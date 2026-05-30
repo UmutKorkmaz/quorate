@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "jsx": "react-jsx",
+    "outDir": ".tsc",
+    "rootDir": "src",
+    "tsBuildInfoFile": ".tsc/.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../core" }
+  ],
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "quorate",
+  "version": "0.1.0",
+  "description": "Multi-provider AI code review council CLI.",
+  "license": "MIT",
+  "repository": "https://github.com/UmutKorkmaz/quorate",
+  "type": "module",
+  "bin": {
+    "quorate": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json --force && node esbuild.config.mjs",
+    "test": "vitest run test",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "ink": "^7.0.0",
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@quorate/core": "0.1.0",
+    "@types/react": "^19.2.0",
+    "commander": "^14.0.2",
+    "esbuild": "^0.27.7",
+    "ink-testing-library": "^4.0.0"
+  }
+}

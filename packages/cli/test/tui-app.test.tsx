@@ -1,0 +1,104 @@
+import { describe, expect, it } from "vitest";
+import { render } from "ink-testing-library";
+import { createDefaultConfig } from "@quorate/core";
+import { App } from "../src/tui/app.js";
+
+// Real control bytes the terminal sends; ink-testing-library feeds these to useInput.
+const DOWN = "\u001B[B";
+const TAB = "\t";
+const ENTER = "\r";
+const ESC = "\u001B";
+const INK_INTERACTION_TIMEOUT_MS = 15_000;
+
+async function flush(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 15));
+}
+
+function mount() {
+  return render(<App cwd={process.cwd()} config={createDefaultConfig([])} mode="review" />);
+}
+
+describe("App", () => {
+  it("renders the composer and status line on mount", () => {
+    const { lastFrame, unmount } = mount();
+    expect(lastFrame() ?? "").toContain("review");
+    unmount();
+  });
+
+  it("typing /help and pressing Enter shows help text in the transcript", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("/help");
+    await flush();
+    stdin.write(ENTER);
+    await flush();
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("/review");
+    expect(frame).toContain("/mode");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("/mode plan (space closes palette) updates the status line to plan", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("/mode plan");
+    await flush();
+    stdin.write(ENTER);
+    await flush();
+    expect(lastFrame() ?? "").toContain("plan");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("Esc clears the composer buffer", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("hello world");
+    await flush();
+    expect(lastFrame() ?? "").toContain("hello world");
+    stdin.write(ESC);
+    await flush();
+    expect(lastFrame() ?? "").not.toContain("hello world");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("typing /re opens the palette with matching commands and a footer hint", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("/re");
+    await flush();
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("/review");
+    expect(frame).toContain("/rerun");
+    expect(frame).toContain("Enter run");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("typing /zzz shows the no-matches row", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("/zzz");
+    await flush();
+    expect(lastFrame() ?? "").toContain("No matching commands");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("Down then Enter runs the second match, not the first", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("/re");
+    await flush();
+    stdin.write(DOWN);
+    await flush();
+    stdin.write(ENTER);
+    await flush();
+    // matches for "re" are [review, rerun, ...]; Down selects rerun, which with no
+    // prior request emits "No request to rerun yet." (proves rerun ran, not review).
+    expect(lastFrame() ?? "").toContain("No request to rerun");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("Tab completes the buffer to the selected command and closes the palette", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("/re");
+    await flush();
+    stdin.write(TAB);
+    await flush();
+    // First match is /review; Tab fills "/review " into the composer prompt.
+    expect(lastFrame() ?? "").toContain("› /review");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+});
