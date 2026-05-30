@@ -4,24 +4,31 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { detectAvailableProviders, findExecutable } from "../src/providers.js";
 
+const IS_WINDOWS = process.platform === "win32";
+
+// Create a file that findExecutable() will resolve on the current platform:
+// POSIX needs an executable bit; Windows resolves via PATHEXT (e.g. .CMD).
+function writeExecutable(dir: string, base: string): string {
+  const filePath = join(dir, IS_WINDOWS ? `${base}.CMD` : base);
+  writeFileSync(filePath, IS_WINDOWS ? "@echo off\r\nexit /b 0\r\n" : "#!/bin/sh\nexit 0\n", "utf8");
+  if (!IS_WINDOWS) chmodSync(filePath, 0o755);
+  return filePath;
+}
+
 describe("detectAvailableProviders", () => {
   it("detects commands from PATH without executing them", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-test-"));
-    const commandPath = join(dir, "codex");
-    writeFileSync(commandPath, "#!/bin/sh\nexit 0\n", "utf8");
-    chmodSync(commandPath, 0o755);
+    writeExecutable(dir, "codex");
 
     const [detected] = detectAvailableProviders(
       [{ id: "codex", command: "codex", roles: ["maintainer"] }],
       { PATH: dir }
     );
 
-    expect(detected).toMatchObject({
-      id: "codex",
-      command: "codex",
-      path: commandPath,
-      available: true
-    });
+    expect(detected.id).toBe("codex");
+    expect(detected.available).toBe(true);
+    expect(detected.path).toBeDefined();
+    expect(detected.path?.toLowerCase()).toContain("codex");
   });
 
   it("marks unavailable providers without throwing", () => {
@@ -36,20 +43,19 @@ describe("detectAvailableProviders", () => {
 });
 
 describe("findExecutable path joining", () => {
-  it("builds candidates with the platform separator (regression for hardcoded slash)", () => {
-    // On POSIX the separator is "/"; this asserts we no longer hardcode "/" via
-    // string interpolation and instead use node:path join. A found executable
-    // path must contain the joined directory + command, not a double separator.
+  it("builds candidates with node:path join (no hardcoded slash)", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-join-"));
-    const commandPath = join(dir, "joiner");
-    writeFileSync(commandPath, "#!/bin/sh\nexit 0\n", "utf8");
-    chmodSync(commandPath, 0o755);
+    writeExecutable(dir, "joiner");
 
     const found = findExecutable("joiner", { PATH: dir });
-    expect(found).toBe(join(dir, "joiner"));
-    // node:path join collapses redundant separators; a hardcoded `${dir}/...`
-    // would produce a different string when dir already ends with a separator.
-    const found2 = findExecutable("joiner", { PATH: `${dir}/` });
-    expect(found2).toBe(join(dir, "joiner"));
+    expect(found).toBeDefined();
+    expect(found).toContain(dir);
+    expect(found?.toLowerCase()).toContain("joiner");
+
+    // A trailing separator in a PATH entry must not produce a doubled separator;
+    // node:path join collapses it, so resolution still finds the same executable.
+    const sep = IS_WINDOWS ? "\\" : "/";
+    const found2 = findExecutable("joiner", { PATH: `${dir}${sep}` });
+    expect(found2).toBe(found);
   });
 });
