@@ -18,6 +18,7 @@ import {
 import { withProviderSelection, withRoleSelection, providerRunPreflight } from "../session.js";
 import { commandRegistry, parseAndRun, type SlashCommand } from "./commands.js";
 import { SlashPalette } from "./SlashPalette.js";
+import { Spinner, Elapsed } from "./Spinner.js";
 
 export interface AppProps {
   cwd: string;
@@ -53,6 +54,10 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
   stateRef.current = state;
   const idRef = useRef(0);
   const nextId = useCallback(() => `c${idRef.current++}`, []);
+  const abortRef = useRef<AbortController | null>(null);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+  const startedAtRef = useRef(0);
 
   const emit = useCallback(
     (cell: TranscriptCell) => {
@@ -79,7 +84,9 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
           });
         }
       };
-      return runCouncil(request, current, { onEvent });
+      const controller = new AbortController();
+      abortRef.current = controller;
+      return runCouncil(request, current, { onEvent, signal: controller.signal });
     },
     [emit, nextId]
   );
@@ -100,6 +107,7 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
         exit();
         return;
       }
+      startedAtRef.current = Date.now();
       setBusy(true);
       try {
         await parseAndRun(ctx, trimmed);
@@ -107,6 +115,7 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
         // preflight / run errors already emitted a cell; keep the shell alive.
       } finally {
         setBusy(false);
+        abortRef.current = null;
       }
     },
     [ctx, emit, exit, nextId]
@@ -132,6 +141,10 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
   }, [stdin]);
 
   useInput((char, key) => {
+    if (key.escape && busy) {
+      abortRef.current?.abort();
+      return;
+    }
     if (paletteOpen && matches.length > 0) {
       if (key.upArrow) {
         setSelected((index) => (index - 1 + matches.length) % matches.length);
@@ -191,9 +204,17 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
     <Box flexDirection="column">
       <Static items={cells}>{(cell) => <TranscriptItem key={cell.id} cell={cell} />}</Static>
       <Box flexDirection="column" marginTop={1}>
-        <Text dimColor>
-          {`${busy ? "running…" : "ready"} · ${state.mode} · ${providerLabel} · ${diffLabel}${degraded}`}
-        </Text>
+        {busy ? (
+          <Text>
+            <Spinner />
+            <Text color="cyan"> reviewing</Text>
+            <Text dimColor>{` · ${state.mode} · ${providerLabel} · ${diffLabel}${degraded} · `}</Text>
+            <Elapsed since={startedAtRef.current || Date.now()} />
+            <Text dimColor> · esc to interrupt</Text>
+          </Text>
+        ) : (
+          <Text dimColor>{`ready · ${state.mode} · ${providerLabel} · ${diffLabel}${degraded}`}</Text>
+        )}
         <Box borderStyle="round" borderColor={paletteOpen ? "cyan" : "gray"} paddingX={1}>
           <Text>
             {"› "}
