@@ -134,7 +134,12 @@ describe("handleShellLine", () => {
 
     expect(state.lastReport).toBeUndefined();
     expect(output.join("\n")).toContain("Provider preflight failed");
-    expect(output.join("\n")).toContain("hermes has no runnable headless profile");
+    // Either failure is valid and blocks the run; which one depends on whether the
+    // `hermes` CLI happens to be installed on the machine running the tests (it is
+    // not on CI), so accept both rather than assuming a PATH-dependent outcome.
+    expect(output.join("\n")).toMatch(
+      /hermes (is not available on PATH|has no runnable headless profile)/
+    );
   });
 
   it("keeps the shell alive when a command fails", async () => {
