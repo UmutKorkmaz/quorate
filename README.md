@@ -1,17 +1,34 @@
 # Quorate
 
-Quorate is a CLI-first, GitHub-ready review council for software projects.
-It routes a diff or plan to specialist reviewers, aggregates their findings, and
-returns one verdict with concrete evidence.
+> A council of AI reviewers for your code — in one CLI.
 
-The local CLI can detect AI tools already available on this laptop. The first
-implementation supports these provider ids by default:
+**Quorate** convenes a *quorate* (a body able to reach a binding decision) of AI
+code reviewers over a diff or a plan, aggregates their findings, and returns **one
+verdict** with concrete, file-and-line evidence. It runs the AI CLIs you already
+have on your machine — `claude`, `codex`, `qwen`, `kimi`, and more — and ships a
+Claude-Code-style interactive shell, a safe heuristic default, and a GitHub Action.
 
-`claude`, `codex`, `agy`, `hermes`, `kimi`, `qwen`, `minimax`, `opencode`,
-`kilo`, `droid`, `crush`, `cline`, `goose`, `copilot`, `grok`, `agent`, `ollama`.
+[![npm](https://img.shields.io/npm/v/quorate.svg)](https://www.npmjs.com/package/quorate)
+![node](https://img.shields.io/node/v/quorate.svg)
+[![license](https://img.shields.io/npm/l/quorate.svg)](./LICENSE)
 
-The safe default provider is `heuristic`, which does not call external AI tools.
-Real CLI providers are opt-in in `.quorate.yml`.
+```text
+ ╭──────────────────────────────────────────────────────────────╮
+ │ › /re                                                         │
+ ╰──────────────────────────────────────────────────────────────╯
+   ▸ /review     Review the loaded/current diff   [subject]
+     /rerun      Run the last request again
+     /roles      Limit council roles
+   ↑/↓ select · Tab complete · Enter run · Esc close
+
+  ⠹ reviewing · review · claude+codex · diff loaded · 00:08 · esc to interrupt
+
+   FAIL  src/auth.ts:42
+   HIGH  Missing authorization check — token introspection result is trusted
+         without verifying the audience claim.
+```
+
+---
 
 ## Install
 
@@ -20,120 +37,151 @@ npm install -g quorate
 quorate
 ```
 
-`quorate` opens the interactive shell. Node >= 22 is required.
+Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interactive shell.
 
-For development in this repository:
+## Why Quorate
+
+- **Many models, one verdict.** Get several independent AI perspectives on a change, deduplicated and ranked into a single PASS / WARN / FAIL.
+- **Uses the CLIs you already have.** No API keys to wire up — Quorate detects local agents (`claude`, `codex`, `qwen`, `kimi`, `crush`, `goose`, …) and drives them in headless mode.
+- **Honest by default.** The built-in heuristic runs with zero setup and never pretends: a heuristic-only review is reported as **degraded**, not a confident green.
+- **Safe by design.** Real providers are opt-in, spawned without a shell, with explicit headless args, byte/time caps, and a dangerous-flag denylist.
+- **A shell that feels like Claude Code.** Inline transcript, a `/` command palette with fuzzy-style filtering, an animated braille spinner, and native severity cards.
+
+## Quick start
 
 ```bash
-npm install
-npm run build
+quorate                                   # open the shell
+quorate doctor                            # see which AI CLIs are installed
+quorate review --diff changes.diff        # one-shot review of a diff
+quorate review --base main --head HEAD    # review the current branch
+quorate plan "migrate auth to passkeys"   # evaluate a plan instead of a diff
 ```
 
-`npm run build` builds the TypeScript packages. There is no native build step.
+In the shell, type `/` to open the command palette:
 
-Use the local CLI through npm workspace execution:
-
-```bash
-npm exec --workspace quorate -- quorate doctor
-npm exec --workspace quorate -- quorate review --diff examples/sample.diff
-npm exec --workspace quorate -- quorate shell
+```text
+/providers            list providers and local availability
+/use available        enable every detected, runnable provider for this session
+/diff path            load a unified diff
+/git [base] [head]    load a git diff
+/pr 123               load a pull-request diff (uses gh)
+/review [subject]     review the loaded/current diff
+/plan text            evaluate a plan
+/mode review|plan     how bare text is interpreted
+/last · /rerun        show or re-run the last report
+/json · /markdown     export the last report
+/exit                 leave
 ```
+
+Bare text follows the current mode — in `review` it reviews the loaded diff with
+your text as the subject; in `plan` it evaluates the text as a plan.
+
+## Providers
+
+Quorate detects these agent CLIs by default and runs the ones you enable:
+
+`claude` · `codex` · `agy` · `hermes` · `kimi` · `qwen` · `minimax` · `opencode` ·
+`kilo` · `droid` · `crush` · `cline` · `goose` · `copilot` · `grok` · `agent` · `ollama`
+
+The default provider is **`heuristic`** — four fast static checks (focused tests,
+hard-coded secrets, stray `console.log`, TODO/FIXME). It needs no setup and never
+calls an external tool. Enable real reviewers per session with `/use available`,
+or persist them in config.
 
 ## Configure
 
-Create a starter config:
-
 ```bash
-npm exec --workspace quorate -- quorate init
+quorate init        # writes a starter .quorate.yml (real providers disabled)
 ```
 
-Then enable only providers you have authenticated and tested. Provider commands
-are spawned without a shell, prompts are sent through an explicit input mode, and
-dangerous/session-resume flags are rejected unless a provider profile opts out.
-If `.quorate.yml` is absent, Quorate falls back to the safe built-in
-heuristic config.
+Then enable only the providers you trust, with explicit headless arguments:
 
-## Interactive Shell
-
-The interactive shell is a slash-command-first review console. Press `/` to
-open the command palette, use arrow keys to select a command, `Tab` to
-complete it, and `Enter` to run it.
-
-```bash
-npm exec --workspace quorate -- quorate shell
+```yaml
+councils: [architect, security, qa, performance, maintainer]
+providers:
+  - id: heuristic
+    type: mock
+    enabled: true
+  - id: codex
+    type: cli
+    enabled: true
+    inputMode: stdin
+    roles: [maintainer, qa]
+    args: ["exec", "--sandbox", "read-only", "-"]
 ```
 
-Useful shell flags:
-
-| Flag | Purpose |
-| --- | --- |
-| `--classic` | Use the legacy inline shell instead of the native TUI. |
-| `--providers ids` | Start with a comma-separated provider selection. |
-| `--mode review\|plan` | Choose how bare text is interpreted. |
-
-The shell is slash-command first:
-
-```text
-/providers
-/use heuristic
-/diff examples/sample.diff
-/review local smoke
-/plan migrate auth to passkeys
-/last
-/json council-report.json
-/exit
-```
-
-When stdin is piped, the shell falls back to line-by-line mode for scripts.
-
-Bare text follows the current mode. In `review` mode it reviews the loaded/current
-diff with that text as the subject. "Current diff" means staged plus unstaged
-`git diff`; use `/git [base] [head]`, `/diff <path>`, or `/pr <number>` to load
-a specific diff first. In `plan` mode, bare text asks the council to evaluate
-the text as a plan.
-
-Useful shell commands:
-
-| Command | Purpose |
-| --- | --- |
-| `/providers`, `/doctor` | Show local availability and whether profiles are runnable. |
-| `/use heuristic` | Use the safe built-in reviewer only. |
-| `/use available` | Enable every detected provider for the session; this can spend tokens and only runnable profiles execute. |
-| `/enable codex`, `/disable claude` | Add or remove providers without changing config files. |
-| `/roles architect,qa` | Limit the council roles for the next runs. |
-| `/mode review`, `/mode plan` | Change how bare text is interpreted. |
-| `/rerun`, `/history` | Repeat the last request or inspect recent commands. |
-| `/json path`, `/markdown path` | Export the last report. |
-
-Real provider profiles must be headless and explicit. Important fields:
+Provider safety fields:
 
 | Field | Meaning |
 | --- | --- |
-| `args` | Command arguments; empty CLI args are refused for safety. |
+| `args` | Command arguments; empty args are refused (no interactive sessions). |
 | `inputMode` | `stdin`, `prompt-file`, or `none`. |
+| `headlessAllowlist` | Optional per-provider allowlist of permitted flags. |
 | `timeoutMs`, `killGraceMs` | Runtime cap and forced-kill grace period. |
 | `maxInputBytes`, `maxOutputBytes` | Prompt/output caps before a provider is refused or killed. |
-| `{promptFile}`, `{diffFile}`, `{role}`, `{subject}` | Placeholders expanded in provider args. |
+| `{promptFile}`, `{diffFile}`, `{role}`, `{subject}` | Placeholders expanded in args. |
+
+Session/resume and `--dangerously*`/`--yolo`-style flags are rejected unless a
+profile explicitly opts in with `allowDangerousArgs`.
 
 ## GitHub Action
 
-For this repo:
+Run the council on every pull request:
 
 ```yaml
+name: Quorate
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
 jobs:
   review:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: ./
+      - uses: UmutKorkmaz/quorate@v0.2.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Use a self-hosted runner when the PR bot should call locally authenticated CLIs
-such as `claude`, `codex`, `qwen`, or `kimi`. Use GitHub-hosted runners for the
-default heuristic provider or future API-backed providers.
+The Action posts a single report comment and can fail the check based on
+`fail-on` severity. Use a **self-hosted runner** when the bot should call locally
+authenticated CLIs (`claude`, `codex`, …); use GitHub-hosted runners for the
+default heuristic.
+
+**Security:** the Action loads `.quorate.yml` from the pull request's **base
+branch**, never from the PR head — a pull request cannot supply the config that
+governs its own review.
+
+## How it works
+
+```text
+ diff / plan ─▶ council orchestrator ─▶ providers (heuristic + CLIs, in parallel)
+                       │                         │ headless, sandboxed, capped
+                       ▼                         ▼
+                 dedupe + rank ◀──── findings (severity, file:line, evidence)
+                       │
+                       ▼
+            one verdict  (pass · warn · fail, with degraded honesty)
+```
+
+The engine (`@quorate/core`) is shared by the CLI, the interactive shell, and the
+GitHub Action, so a review behaves identically everywhere.
+
+## Development
+
+```bash
+git clone https://github.com/UmutKorkmaz/quorate
+cd quorate
+npm install
+npm run build
+npm test
+```
+
+An npm workspace: `packages/cli` (the `quorate` binary + Ink TUI),
+`packages/core` (the engine), `packages/github-action`. Pure TypeScript/Node —
+no native build step.
+
+## License
+
+MIT © Umut Korkmaz
