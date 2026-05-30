@@ -1,0 +1,88 @@
+councils:
+  - architect
+  - security
+  - qa
+  - performance
+  - maintainer
+
+providers:
+  - id: heuristic
+    type: mock
+    roles:
+      - maintainer
+    enabled: true
+    timeoutMs: 5000
+
+  # Enable these after confirming the command is authenticated and supports stdin prompts.
+  - id: claude
+    type: cli
+    command: claude
+    args:
+      - --print
+      - --input-format
+      - text
+      - --output-format
+      - text
+      - --permission-mode
+      - plan
+      - --no-session-persistence
+      - --max-budget-usd
+      - "0.25"
+      - --tools
+      - ""
+    roles:
+      - architect
+      - security
+    enabled: false
+    inputMode: stdin
+    timeoutMs: 120000
+    killGraceMs: 5000
+    maxInputBytes: 250000
+    maxOutputBytes: 1000000
+
+  - id: codex
+    type: cli
+    command: codex
+    args:
+      - exec
+      - --ephemeral
+      - --sandbox
+      - read-only
+      - "-"
+    roles:
+      - maintainer
+      - qa
+    enabled: false
+    inputMode: stdin
+    timeoutMs: 120000
+    killGraceMs: 5000
+    maxInputBytes: 250000
+    maxOutputBytes: 1000000
+
+  - id: qwen
+    type: cli
+    command: qwen
+    args:
+      - --bare
+      - --approval-mode
+      - plan
+      - --input-format
+      - text
+      - --output-format
+      - text
+      - --max-session-turns
+      - "1"
+    roles:
+      - performance
+      - maintainer
+    enabled: false
+    inputMode: stdin
+    timeoutMs: 120000
+    killGraceMs: 5000
+    maxInputBytes: 250000
+    maxOutputBytes: 1000000
+
+github:
+  commentMode: update
+  failOn: high
+  runnerMode: auto
