@@ -1,0 +1,29 @@
+{
+  "name": "quorate-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A multi-agent code review council for local CLI and GitHub PR workflows.",
+  "type": "module",
+  "packageManager": "npm@11.7.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build:js",
+    "build:js": "npm run build --workspace @quorate/core && npm run build --workspace quorate && npm run build --workspace @quorate/github-action",
+    "typecheck": "tsc -b packages/core packages/cli && tsc -p packages/github-action/tsconfig.check.json",
+    "test": "npm run test:js",
+    "test:js": "vitest run",
+    "ci": "npm run build && npx vitest run",
+    "clean": "rm -rf packages/*/dist coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "esbuild": "^0.27.7",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.14"
+  }
+}

@@ -1,0 +1,29 @@
+# AgentOps session artifacts
+/.agents/
+/AGENTS.md
+
+# Node / TypeScript
+node_modules/
+dist/
+packages/cli/.tsc/
+target/
+!packages/github-action/dist/
+!packages/github-action/dist/index.js
+coverage/
+*.tsbuildinfo
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Quorate local outputs
+council-report.json
+*.tgz
+
+# Local agent / session artifacts (not part of the project)
+AGENTS.md
+docs/superpowers/
+.remember/
+.agents/
+.antigravitycli/
