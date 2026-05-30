@@ -1,0 +1,38 @@
+name: Quorate
+description: Run a multi-agent code review council on pull requests.
+author: Quorate
+inputs:
+  config-path:
+    description: Path to a .quorate.yml config file.
+    required: false
+    default: .quorate.yml
+  mode:
+    description: Council mode. Only review is implemented for the GitHub Action.
+    required: false
+    default: review
+  providers:
+    description: Comma-separated provider ids to enable for this run.
+    required: false
+  fail-on:
+    description: Minimum severity that fails the action: critical, high, medium, low, info, or never.
+    required: false
+    default: high
+  post-comment:
+    description: Whether to post or update the Quorate PR comment.
+    required: false
+    default: "true"
+  github-token:
+    description: GitHub token used to read PR files and write comments.
+    required: false
+  runner-mode:
+    description: Provider runner mode: auto, cli, or api.
+    required: false
+    default: auto
+outputs:
+  verdict:
+    description: Final Quorate verdict.
+  findings:
+    description: Number of findings in the report.
+runs:
+  using: node20
+  main: packages/github-action/dist/index.js

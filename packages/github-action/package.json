@@ -1,0 +1,14 @@
+{
+  "name": "@quorate/github-action",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "rm -rf dist && esbuild src/index.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/index.js",
+    "test": "vitest run test"
+  },
+  "dependencies": {
+    "@actions/core": "^3.0.1",
+    "@actions/github": "^9.1.1",
+    "@quorate/core": "0.1.0"
+  }
+}
