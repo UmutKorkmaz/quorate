@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "description": "Multi-provider AI code review council CLI.",
   "license": "MIT",
-  "repository": "https://github.com/UmutKorkmaz/quorate",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UmutKorkmaz/quorate.git"
+  },
   "type": "module",
   "bin": {
-    "quorate": "./dist/index.js"
+    "quorate": "dist/index.js"
   },
   "files": [
     "dist"
