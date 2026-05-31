@@ -37,7 +37,7 @@ export const defaultProviderCandidates: Array<
   {
     id: "codex",
     command: "codex",
-    args: ["exec", "--ephemeral", "--sandbox", "read-only", "-"],
+    args: ["exec", "--ephemeral", "--sandbox", "read-only", "--skip-git-repo-check", "-"],
     inputMode: "stdin",
     roles: ["maintainer", "qa"],
     installHint: "OpenAI Codex CLI"
@@ -159,7 +159,10 @@ export function createDefaultConfig(detected = detectAvailableProviders()): Quor
       id: candidate.id,
       type: "cli",
       command: detectedProvider?.command ?? candidate.command,
-      args: [],
+      // Use each provider's known headless args so detected CLIs are runnable
+      // out of the box (still disabled until the user opts in with /use). An
+      // empty default left every real provider stuck as "needs-profile".
+      args: candidate.args ?? [],
       roles: candidate.roles,
       enabled: false,
       stdin: true,

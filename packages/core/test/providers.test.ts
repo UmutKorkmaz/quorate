@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { detectAvailableProviders, findExecutable } from "../src/providers.js";
+import { createDefaultConfig, detectAvailableProviders, findExecutable } from "../src/providers.js";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -39,6 +39,27 @@ describe("detectAvailableProviders", () => {
 
     expect(detected.available).toBe(false);
     expect(detected.path).toBeUndefined();
+  });
+});
+
+describe("createDefaultConfig provider profiles", () => {
+  it("ships known headless args so real providers are runnable without per-repo config", () => {
+    const config = createDefaultConfig([]);
+    const codex = config.providers.find((provider) => provider.id === "codex");
+    const claude = config.providers.find((provider) => provider.id === "claude");
+
+    expect(codex?.args.length).toBeGreaterThan(0);
+    expect(codex?.args).toContain("--skip-git-repo-check");
+    expect(claude?.args.length).toBeGreaterThan(0);
+  });
+
+  it("keeps real providers disabled by default (opt-in only)", () => {
+    const config = createDefaultConfig([]);
+    const codex = config.providers.find((provider) => provider.id === "codex");
+    const heuristic = config.providers.find((provider) => provider.id === "heuristic");
+
+    expect(codex?.enabled).toBe(false);
+    expect(heuristic?.enabled).toBe(true);
   });
 });
 

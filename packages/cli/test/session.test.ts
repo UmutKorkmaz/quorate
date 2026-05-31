@@ -45,7 +45,8 @@ describe("resolveUseProviders", () => {
     const state = createState();
     expect(resolveUseProviders(state, [])).toBeUndefined();
     expect(resolveUseProviders(state, ["default"])).toBeUndefined();
-    expect(resolveUseProviders(state, ["available"])).toEqual(["heuristic"]);
+    // No CLI providers detected (injected empty set) -> only the mock heuristic is runnable.
+    expect(resolveUseProviders(state, ["available"], [])).toEqual(["heuristic"]);
     expect(resolveUseProviders(state, ["claude", "codex"])).toEqual(["claude", "codex"]);
   });
 });
@@ -53,7 +54,8 @@ describe("resolveUseProviders", () => {
 describe("availableProviderIds and isRunnableProvider", () => {
   it("returns only runnable providers (mock heuristic) when no cli provider is detected", () => {
     const state = createState();
-    expect(availableProviderIds(state)).toEqual(["heuristic"]);
+    // Inject an empty detected set so no CLI provider is available on PATH.
+    expect(availableProviderIds(state, [])).toEqual(["heuristic"]);
   });
 
   it("treats mock providers as runnable and cli providers as runnable only with args + inputMode + availability", () => {
@@ -61,9 +63,11 @@ describe("availableProviderIds and isRunnableProvider", () => {
     const heuristic = config.providers.find((provider) => provider.id === "heuristic")!;
     const codex = config.providers.find((provider) => provider.id === "codex")!;
     expect(isRunnableProvider(heuristic)).toBe(true);
-    expect(isRunnableProvider(codex, true)).toBe(false);
-    expect(isRunnableProvider({ ...codex, args: ["{promptFile}"], inputMode: "stdin" }, true)).toBe(true);
-    expect(isRunnableProvider({ ...codex, args: ["{promptFile}"], inputMode: "stdin" }, false)).toBe(false);
+    // A CLI provider with no headless args is never runnable, even when available.
+    expect(isRunnableProvider({ ...codex, args: [] }, true)).toBe(false);
+    // The default codex profile now ships args + inputMode, so it is runnable when available.
+    expect(isRunnableProvider(codex, true)).toBe(true);
+    expect(isRunnableProvider(codex, false)).toBe(false);
   });
 });
 
@@ -107,7 +111,8 @@ describe("providerRunPreflight", () => {
     const enabledNoProfile: QuorateConfig = {
       ...config,
       providers: config.providers.map((provider) =>
-        provider.id === "codex" ? { ...provider, enabled: true } : { ...provider, enabled: false }
+        // codex is available on PATH but stripped of its headless args -> no runnable profile.
+        provider.id === "codex" ? { ...provider, enabled: true, args: [] } : { ...provider, enabled: false }
       )
     };
     expect(providerRunPreflight(enabledNoProfile, detected)).toEqual(["codex has no runnable headless profile."]);

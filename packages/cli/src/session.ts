@@ -103,8 +103,10 @@ export function isRunnableProvider(
   return provider.type === "mock" || (available && (provider.args?.length ?? 0) > 0 && Boolean(provider.inputMode));
 }
 
-export function availableProviderIds(state: ShellState): string[] {
-  const detected = detectAvailableProviders();
+export function availableProviderIds(
+  state: ShellState,
+  detected = detectAvailableProviders()
+): string[] {
   const available = new Map(detected.map((provider) => [provider.id, provider.available]));
   return state.config.providers
     .filter((provider) =>
@@ -113,9 +115,13 @@ export function availableProviderIds(state: ShellState): string[] {
     .map((provider) => provider.id);
 }
 
-export function resolveUseProviders(state: ShellState, requested: string[]): string[] | undefined {
+export function resolveUseProviders(
+  state: ShellState,
+  requested: string[],
+  detected = detectAvailableProviders()
+): string[] | undefined {
   if (requested.length === 0 || requested.includes("default")) return undefined;
-  if (requested.includes("available")) return availableProviderIds(state);
+  if (requested.includes("available")) return availableProviderIds(state, detected);
   return requested;
 }
 
