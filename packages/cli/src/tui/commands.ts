@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  isEmptyReviewDiff,
   renderMarkdownReport,
   type CouncilMode,
   type CouncilReport,
@@ -59,6 +60,10 @@ async function runReviewWithReport(
   diff?: string
 ): Promise<void> {
   const state = ctx.getState();
+  if (isEmptyReviewDiff(mode, diff)) {
+    text(ctx, "No changes to review. Load a diff first with /git, /diff <file>, or /pr <number>.");
+    return;
+  }
   const request: CouncilRequest = { mode, subject, diff, repoPath: state.cwd };
   ctx.dispatch({ type: "setLastRequest", request });
   const report = await ctx.runReview(request);

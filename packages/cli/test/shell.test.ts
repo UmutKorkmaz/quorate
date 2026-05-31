@@ -123,6 +123,22 @@ describe("handleShellLine", () => {
     expect(output.join("\n")).toContain("Active providers:");
   });
 
+  it("refuses to review when the loaded diff is empty and tells you how to load one", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-shell-"));
+    const emptyPath = join(dir, "empty.diff");
+    writeFileSync(emptyPath, "", "utf8");
+    const state = createState(dir);
+    const output: string[] = [];
+    const io = { write: (message: string) => output.push(message) };
+
+    await handleShellLine(state, "/diff empty.diff", io);
+    await handleShellLine(state, "/review", io);
+
+    expect(state.lastReport).toBeUndefined();
+    expect(output.join("\n")).toContain("No changes to review");
+    expect(output.join("\n")).toContain("/git");
+  });
+
   it("preflights selected providers before running a council request", async () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-shell-"));
     const state = createState(dir);

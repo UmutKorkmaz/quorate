@@ -7,6 +7,7 @@ import { Command } from "commander";
 import {
   createDefaultConfig,
   detectAvailableProviders,
+  isEmptyReviewDiff,
   loadConfig,
   renderMarkdownReport,
   runCouncil,
@@ -75,7 +76,7 @@ export function buildProgram(): Command {
   program
     .name("quorate")
     .description("Run a multi-agent code review council from local CLIs or GitHub Actions.")
-    .version("0.2.0")
+    .version("0.2.1")
     .option("-c, --config <path>", "Path to .quorate.yml")
     .option("--cwd <path>", "Working directory", defaultCwd);
 
@@ -139,6 +140,11 @@ export function buildProgram(): Command {
       const cwd = cwdFrom(program);
       const config = applyProviderFilter(configFrom(program), options.providers);
       const diff = readDiff(options, cwd);
+      if (isEmptyReviewDiff("review", diff)) {
+        console.error("No changes to review. Pass --diff <file>, --base/--head, or --pr <number>.");
+        process.exitCode = 1;
+        return;
+      }
       const report = await runCouncil(
         {
           mode: "review",

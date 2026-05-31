@@ -276,10 +276,13 @@ function providerEnvironment(provider: ProviderConfig): NodeJS.ProcessEnv {
   return { ...env, ...(provider.env ?? {}) };
 }
 
-function parseFindingsFromText(output: string, providerId: string, role: string): Finding[] {
+export function parseFindingsFromText(output: string, providerId: string, role: string): Finding[] {
   const findings: Finding[] = [];
+  // Title is greedy up to the first ":" (body separator) or "(" (file ref); a
+  // non-greedy title collapses to a single character because the trailing
+  // groups are all optional (the cause of the "F | ocus" mis-split).
   const pattern =
-    /^\s*(?:[-*]\s*)?\[(critical|high|medium|low|info)\]\s*(.+?)(?:\s+\(([^():]+)(?::(\d+))?\))?\s*:?\s*(.*)$/i;
+    /^\s*(?:[-*]\s*)?\[(critical|high|medium|low|info)\]\s*([^:(]+)(?:\s*\(([^():]+)(?::(\d+))?\))?\s*:?\s*(.*)$/i;
 
   for (const line of output.split(/\r?\n/)) {
     const match = pattern.exec(line);

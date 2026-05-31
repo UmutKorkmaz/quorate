@@ -164,7 +164,7 @@ export function createDefaultConfig(detected = detectAvailableProviders()): Quor
       enabled: false,
       stdin: true,
       inputMode: candidate.inputMode ?? "stdin",
-      timeoutMs: 120_000,
+      timeoutMs: 300_000,
       killGraceMs: 5_000,
       maxInputBytes: 250_000,
       maxOutputBytes: 1_000_000,

@@ -3,6 +3,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  isEmptyReviewDiff,
   renderMarkdownReport,
   runCouncil,
   type QuorateConfig,
@@ -401,6 +402,10 @@ export async function handleShellLine(
       break;
     case "review": {
       const diff = state.diff ?? readDiff({}, state.cwd);
+      if (isEmptyReviewDiff("review", diff)) {
+        out = "No changes to review. Load a diff first with /git, /diff <file>, or /pr <number>.";
+        break;
+      }
       const subject = command.subject ?? "Interactive code review";
       state.lastRequest = {
         mode: "review",
