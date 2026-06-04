@@ -170,7 +170,18 @@ export function configuredActiveProviders(state: ShellState): string[] {
     .map((provider) => provider.id);
 }
 
+/**
+ * The pseudo-provider id used for accounting when no provider is config-enabled.
+ * Derived from the config's enabled mock provider (the built-in heuristic)
+ * rather than a hard-coded literal, so it tracks the real provider id.
+ */
+export function fallbackProviderId(state: ShellState): string {
+  const mock = state.config.providers.find((provider) => provider.type === "mock");
+  return mock?.id ?? "heuristic";
+}
+
 export function activeProviderSet(state: ShellState): Set<string> {
+  if (state.activeProviders) return new Set(state.activeProviders);
   const configured = configuredActiveProviders(state);
-  return new Set(state.activeProviders ?? (configured.length > 0 ? configured : ["heuristic"]));
+  return new Set(configured.length > 0 ? configured : [fallbackProviderId(state)]);
 }

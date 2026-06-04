@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { runCliProvider } from "./cli-provider.js";
 import { runHeuristicReview } from "./heuristics.js";
 import { createDefaultConfig } from "./providers.js";
+import { areSameFinding } from "./similarity.js";
 import type {
   QuorateConfig,
   CouncilEvent,
@@ -24,30 +25,77 @@ const severityWeight: Record<Severity, number> = {
   info: 1
 };
 
-function findingKey(finding: Finding): string {
-  return [finding.severity, finding.title, finding.file ?? "", finding.line ?? ""].join("|");
-}
-
 export function sortFindings(findings: Finding[]): Finding[] {
   return [...findings].sort((left, right) => {
     const severityDelta = severityWeight[right.severity] - severityWeight[left.severity];
     if (severityDelta !== 0) return severityDelta;
+    const agreementDelta = (right.agreement ?? 1) - (left.agreement ?? 1);
+    if (agreementDelta !== 0) return agreementDelta;
     return left.title.localeCompare(right.title);
   });
 }
 
-function dedupeFindings(findings: Finding[]): Finding[] {
-  const seen = new Set<string>();
-  const deduped: Finding[] = [];
+function clamp01(value: number): number {
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function confidenceFor(agreement: number, severity: Severity): number {
+  // Higher agreement and higher severity both raise confidence. Tuned so a
+  // lone low/info finding stays modest while corroborated criticals approach 1.
+  const severityBoost = (severityWeight[severity] - 1) * 0.05; // 0..0.2
+  return clamp01(0.4 + 0.15 * (agreement - 1) + severityBoost);
+}
+
+/**
+ * Greedily clusters findings that describe the same underlying issue (see
+ * `areSameFinding`). Each cluster collapses to a single representative finding:
+ * the highest-severity member is the base, annotated with `agreedBy`
+ * (sorted unique provider ids), `agreement` (their count), and a derived
+ * `confidence`. A missing `suggestion` on the base is filled from any member.
+ *
+ * Singletons survive untouched — including lone `critical`/`high` findings,
+ * which are never dropped just because a single provider raised them
+ * (popularity-trap guard).
+ */
+export function clusterFindings(findings: Finding[]): Finding[] {
+  const clusters: Finding[][] = [];
 
   for (const finding of findings) {
-    const key = findingKey(finding);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(finding);
+    const target = clusters.find((cluster) =>
+      cluster.some((member) => areSameFinding(member, finding))
+    );
+    if (target) {
+      target.push(finding);
+    } else {
+      clusters.push([finding]);
+    }
   }
 
-  return deduped;
+  return clusters.map((cluster) => {
+    const base = [...cluster].sort(
+      (left, right) => severityWeight[right.severity] - severityWeight[left.severity]
+    )[0];
+
+    const agreedBy = [
+      ...new Set(
+        cluster
+          .map((member) => member.providerId)
+          .filter((id): id is string => Boolean(id))
+      )
+    ].sort();
+    const agreement = agreedBy.length > 0 ? agreedBy.length : 1;
+    const suggestion = base.suggestion ?? cluster.find((member) => member.suggestion)?.suggestion;
+
+    return {
+      ...base,
+      suggestion,
+      agreedBy,
+      agreement,
+      confidence: confidenceFor(agreement, base.severity)
+    };
+  });
 }
 
 export function verdictFor(findings: Finding[], providerResults: ProviderResult[]): Verdict {
@@ -236,7 +284,7 @@ export async function runCouncil(
     };
   });
 
-  const findings = sortFindings(dedupeFindings(providerResults.flatMap((result) => result.findings)));
+  const findings = sortFindings(clusterFindings(providerResults.flatMap((result) => result.findings)));
   const baseVerdict = verdictFor(findings, providerResults);
 
   const realOk = providerResults.filter(

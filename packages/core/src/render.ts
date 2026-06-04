@@ -15,9 +15,14 @@ function locationFor(finding: Finding): string {
   return finding.line ? `${finding.file}:${finding.line}` : finding.file;
 }
 
+function agreementFor(finding: Finding): string {
+  return String(finding.agreement ?? 1);
+}
+
 function findingRow(finding: Finding): string {
   return [
     finding.severity,
+    agreementFor(finding),
     finding.providerId ?? "",
     finding.role ?? "",
     locationFor(finding),
@@ -45,8 +50,8 @@ export function renderMarkdownReport(report: CouncilReport, options: { includeMa
   } else {
     lines.push(
       "",
-      "Severity | Provider | Role | Location | Title | Details",
-      "--- | --- | --- | --- | --- | ---",
+      "Severity | Agreement | Provider | Role | Location | Title | Details",
+      "--- | --- | --- | --- | --- | --- | ---",
       ...report.findings.map(findingRow)
     );
   }

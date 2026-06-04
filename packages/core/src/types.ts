@@ -71,6 +71,12 @@ export interface Finding {
   providerId?: string;
   role?: string;
   suggestion?: string;
+  /** Count of distinct providers that raised this (clustered) finding. */
+  agreement?: number;
+  /** Sorted, unique provider ids that raised this finding. */
+  agreedBy?: string[];
+  /** Confidence in the finding, 0..1, derived from agreement and severity. */
+  confidence?: number;
 }
 
 export type ProviderRunStatus = "ok" | "error" | "skipped" | "interrupted";
