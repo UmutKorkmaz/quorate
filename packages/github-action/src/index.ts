@@ -6,6 +6,7 @@ import {
   renderMarkdownReport,
   runCouncil,
   shouldFailForReport,
+  summarizeDiff,
   type QuorateConfig,
   type Severity
 } from "@quorate/core";
@@ -13,6 +14,7 @@ import {
 type Octokit = ReturnType<typeof github.getOctokit>;
 import { buildPullRequestDiff } from "./diff.js";
 import { upsertReportComment } from "./comment.js";
+import { postInlineComments } from "./inline.js";
 
 /**
  * Minimal shape of the action's GitHub event context. Kept narrow and explicit
@@ -26,6 +28,7 @@ export interface ActionContext {
       title?: string;
       html_url?: string;
       base?: { sha?: string; ref?: string };
+      head?: { sha?: string };
     };
     repository?: { default_branch?: string };
   };
@@ -66,15 +69,25 @@ export function resolveBaseRef(context: ActionContext): string {
 
 export function applyOverrides(
   config: QuorateConfig,
-  inputs: { providers?: string; failOn?: string; runnerMode?: string }
+  inputs: {
+    providers?: string;
+    failOn?: string;
+    runnerMode?: string;
+    inlineComments?: string;
+    inlineCommentLimit?: string;
+  }
 ): QuorateConfig {
   const providers = normalizeInput(inputs.providers);
   const failOn = normalizeInput(inputs.failOn);
   const runnerMode = normalizeInput(inputs.runnerMode);
+  const inlineComments = normalizeInput(inputs.inlineComments);
+  const inlineCommentLimit = normalizeInput(inputs.inlineCommentLimit);
 
   const selected = providers
     ? new Set(providers.split(",").map((provider) => provider.trim()).filter(Boolean))
     : undefined;
+
+  const parsedLimit = inlineCommentLimit !== undefined ? Number(inlineCommentLimit) : undefined;
 
   return {
     ...config,
@@ -87,7 +100,15 @@ export function applyOverrides(
     github: {
       ...config.github,
       failOn: (failOn as Severity | "never" | undefined) ?? config.github.failOn,
-      runnerMode: (runnerMode as "auto" | "cli" | "api" | undefined) ?? config.github.runnerMode
+      runnerMode: (runnerMode as "auto" | "cli" | "api" | undefined) ?? config.github.runnerMode,
+      inlineComments:
+        inlineComments !== undefined
+          ? ["1", "true", "yes", "on"].includes(inlineComments.toLowerCase())
+          : config.github.inlineComments,
+      inlineCommentLimit:
+        parsedLimit !== undefined && Number.isFinite(parsedLimit)
+          ? parsedLimit
+          : config.github.inlineCommentLimit
     }
   };
 }
@@ -151,7 +172,9 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   const config = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }), {
     providers: input("providers"),
     failOn: input("fail-on"),
-    runnerMode: input("runner-mode")
+    runnerMode: input("runner-mode"),
+    inlineComments: input("inline-comments"),
+    inlineCommentLimit: input("inline-comment-limit")
   });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const report = await runCouncil(
@@ -168,7 +191,8 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     },
     config
   );
-  const body = renderMarkdownReport(report, { includeMarker: true });
+  const summary = summarizeDiff(diff);
+  const body = renderMarkdownReport(report, { includeMarker: true, summary });
 
   deps.setOutput("verdict", report.verdict);
   deps.setOutput("findings", String(report.findings.length));
@@ -183,6 +207,25 @@ export async function runAction(deps: ActionDeps): Promise<void> {
       body,
       mode: config.github.commentMode
     });
+  }
+
+  if (config.github.inlineComments) {
+    const commitId = pullRequest.head?.sha;
+    if (commitId) {
+      try {
+        await postInlineComments(client, {
+          owner,
+          repo,
+          pullNumber,
+          commitId,
+          findings: report.findings,
+          limit: config.github.inlineCommentLimit ?? 10
+        });
+      } catch {
+        // An inline-comment failure (e.g. permissions, transient API error)
+        // must not fail the whole run; the summary comment and gating still run.
+      }
+    }
   }
 
   if (shouldFailForReport(report, config.github)) {

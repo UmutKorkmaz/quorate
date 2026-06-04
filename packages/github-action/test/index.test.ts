@@ -36,7 +36,8 @@ function makeDeps(overrides: Partial<ActionDeps> = {}): {
         number: 7,
         title: "A pull request",
         html_url: "https://example.test/pr/7",
-        base: { sha: "base-sha-123", ref: "feature-base" }
+        base: { sha: "base-sha-123", ref: "feature-base" },
+        head: { sha: "head-sha-123" }
       },
       repository: { default_branch: "trunk" }
     }
@@ -81,7 +82,13 @@ function makeOctokit() {
         throw error;
       }
     },
-    pulls: { listFiles: { id: "listFiles" } },
+    pulls: {
+      listFiles: { id: "listFiles" },
+      listReviewComments: { id: "listReviewComments" },
+      createReview: async () => {
+        rest.calls.push("review");
+      }
+    },
     issues: {
       listComments: { id: "listComments" },
       createComment: async () => {
@@ -206,8 +213,43 @@ describe("runAction", () => {
     expect(Number.isNaN(Number(outputs.findings))).toBe(false);
     expect(summaryRaw.length).toBe(1);
     expect(summaryRaw[0]).toContain(reportCommentMarker);
+    // The diff summary section is rendered into the report body.
+    expect(summaryRaw[0]).toContain("## Summary");
+    expect(summaryRaw[0]).toContain("file changed");
+    expect(summaryRaw[0]).toContain("src/app.ts");
     // Existing marker comment present -> update, not create.
+    // inlineComments defaults off, so no review is posted.
     expect(rest.calls).toEqual(["update"]);
+  });
+
+  it("posts an inline review when inline-comments is enabled and findings are located", async () => {
+    const { deps, rest } = makeDeps();
+    // A diff line the heuristic reviewer flags, with a real file + line.
+    deps.getOctokit = () =>
+      ({
+        rest,
+        paginate: async <T>(endpoint: unknown): Promise<T[]> => {
+          if (endpoint === rest.pulls.listFiles) {
+            return [
+              { filename: "src/app.ts", status: "modified", patch: "@@ -1 +1,2 @@\n unchanged\n+console.log('hi')" }
+            ] as unknown as T[];
+          }
+          // No pre-existing issue comments or review comments.
+          return [] as T[];
+        }
+      }) as never;
+    deps.getInput = (name) =>
+      name === "github-token"
+        ? "tok"
+        : name === "post-comment"
+          ? "false"
+          : name === "inline-comments"
+            ? "true"
+            : undefined;
+
+    await runAction(deps);
+
+    expect(rest.calls).toContain("review");
   });
 
   it("skips the comment when post-comment is false", async () => {

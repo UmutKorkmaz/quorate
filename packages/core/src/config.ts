@@ -36,7 +36,12 @@ const configSchema = z.object({
       commentMode: z.enum(["update", "new", "off"]).optional(),
       failOn: z.union([severitySchema, z.literal("never")]).optional(),
       runnerMode: z.enum(["auto", "cli", "api"]).optional(),
-      failOnDegraded: z.boolean().optional()
+      failOnDegraded: z.boolean().optional(),
+      inlineComments: z.boolean().optional(),
+      inlineCommentLimit: z.number().int().positive().optional(),
+      gate: z
+        .object({ severity: severitySchema, minAgreement: z.number().int().positive() })
+        .optional()
     })
     .default({})
 });

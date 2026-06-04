@@ -28,6 +28,14 @@ inputs:
     description: Provider runner mode: auto, cli, or api.
     required: false
     default: auto
+  inline-comments:
+    description: Whether to post findings as inline review comments on changed lines.
+    required: false
+    default: "false"
+  inline-comment-limit:
+    description: Maximum number of inline review comments to post per run.
+    required: false
+    default: "10"
 outputs:
   verdict:
     description: Final Quorate verdict.

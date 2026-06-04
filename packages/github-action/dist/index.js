@@ -46253,7 +46253,10 @@ var configSchema = external_exports.object({
     commentMode: external_exports.enum(["update", "new", "off"]).optional(),
     failOn: external_exports.union([severitySchema, external_exports.literal("never")]).optional(),
     runnerMode: external_exports.enum(["auto", "cli", "api"]).optional(),
-    failOnDegraded: external_exports.boolean().optional()
+    failOnDegraded: external_exports.boolean().optional(),
+    inlineComments: external_exports.boolean().optional(),
+    inlineCommentLimit: external_exports.number().int().positive().optional(),
+    gate: external_exports.object({ severity: severitySchema, minAgreement: external_exports.number().int().positive() }).optional()
   }).default({})
 });
 function parseConfig(source) {
@@ -46651,6 +46654,7 @@ function findingRow(finding) {
   ].join(" | ");
 }
 function renderMarkdownReport(report, options = {}) {
+  const hasSummary = typeof options.summary === "string" && options.summary.trim().length > 0;
   const lines = [
     options.includeMarker ? reportCommentMarker : void 0,
     "# Quorate Report",
@@ -46660,6 +46664,10 @@ function renderMarkdownReport(report, options = {}) {
     report.metadata.degraded ? `> \u26A0 Degraded: ${report.summary}` : void 0,
     "",
     report.summary,
+    hasSummary ? "" : void 0,
+    hasSummary ? "## Summary" : void 0,
+    hasSummary ? "" : void 0,
+    hasSummary ? options.summary : void 0,
     "",
     "## Findings"
   ].filter((line) => line !== void 0);
@@ -46694,7 +46702,46 @@ function shouldFailForThreshold(report, threshold) {
 }
 function shouldFailForReport(report, github) {
   if (shouldFailForThreshold(report, github.failOn)) return true;
-  return github.failOnDegraded === true && report.metadata.degraded;
+  if (github.failOnDegraded === true && report.metadata.degraded) return true;
+  const gate = github.gate;
+  if (gate) {
+    const gateWeight = severityWeight2[gate.severity];
+    if (report.findings.some(
+      (finding) => severityWeight2[finding.severity] >= gateWeight && (finding.agreement ?? 1) >= gate.minAgreement
+    )) {
+      return true;
+    }
+  }
+  return false;
+}
+function summarizeDiff(diff) {
+  if (!diff || diff.trim().length === 0) return "";
+  const files = [];
+  const seen = /* @__PURE__ */ new Set();
+  let pendingGitPath;
+  const addFile = (path) => {
+    if (!path || seen.has(path)) return;
+    seen.add(path);
+    files.push(path);
+  };
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("+++ b/")) {
+      const path = line.slice("+++ b/".length).trim();
+      if (path && path !== "/dev/null") addFile(path);
+      pendingGitPath = void 0;
+    } else if (line.startsWith("diff --git ")) {
+      const match = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+      pendingGitPath = match ? match[2].trim() : void 0;
+    } else if (line.startsWith("+++ ") && pendingGitPath) {
+      addFile(pendingGitPath);
+      pendingGitPath = void 0;
+    }
+  }
+  if (pendingGitPath) addFile(pendingGitPath);
+  if (files.length === 0) return "";
+  const heading = `**${files.length} file${files.length === 1 ? "" : "s"} changed**`;
+  const bullets = files.map((path) => `- \`${path}\``);
+  return [heading, "", ...bullets].join("\n");
 }
 
 // src/diff.ts
@@ -46764,6 +46811,62 @@ async function upsertReportComment(client, input) {
   return "created";
 }
 
+// src/inline.ts
+var import_node_crypto2 = require("node:crypto");
+function findingMarkerHash(finding) {
+  const key = `${finding.severity}|${finding.file ?? ""}|${finding.line ?? ""}|${finding.title}`;
+  return (0, import_node_crypto2.createHash)("sha1").update(key).digest("hex").slice(0, 8);
+}
+function findingMarker(hash2) {
+  return `<!-- quorate-finding:${hash2} -->`;
+}
+function renderCommentBody(finding, hash2) {
+  return `${findingMarker(hash2)}
+**${finding.severity.toUpperCase()}: ${finding.title}**
+
+${finding.body}`;
+}
+async function postInlineComments(client, input) {
+  const located = input.findings.filter(
+    (finding) => typeof finding.file === "string" && finding.file.length > 0 && typeof finding.line === "number"
+  );
+  if (located.length === 0) return 0;
+  const existing = await client.paginate(client.rest.pulls.listReviewComments, {
+    owner: input.owner,
+    repo: input.repo,
+    pull_number: input.pullNumber,
+    per_page: 100
+  });
+  const seen = /* @__PURE__ */ new Set();
+  for (const comment of existing) {
+    const match = comment.body?.match(/<!-- quorate-finding:([0-9a-f]+) -->/);
+    if (match) seen.add(match[1]);
+  }
+  const comments = [];
+  for (const finding of located) {
+    if (comments.length >= input.limit) break;
+    const hash2 = findingMarkerHash(finding);
+    if (seen.has(hash2)) continue;
+    seen.add(hash2);
+    comments.push({
+      path: finding.file,
+      line: finding.line,
+      side: "RIGHT",
+      body: renderCommentBody(finding, hash2)
+    });
+  }
+  if (comments.length === 0) return 0;
+  await client.rest.pulls.createReview({
+    owner: input.owner,
+    repo: input.repo,
+    pull_number: input.pullNumber,
+    commit_id: input.commitId,
+    event: "COMMENT",
+    comments
+  });
+  return comments.length;
+}
+
 // src/index.ts
 function normalizeInput(value) {
   if (value === void 0) return void 0;
@@ -46782,7 +46885,10 @@ function applyOverrides(config2, inputs) {
   const providers = normalizeInput(inputs.providers);
   const failOn = normalizeInput(inputs.failOn);
   const runnerMode = normalizeInput(inputs.runnerMode);
+  const inlineComments = normalizeInput(inputs.inlineComments);
+  const inlineCommentLimit = normalizeInput(inputs.inlineCommentLimit);
   const selected = providers ? new Set(providers.split(",").map((provider) => provider.trim()).filter(Boolean)) : void 0;
+  const parsedLimit = inlineCommentLimit !== void 0 ? Number(inlineCommentLimit) : void 0;
   return {
     ...config2,
     providers: selected ? config2.providers.map((provider) => ({
@@ -46792,7 +46898,9 @@ function applyOverrides(config2, inputs) {
     github: {
       ...config2.github,
       failOn: failOn ?? config2.github.failOn,
-      runnerMode: runnerMode ?? config2.github.runnerMode
+      runnerMode: runnerMode ?? config2.github.runnerMode,
+      inlineComments: inlineComments !== void 0 ? ["1", "true", "yes", "on"].includes(inlineComments.toLowerCase()) : config2.github.inlineComments,
+      inlineCommentLimit: parsedLimit !== void 0 && Number.isFinite(parsedLimit) ? parsedLimit : config2.github.inlineCommentLimit
     }
   };
 }
@@ -46837,7 +46945,9 @@ async function runAction(deps) {
   const config2 = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }), {
     providers: input("providers"),
     failOn: input("fail-on"),
-    runnerMode: input("runner-mode")
+    runnerMode: input("runner-mode"),
+    inlineComments: input("inline-comments"),
+    inlineCommentLimit: input("inline-comment-limit")
   });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const report = await runCouncil(
@@ -46854,7 +46964,8 @@ async function runAction(deps) {
     },
     config2
   );
-  const body = renderMarkdownReport(report, { includeMarker: true });
+  const summary2 = summarizeDiff(diff);
+  const body = renderMarkdownReport(report, { includeMarker: true, summary: summary2 });
   deps.setOutput("verdict", report.verdict);
   deps.setOutput("findings", String(report.findings.length));
   deps.summary.addRaw(body);
@@ -46867,6 +46978,22 @@ async function runAction(deps) {
       body,
       mode: config2.github.commentMode
     });
+  }
+  if (config2.github.inlineComments) {
+    const commitId = pullRequest.head?.sha;
+    if (commitId) {
+      try {
+        await postInlineComments(client, {
+          owner,
+          repo,
+          pullNumber,
+          commitId,
+          findings: report.findings,
+          limit: config2.github.inlineCommentLimit ?? 10
+        });
+      } catch {
+      }
+    }
   }
   if (shouldFailForReport(report, config2.github)) {
     deps.setFailed(`Quorate verdict ${report.verdict} meets fail threshold ${config2.github.failOn}.`);

@@ -33,6 +33,9 @@ export interface GithubConfig {
   failOn: Severity | "never";
   runnerMode: "auto" | "cli" | "api";
   failOnDegraded?: boolean;
+  inlineComments?: boolean;
+  inlineCommentLimit?: number;
+  gate?: { severity: Severity; minAgreement: number };
 }
 
 export interface QuorateConfig {
