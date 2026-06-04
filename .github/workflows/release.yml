@@ -25,6 +25,9 @@ jobs:
 
       - run: npm run build:js
 
+      - name: Run test suite
+        run: npx vitest run
+
       - name: Check if this version is already on npm
         id: check
         run: |

@@ -76,7 +76,7 @@ export function buildProgram(): Command {
   program
     .name("quorate")
     .description("Run a multi-agent code review council from local CLIs or GitHub Actions.")
-    .version("0.2.2")
+    .version("0.3.0")
     .option("-c, --config <path>", "Path to .quorate.yml")
     .option("--cwd <path>", "Working directory", defaultCwd);
 
