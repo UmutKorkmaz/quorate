@@ -37,6 +37,7 @@ export interface SessionState {
   activeRoles?: string[];
   lastRequest?: CouncilRequest;
   lastReport?: CouncilReport;
+  transcript?: Array<{ input: string; at: string }>;
 }
 
 export interface ProviderSnapshot {
@@ -54,6 +55,78 @@ export function splitList(inputText: string): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+/**
+ * Split free-form arguments on whitespace (distinct from {@link splitList},
+ * which splits on commas). Shared by both the classic shell and the Ink TUI.
+ */
+export function splitWords(inputText: string): string[] {
+  return inputText.trim().split(/\s+/).filter(Boolean);
+}
+
+/**
+ * The subset of session/shell state needed to render the `/status` text.
+ * Both {@link ShellState} and the TUI `SessionState` satisfy this shape.
+ */
+export interface StatusStateLike {
+  cwd: string;
+  mode: CouncilMode;
+  diffLabel?: string;
+  activeProviders?: string[];
+  activeRoles?: string[];
+  lastReport?: CouncilReport;
+}
+
+export function statusText(state: StatusStateLike): string {
+  const providerText =
+    state.activeProviders?.length === 0
+      ? "heuristic fallback"
+      : state.activeProviders?.join(", ") ?? "config defaults";
+
+  return [
+    `Mode: ${state.mode}`,
+    `Cwd: ${state.cwd}`,
+    `Diff: ${state.diffLabel ?? "not loaded"}`,
+    `Providers: ${providerText}`,
+    `Roles: ${state.activeRoles?.join(", ") ?? "config defaults"}`,
+    `Last report: ${state.lastReport ? `${state.lastReport.verdict} (${state.lastReport.findings.length} findings)` : "none"}`
+  ].join("\n");
+}
+
+/**
+ * Shared help text for both shells. `extra` lines (e.g. `/reset`) are appended
+ * right before the trailing blank line + bare-text note so each surface can add
+ * the aliases it actually exposes.
+ */
+export function shellHelp(extra: string[] = []): string {
+  return [
+    "Quorate shell commands:",
+    "  /help                 Show this help",
+    "  /providers            List providers and local availability",
+    "  /doctor               Alias for /providers",
+    "  /status               Show current session state",
+    "  /use ids              Enable providers (default, available, heuristic, or ids)",
+    "  /enable ids           Add providers to the active session set",
+    "  /disable ids          Remove providers from the active session set",
+    "  /roles ids            Limit council roles, comma-separated",
+    "  /mode review|plan     Set how bare text is interpreted",
+    "  /diff path            Load a unified diff file",
+    "  /git [base] [head]    Load git diff from the current repo",
+    "  /pr number            Load a pull request diff with gh",
+    "  /review [subject]     Review the loaded/current diff",
+    "  /plan text            Ask the council to evaluate a plan",
+    "  /last                 Show the last report",
+    "  /rerun                Run the last request again",
+    "  /history              Show recent shell commands",
+    "  /json path            Save the last report as JSON",
+    "  /markdown path        Save the last report as Markdown",
+    "  /clear                Clear loaded diff and last report",
+    ...extra,
+    "  /exit                 Leave the shell",
+    "",
+    "Bare text runs /review in review mode and /plan in plan mode."
+  ].join("\n");
 }
 
 export function validateProviderSelection(config: QuorateConfig, providers?: string): string[] {

@@ -23,6 +23,8 @@ import {
   providerSnapshots,
   configuredActiveProviders,
   activeProviderSet,
+  shellHelp as buildShellHelp,
+  statusText,
   type ProviderSnapshot,
   type ShellState
 } from "./session.js";
@@ -172,50 +174,7 @@ function unknownValues(values: string[], allowed: Set<string>): string[] {
 }
 
 export function shellHelp(): string {
-  return [
-    "Quorate shell commands:",
-    "  /help                 Show this help",
-    "  /providers            List providers and local availability",
-    "  /doctor               Alias for /providers",
-    "  /use ids              Enable providers for this session, comma-separated",
-    "  /use default          Return to config provider defaults",
-    "  /use available        Enable detected providers with runnable headless profiles",
-    "  /enable ids           Add providers to the active session set",
-    "  /disable ids          Remove providers from the active session set",
-    "  /roles ids            Limit council roles, comma-separated",
-    "  /mode review|plan     Set how bare text is interpreted",
-    "  /diff path            Load a unified diff file",
-    "  /git [base] [head]    Load git diff from the current repo",
-    "  /pr number            Load a pull request diff with gh",
-    "  /review [subject]     Review the loaded/current diff",
-    "  /plan text            Ask the council to evaluate a plan",
-    "  /last                 Show the last report",
-    "  /rerun                Run the last request again",
-    "  /history              Show recent shell commands",
-    "  /json path            Save the last report as JSON",
-    "  /markdown path        Save the last report as Markdown",
-    "  /clear                Clear loaded diff and last report",
-    "  /reset                Alias for /clear",
-    "  /exit                 Leave the shell",
-    "",
-    "Bare text runs /review in review mode and /plan in plan mode."
-  ].join("\n");
-}
-
-function statusText(state: ShellState): string {
-  const providerText =
-    state.activeProviders?.length === 0
-      ? "heuristic fallback"
-      : state.activeProviders?.join(", ") ?? "config defaults";
-
-  return [
-    `Mode: ${state.mode}`,
-    `Cwd: ${state.cwd}`,
-    `Diff: ${state.diffLabel ?? "not loaded"}`,
-    `Providers: ${providerText}`,
-    `Roles: ${state.activeRoles?.join(", ") ?? "config defaults"}`,
-    `Last report: ${state.lastReport ? `${state.lastReport.verdict} (${state.lastReport.findings.length} findings)` : "none"}`
-  ].join("\n");
+  return buildShellHelp(["  /reset                Alias for /clear"]);
 }
 
 function record(state: ShellState, inputLine: string, outputText: string): void {

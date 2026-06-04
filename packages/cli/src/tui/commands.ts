@@ -10,11 +10,12 @@ import {
 import { readDiff } from "../diff.js";
 import {
   splitList,
+  splitWords,
   resolveUseProviders,
-  availableProviderIds,
-  configuredActiveProviders,
   activeProviderSet,
   providerSnapshots as providerSnapshotsImpl,
+  shellHelp,
+  statusText as buildStatusText,
   type ShellState
 } from "../session.js";
 import type { ShellContext } from "./context.js";
@@ -81,72 +82,25 @@ function text(ctx: ShellContext, message: string): void {
   ctx.emit({ id: cellId(), kind: "text", text: message });
 }
 
-function helpText(): string {
-  return [
-    "Quorate shell commands:",
-    "  /help                 Show this help",
-    "  /providers            List providers and local availability",
-    "  /doctor               Alias for /providers",
-    "  /status               Show current session state",
-    "  /use ids              Enable providers (default, available, heuristic, or ids)",
-    "  /enable ids           Add providers to the active session set",
-    "  /disable ids          Remove providers from the active session set",
-    "  /roles ids            Limit council roles, comma-separated",
-    "  /mode review|plan     Set how bare text is interpreted",
-    "  /diff path            Load a unified diff file",
-    "  /git [base] [head]    Load git diff from the current repo",
-    "  /pr number            Load a pull request diff with gh",
-    "  /review [subject]     Review the loaded/current diff",
-    "  /plan text            Ask the council to evaluate a plan",
-    "  /last                 Show the last report",
-    "  /rerun                Run the last request again",
-    "  /history              Show recent shell commands",
-    "  /json path            Save the last report as JSON",
-    "  /markdown path        Save the last report as Markdown",
-    "  /clear                Clear loaded diff and last report",
-    "  /exit                 Leave the shell",
-    "",
-    "Bare text runs /review in review mode and /plan in plan mode."
-  ].join("\n");
-}
-
-function statusText(ctx: ShellContext): string {
-  const state = ctx.getState();
-  const providerText =
-    state.activeProviders?.length === 0
-      ? "heuristic fallback"
-      : state.activeProviders?.join(", ") ?? "config defaults";
-  return [
-    `Mode: ${state.mode}`,
-    `Cwd: ${state.cwd}`,
-    `Diff: ${state.diffLabel ?? "not loaded"}`,
-    `Providers: ${providerText}`,
-    `Roles: ${state.activeRoles?.join(", ") ?? "config defaults"}`,
-    `Last report: ${state.lastReport ? `${state.lastReport.verdict} (${state.lastReport.findings.length} findings)` : "none"}`
-  ].join("\n");
-}
-
 export const commandRegistry: SlashCommand[] = [
   {
     name: "providers",
     aliases: ["doctor"],
     summary: "List providers and local availability",
-    run(ctx) {
-      ctx.emit({ id: cellId(), kind: "providerStatus", rows: providerSnapshotsFor(ctx) });
-    }
+    run: runProviders
   },
   {
+    // Kept as a registry name (the command list snapshot asserts it) but shares the
+    // single `runProviders` implementation rather than duplicating its body.
     name: "doctor",
     summary: "Alias for /providers",
-    run(ctx) {
-      ctx.emit({ id: cellId(), kind: "providerStatus", rows: providerSnapshotsFor(ctx) });
-    }
+    run: runProviders
   },
   {
     name: "status",
     summary: "Show current session state",
     run(ctx) {
-      text(ctx, statusText(ctx));
+      text(ctx, buildStatusText(ctx.getState()));
     }
   },
   {
@@ -334,7 +288,14 @@ export const commandRegistry: SlashCommand[] = [
     name: "history",
     summary: "Show recent shell commands",
     run(ctx) {
-      text(ctx, "No shell history yet.");
+      const transcript = ctx.getState().transcript ?? [];
+      const recent = transcript.slice(-10);
+      text(
+        ctx,
+        recent.length > 0
+          ? recent.map((entry, index) => `${index + 1}. ${entry.at} ${entry.input}`).join("\n")
+          : "No shell history yet."
+      );
     }
   },
   {
@@ -390,7 +351,7 @@ export const commandRegistry: SlashCommand[] = [
     aliases: ["?"],
     summary: "Show shell commands",
     run(ctx) {
-      text(ctx, helpText());
+      text(ctx, shellHelp());
     }
   },
   {
@@ -403,12 +364,12 @@ export const commandRegistry: SlashCommand[] = [
   }
 ];
 
-function splitWords(args: string): string[] {
-  return args.trim().split(/\s+/).filter(Boolean);
-}
-
 function providerSnapshotsFor(ctx: ShellContext) {
   return providerSnapshotsImpl(asShellState(ctx));
+}
+
+function runProviders(ctx: ShellContext): void {
+  ctx.emit({ id: cellId(), kind: "providerStatus", rows: providerSnapshotsFor(ctx) });
 }
 
 const aliasMap: Map<string, SlashCommand> = (() => {
