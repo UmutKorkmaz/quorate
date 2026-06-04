@@ -25,7 +25,10 @@ const providerSchema = z.object({
   inheritEnv: z.boolean().default(false),
   envAllowlist: z.array(z.string().min(1)).optional(),
   env: z.record(z.string(), z.string()).optional(),
-  installHint: z.string().optional()
+  installHint: z.string().optional(),
+  baseUrl: z.string().url().optional(),
+  model: z.string().min(1).optional(),
+  apiKeyEnv: z.string().min(1).optional()
 });
 
 const configSchema = z.object({

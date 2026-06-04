@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { runApiProvider } from "./api-provider.js";
 import { runCliProvider } from "./cli-provider.js";
 import { runHeuristicReview } from "./heuristics.js";
 import { createDefaultConfig } from "./providers.js";
@@ -145,13 +146,8 @@ async function runProvider(
 
   if (provider.type === "api") {
     return {
-      providerId: provider.id,
-      role,
-      providerType,
-      status: "skipped",
-      summary: "API providers are configurable but not implemented in the local MVP.",
-      findings: [],
-      durationMs: 0
+      ...(await runApiProvider(provider, role, request, { signal: ctx.signal })),
+      providerType: "api"
     };
   }
 

@@ -13370,7 +13370,7 @@ var require_fetch = __commonJS({
     function handleFetchDone(response) {
       finalizeAndReportTiming(response, "fetch");
     }
-    function fetch2(input, init = void 0) {
+    function fetch3(input, init = void 0) {
       webidl.argumentLengthCheck(arguments, 1, "globalThis.fetch");
       let p = createDeferredPromise();
       let requestObject;
@@ -14327,7 +14327,7 @@ var require_fetch = __commonJS({
       }
     }
     module2.exports = {
-      fetch: fetch2,
+      fetch: fetch3,
       Fetch,
       fetching,
       finalizeAndReportTiming
@@ -18622,7 +18622,7 @@ var require_undici = __commonJS({
     module2.exports.setGlobalDispatcher = setGlobalDispatcher;
     module2.exports.getGlobalDispatcher = getGlobalDispatcher;
     var fetchImpl = require_fetch().fetch;
-    module2.exports.fetch = async function fetch2(init, options = void 0) {
+    module2.exports.fetch = async function fetch3(init, options = void 0) {
       try {
         return await fetchImpl(init, options);
       } catch (err) {
@@ -28117,8 +28117,8 @@ function isPlainObject2(value) {
 }
 var noop = () => "";
 async function fetchWrapper(requestOptions) {
-  const fetch2 = requestOptions.request?.fetch || globalThis.fetch;
-  if (!fetch2) {
+  const fetch3 = requestOptions.request?.fetch || globalThis.fetch;
+  if (!fetch3) {
     throw new Error(
       "fetch is not set. Please pass a fetch implementation as new Octokit({ request: { fetch }}). Learn more at https://github.com/octokit/octokit.js/#fetch-missing"
     );
@@ -28134,7 +28134,7 @@ async function fetchWrapper(requestOptions) {
   );
   let fetchResponse;
   try {
-    fetchResponse = await fetch2(requestOptions.url, {
+    fetchResponse = await fetch3(requestOptions.url, {
       method: requestOptions.method,
       body,
       redirect: requestOptions.request?.redirect,
@@ -31704,6 +31704,150 @@ async function runCliProvider(provider, role, request2, hooks) {
     };
   } finally {
     await (0, import_promises.rm)(tempDir, { recursive: true, force: true });
+  }
+}
+
+// ../core/src/api-provider.ts
+var DEFAULT_BASE_URL = "http://localhost:11434/v1";
+var MAX_TIMEOUT_MS = 3e5;
+var DEFAULT_TIMEOUT_MS = 12e4;
+var DEFAULT_MAX_OUTPUT_BYTES = 1e6;
+var REVIEWER_INSTRUCTIONS = [
+  "You are a meticulous code reviewer.",
+  "Report concrete findings in the requested format only. Do not add filler prose.",
+  "Use severity values: critical, high, medium, low, info."
+].join("\n");
+function buildPrompt2(provider, role, request2) {
+  const header = [
+    `You are the ${role} member of Quorate.`,
+    `Mode: ${request2.mode}`,
+    `Subject: ${request2.subject}`,
+    "Return concise findings as Markdown bullets. Use this finding format when possible:",
+    "- [severity] Title (path/to/file.ts:12): concrete evidence and recommendation",
+    "Use severity values: critical, high, medium, low, info.",
+    "You MAY instead return a JSON array of findings in a fenced ```json block, where each item is",
+    '{"severity","title","body","file?","line?","suggestion?"}.'
+  ].join("\n");
+  const diffSection = request2.diff ? `
+
+Diff:
+${request2.diff}` : "";
+  return `${header}
+
+Provider: ${provider.id}${diffSection}`;
+}
+function firstMeaningfulLine2(output) {
+  return output.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "Provider returned output.";
+}
+async function runApiProvider(provider, role, request2, hooks) {
+  const startedAt = Date.now();
+  const base = {
+    providerId: provider.id,
+    role,
+    providerType: "api",
+    findings: [],
+    durationMs: 0
+  };
+  const fail = (summary2, error52, rawOutput) => ({
+    ...base,
+    status: "error",
+    summary: summary2,
+    findings: [],
+    error: error52 ?? summary2,
+    rawOutput,
+    durationMs: Date.now() - startedAt
+  });
+  const model = provider.model;
+  if (!model || model.trim() === "") {
+    return fail(
+      `API provider ${provider.id} has no model configured. Set the model in your config.`
+    );
+  }
+  const baseUrl2 = (provider.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const url2 = `${baseUrl2}/chat/completions`;
+  const timeoutMs = Math.min(provider.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+  const maxOutputBytes = provider.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+  const prompt = buildPrompt2(provider, role, request2);
+  const headers = { "content-type": "application/json" };
+  if (provider.apiKeyEnv) {
+    const token = process.env[provider.apiKeyEnv];
+    if (token) headers.authorization = `Bearer ${token}`;
+  }
+  const controller = new AbortController();
+  let timedOut = false;
+  let userAborted = hooks?.signal?.aborted ?? false;
+  const onUserAbort = () => {
+    userAborted = true;
+    controller.abort();
+  };
+  if (hooks?.signal) {
+    if (hooks.signal.aborted) controller.abort();
+    else hooks.signal.addEventListener("abort", onUserAbort);
+  }
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    const response = await fetch(url2, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: REVIEWER_INSTRUCTIONS },
+          { role: "user", content: prompt }
+        ],
+        stream: false
+      }),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      const trimmed = errorText.trim();
+      return fail(
+        `API provider ${provider.id} returned HTTP ${response.status}.`,
+        trimmed || `HTTP ${response.status} ${response.statusText}`.trim(),
+        trimmed || void 0
+      );
+    }
+    const json2 = await response.json();
+    const rawContent = json2.choices?.[0]?.message?.content;
+    let text = typeof rawContent === "string" ? rawContent : "";
+    let outputTruncated = false;
+    if (Buffer.byteLength(text) > maxOutputBytes) {
+      outputTruncated = true;
+      text = Buffer.from(text).subarray(0, maxOutputBytes).toString("utf8");
+    }
+    const findings = parseFindings(text, provider.id, role);
+    return {
+      ...base,
+      status: "ok",
+      summary: outputTruncated ? `Provider output truncated to ${maxOutputBytes} bytes.` : firstMeaningfulLine2(text),
+      findings,
+      rawOutput: text || void 0,
+      durationMs: Date.now() - startedAt
+    };
+  } catch (error52) {
+    if (userAborted) {
+      return {
+        ...base,
+        status: "interrupted",
+        summary: "Provider run interrupted.",
+        findings: [],
+        durationMs: Date.now() - startedAt
+      };
+    }
+    if (timedOut) {
+      return fail(`Provider timed out after ${timeoutMs}ms.`);
+    }
+    return fail(
+      `API provider ${provider.id} request failed.`,
+      error52 instanceof Error ? error52.message : String(error52)
+    );
+  } finally {
+    clearTimeout(timer);
+    if (hooks?.signal) hooks.signal.removeEventListener("abort", onUserAbort);
   }
 }
 
@@ -46244,7 +46388,10 @@ var providerSchema = external_exports.object({
   inheritEnv: external_exports.boolean().default(false),
   envAllowlist: external_exports.array(external_exports.string().min(1)).optional(),
   env: external_exports.record(external_exports.string(), external_exports.string()).optional(),
-  installHint: external_exports.string().optional()
+  installHint: external_exports.string().optional(),
+  baseUrl: external_exports.string().url().optional(),
+  model: external_exports.string().min(1).optional(),
+  apiKeyEnv: external_exports.string().min(1).optional()
 });
 var configSchema = external_exports.object({
   councils: external_exports.array(external_exports.string().min(1)).default([]),
@@ -46481,13 +46628,8 @@ async function runProvider(provider, role, request2, ctx) {
   }
   if (provider.type === "api") {
     return {
-      providerId: provider.id,
-      role,
-      providerType,
-      status: "skipped",
-      summary: "API providers are configurable but not implemented in the local MVP.",
-      findings: [],
-      durationMs: 0
+      ...await runApiProvider(provider, role, request2, { signal: ctx.signal }),
+      providerType: "api"
     };
   }
   return runCliProvider(provider, role, request2, {
