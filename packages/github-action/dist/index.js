@@ -3236,21 +3236,21 @@ var require_data_url = __commonJS({
     var HTTP_QUOTED_STRING_TOKENS = /^[\u0009\u0020-\u007E\u0080-\u00FF]+$/;
     function dataURLProcessor(dataURL) {
       assert2(dataURL.protocol === "data:");
-      let input2 = URLSerializer(dataURL, true);
-      input2 = input2.slice(5);
+      let input = URLSerializer(dataURL, true);
+      input = input.slice(5);
       const position = { position: 0 };
       let mimeType = collectASequenceOfCodePointsFast(
         ",",
-        input2,
+        input,
         position
       );
       const mimeTypeLength = mimeType.length;
       mimeType = removeASCIIWhitespace(mimeType, true, true);
-      if (position.position >= input2.length) {
+      if (position.position >= input.length) {
         return "failure";
       }
       position.position++;
-      const encodedBody = input2.slice(mimeTypeLength + 1);
+      const encodedBody = input.slice(mimeTypeLength + 1);
       let body = stringPercentDecode(encodedBody);
       if (/;(\u0020){0,}base64$/i.test(mimeType)) {
         const stringBody = isomorphicDecode(body);
@@ -3283,26 +3283,26 @@ var require_data_url = __commonJS({
       }
       return serialized;
     }
-    function collectASequenceOfCodePoints(condition, input2, position) {
+    function collectASequenceOfCodePoints(condition, input, position) {
       let result = "";
-      while (position.position < input2.length && condition(input2[position.position])) {
-        result += input2[position.position];
+      while (position.position < input.length && condition(input[position.position])) {
+        result += input[position.position];
         position.position++;
       }
       return result;
     }
-    function collectASequenceOfCodePointsFast(char, input2, position) {
-      const idx = input2.indexOf(char, position.position);
+    function collectASequenceOfCodePointsFast(char, input, position) {
+      const idx = input.indexOf(char, position.position);
       const start = position.position;
       if (idx === -1) {
-        position.position = input2.length;
-        return input2.slice(start);
+        position.position = input.length;
+        return input.slice(start);
       }
       position.position = idx;
-      return input2.slice(start, position.position);
+      return input.slice(start, position.position);
     }
-    function stringPercentDecode(input2) {
-      const bytes = encoder.encode(input2);
+    function stringPercentDecode(input) {
+      const bytes = encoder.encode(input);
       return percentDecode(bytes);
     }
     function isHexCharByte(byte) {
@@ -3314,41 +3314,41 @@ var require_data_url = __commonJS({
         byte >= 48 && byte <= 57 ? byte - 48 : (byte & 223) - 55
       );
     }
-    function percentDecode(input2) {
-      const length = input2.length;
+    function percentDecode(input) {
+      const length = input.length;
       const output = new Uint8Array(length);
       let j = 0;
       for (let i = 0; i < length; ++i) {
-        const byte = input2[i];
+        const byte = input[i];
         if (byte !== 37) {
           output[j++] = byte;
-        } else if (byte === 37 && !(isHexCharByte(input2[i + 1]) && isHexCharByte(input2[i + 2]))) {
+        } else if (byte === 37 && !(isHexCharByte(input[i + 1]) && isHexCharByte(input[i + 2]))) {
           output[j++] = 37;
         } else {
-          output[j++] = hexByteToNumber(input2[i + 1]) << 4 | hexByteToNumber(input2[i + 2]);
+          output[j++] = hexByteToNumber(input[i + 1]) << 4 | hexByteToNumber(input[i + 2]);
           i += 2;
         }
       }
       return length === j ? output : output.subarray(0, j);
     }
-    function parseMIMEType(input2) {
-      input2 = removeHTTPWhitespace(input2, true, true);
+    function parseMIMEType(input) {
+      input = removeHTTPWhitespace(input, true, true);
       const position = { position: 0 };
       const type = collectASequenceOfCodePointsFast(
         "/",
-        input2,
+        input,
         position
       );
       if (type.length === 0 || !HTTP_TOKEN_CODEPOINTS.test(type)) {
         return "failure";
       }
-      if (position.position > input2.length) {
+      if (position.position > input.length) {
         return "failure";
       }
       position.position++;
       let subtype = collectASequenceOfCodePointsFast(
         ";",
-        input2,
+        input,
         position
       );
       subtype = removeHTTPWhitespace(subtype, false, true);
@@ -3365,41 +3365,41 @@ var require_data_url = __commonJS({
         // https://mimesniff.spec.whatwg.org/#mime-type-essence
         essence: `${typeLowercase}/${subtypeLowercase}`
       };
-      while (position.position < input2.length) {
+      while (position.position < input.length) {
         position.position++;
         collectASequenceOfCodePoints(
           // https://fetch.spec.whatwg.org/#http-whitespace
           (char) => HTTP_WHITESPACE_REGEX.test(char),
-          input2,
+          input,
           position
         );
         let parameterName = collectASequenceOfCodePoints(
           (char) => char !== ";" && char !== "=",
-          input2,
+          input,
           position
         );
         parameterName = parameterName.toLowerCase();
-        if (position.position < input2.length) {
-          if (input2[position.position] === ";") {
+        if (position.position < input.length) {
+          if (input[position.position] === ";") {
             continue;
           }
           position.position++;
         }
-        if (position.position > input2.length) {
+        if (position.position > input.length) {
           break;
         }
         let parameterValue = null;
-        if (input2[position.position] === '"') {
-          parameterValue = collectAnHTTPQuotedString(input2, position, true);
+        if (input[position.position] === '"') {
+          parameterValue = collectAnHTTPQuotedString(input, position, true);
           collectASequenceOfCodePointsFast(
             ";",
-            input2,
+            input,
             position
           );
         } else {
           parameterValue = collectASequenceOfCodePointsFast(
             ";",
-            input2,
+            input,
             position
           );
           parameterValue = removeHTTPWhitespace(parameterValue, false, true);
@@ -3433,28 +3433,28 @@ var require_data_url = __commonJS({
       const buffer = Buffer.from(data, "base64");
       return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     }
-    function collectAnHTTPQuotedString(input2, position, extractValue) {
+    function collectAnHTTPQuotedString(input, position, extractValue) {
       const positionStart = position.position;
       let value = "";
-      assert2(input2[position.position] === '"');
+      assert2(input[position.position] === '"');
       position.position++;
       while (true) {
         value += collectASequenceOfCodePoints(
           (char) => char !== '"' && char !== "\\",
-          input2,
+          input,
           position
         );
-        if (position.position >= input2.length) {
+        if (position.position >= input.length) {
           break;
         }
-        const quoteOrBackslash = input2[position.position];
+        const quoteOrBackslash = input[position.position];
         position.position++;
         if (quoteOrBackslash === "\\") {
-          if (position.position >= input2.length) {
+          if (position.position >= input.length) {
             value += "\\";
             break;
           }
-          value += input2[position.position];
+          value += input[position.position];
           position.position++;
         } else {
           assert2(quoteOrBackslash === '"');
@@ -3464,7 +3464,7 @@ var require_data_url = __commonJS({
       if (extractValue) {
         return value;
       }
-      return input2.slice(positionStart, position.position);
+      return input.slice(positionStart, position.position);
     }
     function serializeAMimeType(mimeType) {
       assert2(mimeType !== "failure");
@@ -3506,10 +3506,10 @@ var require_data_url = __commonJS({
       }
       return lead === 0 && trail === str.length - 1 ? str : str.slice(lead, trail + 1);
     }
-    function isomorphicDecode(input2) {
-      const length = input2.length;
+    function isomorphicDecode(input) {
+      const length = input.length;
       if ((2 << 15) - 1 > length) {
-        return String.fromCharCode.apply(null, input2);
+        return String.fromCharCode.apply(null, input);
       }
       let result = "";
       let i = 0;
@@ -3518,7 +3518,7 @@ var require_data_url = __commonJS({
         if (i + addition > length) {
           addition = length - i;
         }
-        result += String.fromCharCode.apply(null, input2.subarray(i, i += addition));
+        result += String.fromCharCode.apply(null, input.subarray(i, i += addition));
       }
       return result;
     }
@@ -4575,9 +4575,9 @@ var require_util2 = __commonJS({
       }
     }
     var invalidIsomorphicEncodeValueRegex = /[^\x00-\xFF]/;
-    function isomorphicEncode(input2) {
-      assert2(!invalidIsomorphicEncodeValueRegex.test(input2));
-      return input2;
+    function isomorphicEncode(input) {
+      assert2(!invalidIsomorphicEncodeValueRegex.test(input));
+      return input;
     }
     async function readAllBytes(reader) {
       const bytes = [];
@@ -4748,27 +4748,27 @@ var require_util2 = __commonJS({
       return mimeType;
     }
     function gettingDecodingSplitting(value) {
-      const input2 = value;
+      const input = value;
       const position = { position: 0 };
       const values = [];
       let temporaryValue = "";
-      while (position.position < input2.length) {
+      while (position.position < input.length) {
         temporaryValue += collectASequenceOfCodePoints(
           (char) => char !== '"' && char !== ",",
-          input2,
+          input,
           position
         );
-        if (position.position < input2.length) {
-          if (input2.charCodeAt(position.position) === 34) {
+        if (position.position < input.length) {
+          if (input.charCodeAt(position.position) === 34) {
             temporaryValue += collectAnHTTPQuotedString(
-              input2,
+              input,
               position
             );
-            if (position.position < input2.length) {
+            if (position.position < input.length) {
               continue;
             }
           } else {
-            assert2(input2.charCodeAt(position.position) === 44);
+            assert2(input.charCodeAt(position.position) === 44);
             position.position++;
           }
         }
@@ -5126,7 +5126,7 @@ var require_formdata_parser = __commonJS({
       }
       return true;
     }
-    function multipartFormDataParser(input2, mimeType) {
+    function multipartFormDataParser(input, mimeType) {
       assert2(mimeType !== "failure" && mimeType.essence === "multipart/form-data");
       const boundaryString = mimeType.parameters.get("boundary");
       if (boundaryString === void 0) {
@@ -5135,30 +5135,30 @@ var require_formdata_parser = __commonJS({
       const boundary = Buffer.from(`--${boundaryString}`, "utf8");
       const entryList = [];
       const position = { position: 0 };
-      while (input2[position.position] === 13 && input2[position.position + 1] === 10) {
+      while (input[position.position] === 13 && input[position.position + 1] === 10) {
         position.position += 2;
       }
-      let trailing = input2.length;
-      while (input2[trailing - 1] === 10 && input2[trailing - 2] === 13) {
+      let trailing = input.length;
+      while (input[trailing - 1] === 10 && input[trailing - 2] === 13) {
         trailing -= 2;
       }
-      if (trailing !== input2.length) {
-        input2 = input2.subarray(0, trailing);
+      if (trailing !== input.length) {
+        input = input.subarray(0, trailing);
       }
       while (true) {
-        if (input2.subarray(position.position, position.position + boundary.length).equals(boundary)) {
+        if (input.subarray(position.position, position.position + boundary.length).equals(boundary)) {
           position.position += boundary.length;
         } else {
           return "failure";
         }
-        if (position.position === input2.length - 2 && bufferStartsWith(input2, dd, position) || position.position === input2.length - 4 && bufferStartsWith(input2, ddcrlf, position)) {
+        if (position.position === input.length - 2 && bufferStartsWith(input, dd, position) || position.position === input.length - 4 && bufferStartsWith(input, ddcrlf, position)) {
           return entryList;
         }
-        if (input2[position.position] !== 13 || input2[position.position + 1] !== 10) {
+        if (input[position.position] !== 13 || input[position.position + 1] !== 10) {
           return "failure";
         }
         position.position += 2;
-        const result = parseMultipartFormDataHeaders(input2, position);
+        const result = parseMultipartFormDataHeaders(input, position);
         if (result === "failure") {
           return "failure";
         }
@@ -5166,17 +5166,17 @@ var require_formdata_parser = __commonJS({
         position.position += 2;
         let body;
         {
-          const boundaryIndex = input2.indexOf(boundary.subarray(2), position.position);
+          const boundaryIndex = input.indexOf(boundary.subarray(2), position.position);
           if (boundaryIndex === -1) {
             return "failure";
           }
-          body = input2.subarray(position.position, boundaryIndex - 4);
+          body = input.subarray(position.position, boundaryIndex - 4);
           position.position += body.length;
           if (encoding === "base64") {
             body = Buffer.from(body.toString(), "base64");
           }
         }
-        if (input2[position.position] !== 13 || input2[position.position + 1] !== 10) {
+        if (input[position.position] !== 13 || input[position.position + 1] !== 10) {
           return "failure";
         } else {
           position.position += 2;
@@ -5196,13 +5196,13 @@ var require_formdata_parser = __commonJS({
         entryList.push(makeEntry(name, value, filename));
       }
     }
-    function parseMultipartFormDataHeaders(input2, position) {
+    function parseMultipartFormDataHeaders(input, position) {
       let name = null;
       let filename = null;
       let contentType = null;
       let encoding = null;
       while (true) {
-        if (input2[position.position] === 13 && input2[position.position + 1] === 10) {
+        if (input[position.position] === 13 && input[position.position + 1] === 10) {
           if (name === null) {
             return "failure";
           }
@@ -5210,44 +5210,44 @@ var require_formdata_parser = __commonJS({
         }
         let headerName = collectASequenceOfBytes(
           (char) => char !== 10 && char !== 13 && char !== 58,
-          input2,
+          input,
           position
         );
         headerName = removeChars(headerName, true, true, (char) => char === 9 || char === 32);
         if (!HTTP_TOKEN_CODEPOINTS.test(headerName.toString())) {
           return "failure";
         }
-        if (input2[position.position] !== 58) {
+        if (input[position.position] !== 58) {
           return "failure";
         }
         position.position++;
         collectASequenceOfBytes(
           (char) => char === 32 || char === 9,
-          input2,
+          input,
           position
         );
         switch (bufferToLowerCasedHeaderName(headerName)) {
           case "content-disposition": {
             name = filename = null;
-            if (!bufferStartsWith(input2, formDataNameBuffer, position)) {
+            if (!bufferStartsWith(input, formDataNameBuffer, position)) {
               return "failure";
             }
             position.position += 17;
-            name = parseMultipartFormDataName(input2, position);
+            name = parseMultipartFormDataName(input, position);
             if (name === null) {
               return "failure";
             }
-            if (bufferStartsWith(input2, filenameBuffer, position)) {
+            if (bufferStartsWith(input, filenameBuffer, position)) {
               let check2 = position.position + filenameBuffer.length;
-              if (input2[check2] === 42) {
+              if (input[check2] === 42) {
                 position.position += 1;
                 check2 += 1;
               }
-              if (input2[check2] !== 61 || input2[check2 + 1] !== 34) {
+              if (input[check2] !== 61 || input[check2 + 1] !== 34) {
                 return "failure";
               }
               position.position += 12;
-              filename = parseMultipartFormDataName(input2, position);
+              filename = parseMultipartFormDataName(input, position);
               if (filename === null) {
                 return "failure";
               }
@@ -5257,7 +5257,7 @@ var require_formdata_parser = __commonJS({
           case "content-type": {
             let headerValue = collectASequenceOfBytes(
               (char) => char !== 10 && char !== 13,
-              input2,
+              input,
               position
             );
             headerValue = removeChars(headerValue, false, true, (char) => char === 9 || char === 32);
@@ -5267,7 +5267,7 @@ var require_formdata_parser = __commonJS({
           case "content-transfer-encoding": {
             let headerValue = collectASequenceOfBytes(
               (char) => char !== 10 && char !== 13,
-              input2,
+              input,
               position
             );
             headerValue = removeChars(headerValue, false, true, (char) => char === 9 || char === 32);
@@ -5277,26 +5277,26 @@ var require_formdata_parser = __commonJS({
           default: {
             collectASequenceOfBytes(
               (char) => char !== 10 && char !== 13,
-              input2,
+              input,
               position
             );
           }
         }
-        if (input2[position.position] !== 13 && input2[position.position + 1] !== 10) {
+        if (input[position.position] !== 13 && input[position.position + 1] !== 10) {
           return "failure";
         } else {
           position.position += 2;
         }
       }
     }
-    function parseMultipartFormDataName(input2, position) {
-      assert2(input2[position.position - 1] === 34);
+    function parseMultipartFormDataName(input, position) {
+      assert2(input[position.position - 1] === 34);
       let name = collectASequenceOfBytes(
         (char) => char !== 10 && char !== 13 && char !== 34,
-        input2,
+        input,
         position
       );
-      if (input2[position.position] !== 34) {
+      if (input[position.position] !== 34) {
         return null;
       } else {
         position.position++;
@@ -5304,12 +5304,12 @@ var require_formdata_parser = __commonJS({
       name = new TextDecoder().decode(name).replace(/%0A/ig, "\n").replace(/%0D/ig, "\r").replace(/%22/g, '"');
       return name;
     }
-    function collectASequenceOfBytes(condition, input2, position) {
+    function collectASequenceOfBytes(condition, input, position) {
       let start = position.position;
-      while (start < input2.length && condition(input2[start])) {
+      while (start < input.length && condition(input[start])) {
         ++start;
       }
-      return input2.subarray(position.position, position.position = start);
+      return input.subarray(position.position, position.position = start);
     }
     function removeChars(buf, leading, trailing, predicate) {
       let lead = 0;
@@ -12636,39 +12636,39 @@ var require_request2 = __commonJS({
     var patchMethodWarning = false;
     var Request = class _Request {
       // https://fetch.spec.whatwg.org/#dom-request
-      constructor(input2, init = {}) {
+      constructor(input, init = {}) {
         webidl.util.markAsUncloneable(this);
-        if (input2 === kConstruct) {
+        if (input === kConstruct) {
           return;
         }
         const prefix = "Request constructor";
         webidl.argumentLengthCheck(arguments, 1, prefix);
-        input2 = webidl.converters.RequestInfo(input2, prefix, "input");
+        input = webidl.converters.RequestInfo(input, prefix, "input");
         init = webidl.converters.RequestInit(init, prefix, "init");
         let request2 = null;
         let fallbackMode = null;
         const baseUrl2 = environmentSettingsObject.settingsObject.baseUrl;
         let signal = null;
-        if (typeof input2 === "string") {
+        if (typeof input === "string") {
           this[kDispatcher] = init.dispatcher;
           let parsedURL;
           try {
-            parsedURL = new URL(input2, baseUrl2);
+            parsedURL = new URL(input, baseUrl2);
           } catch (err) {
-            throw new TypeError("Failed to parse URL from " + input2, { cause: err });
+            throw new TypeError("Failed to parse URL from " + input, { cause: err });
           }
           if (parsedURL.username || parsedURL.password) {
             throw new TypeError(
-              "Request cannot be constructed from a URL that includes credentials: " + input2
+              "Request cannot be constructed from a URL that includes credentials: " + input
             );
           }
           request2 = makeRequest({ urlList: [parsedURL] });
           fallbackMode = "cors";
         } else {
-          this[kDispatcher] = init.dispatcher || input2[kDispatcher];
-          assert2(input2 instanceof _Request);
-          request2 = input2[kState];
-          signal = input2[kSignal];
+          this[kDispatcher] = init.dispatcher || input[kDispatcher];
+          assert2(input instanceof _Request);
+          request2 = input[kState];
+          signal = input[kSignal];
         }
         const origin = environmentSettingsObject.settingsObject.origin;
         let window = "client";
@@ -12870,7 +12870,7 @@ var require_request2 = __commonJS({
             fillHeaders(this[kHeaders], headers);
           }
         }
-        const inputBody = input2 instanceof _Request ? input2[kState].body : null;
+        const inputBody = input instanceof _Request ? input[kState].body : null;
         if ((init.body != null || inputBody != null) && (request2.method === "GET" || request2.method === "HEAD")) {
           throw new TypeError("Request with GET/HEAD method cannot have body.");
         }
@@ -12899,7 +12899,7 @@ var require_request2 = __commonJS({
         }
         let finalBody = inputOrInitBody;
         if (initBody == null && inputBody != null) {
-          if (bodyUnusable(input2)) {
+          if (bodyUnusable(input)) {
             throw new TypeError(
               "Cannot construct a Request with a Request object that has already been used."
             );
@@ -13370,12 +13370,12 @@ var require_fetch = __commonJS({
     function handleFetchDone(response) {
       finalizeAndReportTiming(response, "fetch");
     }
-    function fetch2(input2, init = void 0) {
+    function fetch2(input, init = void 0) {
       webidl.argumentLengthCheck(arguments, 1, "globalThis.fetch");
       let p = createDeferredPromise();
       let requestObject;
       try {
-        requestObject = new Request(input2, init);
+        requestObject = new Request(input, init);
       } catch (e) {
         p.reject(e);
         return p.promise;
@@ -26904,8 +26904,13 @@ var require_dist2 = __commonJS({
 // src/index.ts
 var index_exports = {};
 __export(index_exports, {
+  applyOverrides: () => applyOverrides,
   loadBaseConfig: () => loadBaseConfig,
-  run: () => run
+  normalizeInput: () => normalizeInput,
+  parseBoolean: () => parseBoolean,
+  resolveBaseRef: () => resolveBaseRef,
+  run: () => run,
+  runAction: () => runAction
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -26913,13 +26918,13 @@ module.exports = __toCommonJS(index_exports);
 var os = __toESM(require("os"), 1);
 
 // ../../node_modules/@actions/core/lib/utils.js
-function toCommandValue(input2) {
-  if (input2 === null || input2 === void 0) {
+function toCommandValue(input) {
+  if (input === null || input === void 0) {
     return "";
-  } else if (typeof input2 === "string" || input2 instanceof String) {
-    return input2;
+  } else if (typeof input === "string" || input instanceof String) {
+    return input;
   }
-  return JSON.stringify(input2);
+  return JSON.stringify(input);
 }
 function toCommandProperties(annotationProperties) {
   if (!Object.keys(annotationProperties).length) {
@@ -31185,7 +31190,7 @@ var defaultProviderCandidates = [
   {
     id: "codex",
     command: "codex",
-    args: ["exec", "--ephemeral", "--sandbox", "read-only", "-"],
+    args: ["exec", "--ephemeral", "--sandbox", "read-only", "--skip-git-repo-check", "-"],
     inputMode: "stdin",
     roles: ["maintainer", "qa"],
     installHint: "OpenAI Codex CLI"
@@ -31293,12 +31298,15 @@ function createDefaultConfig(detected = detectAvailableProviders()) {
       id: candidate.id,
       type: "cli",
       command: detectedProvider?.command ?? candidate.command,
-      args: [],
+      // Use each provider's known headless args so detected CLIs are runnable
+      // out of the box (still disabled until the user opts in with /use). An
+      // empty default left every real provider stuck as "needs-profile".
+      args: candidate.args ?? [],
       roles: candidate.roles,
       enabled: false,
       stdin: true,
       inputMode: candidate.inputMode ?? "stdin",
-      timeoutMs: 12e4,
+      timeoutMs: 3e5,
       killGraceMs: 5e3,
       maxInputBytes: 25e4,
       maxOutputBytes: 1e6,
@@ -31325,6 +31333,9 @@ function createDefaultConfig(detected = detectAvailableProviders()) {
   };
 }
 
+// ../core/src/types.ts
+var severities = ["critical", "high", "medium", "low", "info"];
+
 // ../core/src/cli-provider.ts
 function buildPrompt(provider, role, request2) {
   const header = [
@@ -31333,7 +31344,9 @@ function buildPrompt(provider, role, request2) {
     `Subject: ${request2.subject}`,
     "Return concise findings as Markdown bullets. Use this finding format when possible:",
     "- [severity] Title (path/to/file.ts:12): concrete evidence and recommendation",
-    "Use severity values: critical, high, medium, low, info."
+    "Use severity values: critical, high, medium, low, info.",
+    "You MAY instead return a JSON array of findings in a fenced ```json block, where each item is",
+    '{"severity","title","body","file?","line?","suggestion?"}.'
   ].join("\n");
   const diffSection = request2.diff ? `
 
@@ -31343,7 +31356,7 @@ ${request2.diff}` : "";
 
 Provider: ${provider.id}${diffSection}`;
 }
-async function runCommand(command, args, input2, options) {
+async function runCommand(command, args, input, options) {
   return new Promise((resolve) => {
     const child = (0, import_node_child_process.spawn)(command, args, {
       cwd: options.cwd,
@@ -31434,8 +31447,8 @@ async function runCommand(command, args, input2, options) {
       cleanup();
       resolve({ stdout, stderr, exitCode, signal, timedOut, outputTruncated, aborted: aborted2 });
     });
-    if (input2 !== void 0) {
-      child.stdin.end(input2);
+    if (input !== void 0) {
+      child.stdin.end(input);
     } else {
       child.stdin.end();
     }
@@ -31527,7 +31540,7 @@ function providerEnvironment(provider) {
 }
 function parseFindingsFromText(output, providerId, role) {
   const findings = [];
-  const pattern = /^\s*(?:[-*]\s*)?\[(critical|high|medium|low|info)\]\s*(.+?)(?:\s+\(([^():]+)(?::(\d+))?\))?\s*:?\s*(.*)$/i;
+  const pattern = /^\s*(?:[-*]\s*)?\[(critical|high|medium|low|info)\]\s*([^:(]+)(?:\s*\(([^():]+)(?::(\d+))?\))?\s*:?\s*(.*)$/i;
   for (const line of output.split(/\r?\n/)) {
     const match = pattern.exec(line);
     if (!match) continue;
@@ -31542,6 +31555,54 @@ function parseFindingsFromText(output, providerId, role) {
     });
   }
   return findings;
+}
+var allowedSeverities = new Set(severities);
+function isSeverity(value) {
+  return typeof value === "string" && allowedSeverities.has(value.toLowerCase());
+}
+function extractJsonPayload(output) {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(output);
+  if (fenced && fenced[1].trim()) return fenced[1].trim();
+  const start = output.indexOf("[");
+  const end = output.lastIndexOf("]");
+  if (start !== -1 && end > start) return output.slice(start, end + 1);
+  return void 0;
+}
+function findingFromJson(item, providerId, role) {
+  if (!item || typeof item !== "object") return void 0;
+  const record2 = item;
+  if (!isSeverity(record2.severity)) return void 0;
+  if (typeof record2.title !== "string" || record2.title.trim() === "") return void 0;
+  const body = typeof record2.body === "string" && record2.body.trim() !== "" ? record2.body.trim() : "Provider reported this finding.";
+  const file2 = typeof record2.file === "string" && record2.file.trim() !== "" ? record2.file.trim() : void 0;
+  const lineRaw = record2.line;
+  const line = typeof lineRaw === "number" && Number.isFinite(lineRaw) ? lineRaw : typeof lineRaw === "string" && /^\d+$/.test(lineRaw.trim()) ? Number(lineRaw.trim()) : void 0;
+  const suggestion = typeof record2.suggestion === "string" && record2.suggestion.trim() !== "" ? record2.suggestion.trim() : void 0;
+  return {
+    severity: record2.severity.toLowerCase(),
+    title: record2.title.trim(),
+    body,
+    file: file2,
+    line,
+    suggestion,
+    providerId,
+    role
+  };
+}
+function parseFindings(output, providerId, role) {
+  const payload = extractJsonPayload(output);
+  if (payload) {
+    try {
+      const parsed = JSON.parse(payload);
+      const items = Array.isArray(parsed) ? parsed : void 0;
+      if (items) {
+        const findings = items.map((item) => findingFromJson(item, providerId, role)).filter((finding) => finding !== void 0);
+        if (findings.length > 0) return findings;
+      }
+    } catch {
+    }
+  }
+  return parseFindingsFromText(output, providerId, role);
 }
 function firstMeaningfulLine(output) {
   return output.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "Provider returned output.";
@@ -31617,7 +31678,7 @@ async function runCliProvider(provider, role, request2, hooks) {
       };
     }
     const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    const findings = parseFindingsFromText(combinedOutput, provider.id, role);
+    const findings = parseFindings(combinedOutput, provider.id, role);
     if (result.timedOut || result.exitCode !== 0) {
       return {
         providerId: provider.id,
@@ -32354,8 +32415,8 @@ function cached(getter) {
     }
   };
 }
-function nullish(input2) {
-  return input2 === null || input2 === void 0;
+function nullish(input) {
+  return input === null || input === void 0;
 }
 function cleanRegex(source) {
   const start = source.startsWith("^") ? 1 : 0;
@@ -32442,8 +32503,8 @@ function randomString(length = 10) {
 function esc(str) {
   return JSON.stringify(str);
 }
-function slugify(input2) {
-  return input2.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
+function slugify(input) {
+  return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 var captureStackTrace = "captureStackTrace" in Error ? Error.captureStackTrace : (..._args) => {
 };
@@ -32848,19 +32909,19 @@ function finalizeIssue(iss, ctx, config2) {
   }
   return rest;
 }
-function getSizableOrigin(input2) {
-  if (input2 instanceof Set)
+function getSizableOrigin(input) {
+  if (input instanceof Set)
     return "set";
-  if (input2 instanceof Map)
+  if (input instanceof Map)
     return "map";
-  if (input2 instanceof File)
+  if (input instanceof File)
     return "file";
   return "unknown";
 }
-function getLengthableOrigin(input2) {
-  if (Array.isArray(input2))
+function getLengthableOrigin(input) {
+  if (Array.isArray(input))
     return "array";
-  if (typeof input2 === "string")
+  if (typeof input === "string")
     return "string";
   return "unknown";
 }
@@ -32886,12 +32947,12 @@ function parsedType(data) {
   return t;
 }
 function issue2(...args) {
-  const [iss, input2, inst] = args;
+  const [iss, input, inst] = args;
   if (typeof iss === "string") {
     return {
       message: iss,
       code: "custom",
-      input: input2,
+      input,
       inst
     };
   }
@@ -33435,23 +33496,23 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
       bag.pattern = integer;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
+    const input = payload.value;
     if (isInt) {
-      if (!Number.isInteger(input2)) {
+      if (!Number.isInteger(input)) {
         payload.issues.push({
           expected: origin,
           format: def.format,
           code: "invalid_type",
           continue: false,
-          input: input2,
+          input,
           inst
         });
         return;
       }
-      if (!Number.isSafeInteger(input2)) {
-        if (input2 > 0) {
+      if (!Number.isSafeInteger(input)) {
+        if (input > 0) {
           payload.issues.push({
-            input: input2,
+            input,
             code: "too_big",
             maximum: Number.MAX_SAFE_INTEGER,
             note: "Integers must be within the safe integer range.",
@@ -33462,7 +33523,7 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
           });
         } else {
           payload.issues.push({
-            input: input2,
+            input,
             code: "too_small",
             minimum: Number.MIN_SAFE_INTEGER,
             note: "Integers must be within the safe integer range.",
@@ -33475,10 +33536,10 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
         return;
       }
     }
-    if (input2 < minimum) {
+    if (input < minimum) {
       payload.issues.push({
         origin: "number",
-        input: input2,
+        input,
         code: "too_small",
         minimum,
         inclusive: true,
@@ -33486,10 +33547,10 @@ var $ZodCheckNumberFormat = /* @__PURE__ */ $constructor("$ZodCheckNumberFormat"
         continue: !def.abort
       });
     }
-    if (input2 > maximum) {
+    if (input > maximum) {
       payload.issues.push({
         origin: "number",
-        input: input2,
+        input,
         code: "too_big",
         maximum,
         inclusive: true,
@@ -33509,11 +33570,11 @@ var $ZodCheckBigIntFormat = /* @__PURE__ */ $constructor("$ZodCheckBigIntFormat"
     bag.maximum = maximum;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    if (input2 < minimum) {
+    const input = payload.value;
+    if (input < minimum) {
       payload.issues.push({
         origin: "bigint",
-        input: input2,
+        input,
         code: "too_small",
         minimum,
         inclusive: true,
@@ -33521,10 +33582,10 @@ var $ZodCheckBigIntFormat = /* @__PURE__ */ $constructor("$ZodCheckBigIntFormat"
         continue: !def.abort
       });
     }
-    if (input2 > maximum) {
+    if (input > maximum) {
       payload.issues.push({
         origin: "bigint",
-        input: input2,
+        input,
         code: "too_big",
         maximum,
         inclusive: true,
@@ -33547,16 +33608,16 @@ var $ZodCheckMaxSize = /* @__PURE__ */ $constructor("$ZodCheckMaxSize", (inst, d
       inst2._zod.bag.maximum = def.maximum;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    const size = input2.size;
+    const input = payload.value;
+    const size = input.size;
     if (size <= def.maximum)
       return;
     payload.issues.push({
-      origin: getSizableOrigin(input2),
+      origin: getSizableOrigin(input),
       code: "too_big",
       maximum: def.maximum,
       inclusive: true,
-      input: input2,
+      input,
       inst,
       continue: !def.abort
     });
@@ -33575,16 +33636,16 @@ var $ZodCheckMinSize = /* @__PURE__ */ $constructor("$ZodCheckMinSize", (inst, d
       inst2._zod.bag.minimum = def.minimum;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    const size = input2.size;
+    const input = payload.value;
+    const size = input.size;
     if (size >= def.minimum)
       return;
     payload.issues.push({
-      origin: getSizableOrigin(input2),
+      origin: getSizableOrigin(input),
       code: "too_small",
       minimum: def.minimum,
       inclusive: true,
-      input: input2,
+      input,
       inst,
       continue: !def.abort
     });
@@ -33604,13 +33665,13 @@ var $ZodCheckSizeEquals = /* @__PURE__ */ $constructor("$ZodCheckSizeEquals", (i
     bag.size = def.size;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    const size = input2.size;
+    const input = payload.value;
+    const size = input.size;
     if (size === def.size)
       return;
     const tooBig = size > def.size;
     payload.issues.push({
-      origin: getSizableOrigin(input2),
+      origin: getSizableOrigin(input),
       ...tooBig ? { code: "too_big", maximum: def.size } : { code: "too_small", minimum: def.size },
       inclusive: true,
       exact: true,
@@ -33633,17 +33694,17 @@ var $ZodCheckMaxLength = /* @__PURE__ */ $constructor("$ZodCheckMaxLength", (ins
       inst2._zod.bag.maximum = def.maximum;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    const length = input2.length;
+    const input = payload.value;
+    const length = input.length;
     if (length <= def.maximum)
       return;
-    const origin = getLengthableOrigin(input2);
+    const origin = getLengthableOrigin(input);
     payload.issues.push({
       origin,
       code: "too_big",
       maximum: def.maximum,
       inclusive: true,
-      input: input2,
+      input,
       inst,
       continue: !def.abort
     });
@@ -33662,17 +33723,17 @@ var $ZodCheckMinLength = /* @__PURE__ */ $constructor("$ZodCheckMinLength", (ins
       inst2._zod.bag.minimum = def.minimum;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    const length = input2.length;
+    const input = payload.value;
+    const length = input.length;
     if (length >= def.minimum)
       return;
-    const origin = getLengthableOrigin(input2);
+    const origin = getLengthableOrigin(input);
     payload.issues.push({
       origin,
       code: "too_small",
       minimum: def.minimum,
       inclusive: true,
-      input: input2,
+      input,
       inst,
       continue: !def.abort
     });
@@ -33692,11 +33753,11 @@ var $ZodCheckLengthEquals = /* @__PURE__ */ $constructor("$ZodCheckLengthEquals"
     bag.length = def.length;
   });
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    const length = input2.length;
+    const input = payload.value;
+    const length = input.length;
     if (length === def.length)
       return;
-    const origin = getLengthableOrigin(input2);
+    const origin = getLengthableOrigin(input);
     const tooBig = length > def.length;
     payload.issues.push({
       origin,
@@ -34367,15 +34428,15 @@ var $ZodNumber = /* @__PURE__ */ $constructor("$ZodNumber", (inst, def) => {
         payload.value = Number(payload.value);
       } catch (_) {
       }
-    const input2 = payload.value;
-    if (typeof input2 === "number" && !Number.isNaN(input2) && Number.isFinite(input2)) {
+    const input = payload.value;
+    if (typeof input === "number" && !Number.isNaN(input) && Number.isFinite(input)) {
       return payload;
     }
-    const received = typeof input2 === "number" ? Number.isNaN(input2) ? "NaN" : !Number.isFinite(input2) ? "Infinity" : void 0 : void 0;
+    const received = typeof input === "number" ? Number.isNaN(input) ? "NaN" : !Number.isFinite(input) ? "Infinity" : void 0 : void 0;
     payload.issues.push({
       expected: "number",
       code: "invalid_type",
-      input: input2,
+      input,
       inst,
       ...received ? { received } : {}
     });
@@ -34395,13 +34456,13 @@ var $ZodBoolean = /* @__PURE__ */ $constructor("$ZodBoolean", (inst, def) => {
         payload.value = Boolean(payload.value);
       } catch (_) {
       }
-    const input2 = payload.value;
-    if (typeof input2 === "boolean")
+    const input = payload.value;
+    if (typeof input === "boolean")
       return payload;
     payload.issues.push({
       expected: "boolean",
       code: "invalid_type",
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -34434,13 +34495,13 @@ var $ZodBigIntFormat = /* @__PURE__ */ $constructor("$ZodBigIntFormat", (inst, d
 var $ZodSymbol = /* @__PURE__ */ $constructor("$ZodSymbol", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, _ctx) => {
-    const input2 = payload.value;
-    if (typeof input2 === "symbol")
+    const input = payload.value;
+    if (typeof input === "symbol")
       return payload;
     payload.issues.push({
       expected: "symbol",
       code: "invalid_type",
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -34451,13 +34512,13 @@ var $ZodUndefined = /* @__PURE__ */ $constructor("$ZodUndefined", (inst, def) =>
   inst._zod.pattern = _undefined;
   inst._zod.values = /* @__PURE__ */ new Set([void 0]);
   inst._zod.parse = (payload, _ctx) => {
-    const input2 = payload.value;
-    if (typeof input2 === "undefined")
+    const input = payload.value;
+    if (typeof input === "undefined")
       return payload;
     payload.issues.push({
       expected: "undefined",
       code: "invalid_type",
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -34468,13 +34529,13 @@ var $ZodNull = /* @__PURE__ */ $constructor("$ZodNull", (inst, def) => {
   inst._zod.pattern = _null;
   inst._zod.values = /* @__PURE__ */ new Set([null]);
   inst._zod.parse = (payload, _ctx) => {
-    const input2 = payload.value;
-    if (input2 === null)
+    const input = payload.value;
+    if (input === null)
       return payload;
     payload.issues.push({
       expected: "null",
       code: "invalid_type",
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -34503,13 +34564,13 @@ var $ZodNever = /* @__PURE__ */ $constructor("$ZodNever", (inst, def) => {
 var $ZodVoid = /* @__PURE__ */ $constructor("$ZodVoid", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, _ctx) => {
-    const input2 = payload.value;
-    if (typeof input2 === "undefined")
+    const input = payload.value;
+    if (typeof input === "undefined")
       return payload;
     payload.issues.push({
       expected: "void",
       code: "invalid_type",
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -34524,15 +34585,15 @@ var $ZodDate = /* @__PURE__ */ $constructor("$ZodDate", (inst, def) => {
       } catch (_err) {
       }
     }
-    const input2 = payload.value;
-    const isDate = input2 instanceof Date;
-    const isValidDate = isDate && !Number.isNaN(input2.getTime());
+    const input = payload.value;
+    const isDate = input instanceof Date;
+    const isValidDate = isDate && !Number.isNaN(input.getTime());
     if (isValidDate)
       return payload;
     payload.issues.push({
       expected: "date",
       code: "invalid_type",
-      input: input2,
+      input,
       ...isDate ? { received: "Invalid Date" } : {},
       inst
     });
@@ -34548,20 +34609,20 @@ function handleArrayResult(result, final, index) {
 var $ZodArray = /* @__PURE__ */ $constructor("$ZodArray", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, ctx) => {
-    const input2 = payload.value;
-    if (!Array.isArray(input2)) {
+    const input = payload.value;
+    if (!Array.isArray(input)) {
       payload.issues.push({
         expected: "array",
         code: "invalid_type",
-        input: input2,
+        input,
         inst
       });
       return payload;
     }
-    payload.value = Array(input2.length);
+    payload.value = Array(input.length);
     const proms = [];
-    for (let i = 0; i < input2.length; i++) {
-      const item = input2[i];
+    for (let i = 0; i < input.length; i++) {
+      const item = input[i];
       const result = def.element._zod.run({
         value: item,
         issues: []
@@ -34578,8 +34639,8 @@ var $ZodArray = /* @__PURE__ */ $constructor("$ZodArray", (inst, def) => {
     return payload;
   };
 });
-function handlePropertyResult(result, final, key, input2, isOptionalIn, isOptionalOut) {
-  const isPresent = key in input2;
+function handlePropertyResult(result, final, key, input, isOptionalIn, isOptionalOut) {
+  const isPresent = key in input;
   if (result.issues.length) {
     if (isOptionalIn && isOptionalOut && !isPresent) {
       return;
@@ -34621,14 +34682,14 @@ function normalizeDef(def) {
     optionalKeys: new Set(okeys)
   };
 }
-function handleCatchall(proms, input2, payload, ctx, def, inst) {
+function handleCatchall(proms, input, payload, ctx, def, inst) {
   const unrecognized = [];
   const keySet = def.keySet;
   const _catchall = def.catchall._zod;
   const t = _catchall.def.type;
   const isOptionalIn = _catchall.optin === "optional";
   const isOptionalOut = _catchall.optout === "optional";
-  for (const key in input2) {
+  for (const key in input) {
     if (key === "__proto__")
       continue;
     if (keySet.has(key))
@@ -34637,18 +34698,18 @@ function handleCatchall(proms, input2, payload, ctx, def, inst) {
       unrecognized.push(key);
       continue;
     }
-    const r = _catchall.run({ value: input2[key], issues: [] }, ctx);
+    const r = _catchall.run({ value: input[key], issues: [] }, ctx);
     if (r instanceof Promise) {
-      proms.push(r.then((r2) => handlePropertyResult(r2, payload, key, input2, isOptionalIn, isOptionalOut)));
+      proms.push(r.then((r2) => handlePropertyResult(r2, payload, key, input, isOptionalIn, isOptionalOut)));
     } else {
-      handlePropertyResult(r, payload, key, input2, isOptionalIn, isOptionalOut);
+      handlePropertyResult(r, payload, key, input, isOptionalIn, isOptionalOut);
     }
   }
   if (unrecognized.length) {
     payload.issues.push({
       code: "unrecognized_keys",
       keys: unrecognized,
-      input: input2,
+      input,
       inst
     });
   }
@@ -34692,12 +34753,12 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
   let value;
   inst._zod.parse = (payload, ctx) => {
     value ?? (value = _normalized.value);
-    const input2 = payload.value;
-    if (!isObject2(input2)) {
+    const input = payload.value;
+    if (!isObject2(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
-        input: input2,
+        input,
         inst
       });
       return payload;
@@ -34709,17 +34770,17 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
       const el = shape[key];
       const isOptionalIn = el._zod.optin === "optional";
       const isOptionalOut = el._zod.optout === "optional";
-      const r = el._zod.run({ value: input2[key], issues: [] }, ctx);
+      const r = el._zod.run({ value: input[key], issues: [] }, ctx);
       if (r instanceof Promise) {
-        proms.push(r.then((r2) => handlePropertyResult(r2, payload, key, input2, isOptionalIn, isOptionalOut)));
+        proms.push(r.then((r2) => handlePropertyResult(r2, payload, key, input, isOptionalIn, isOptionalOut)));
       } else {
-        handlePropertyResult(r, payload, key, input2, isOptionalIn, isOptionalOut);
+        handlePropertyResult(r, payload, key, input, isOptionalIn, isOptionalOut);
       }
     }
     if (!catchall) {
       return proms.length ? Promise.all(proms).then(() => payload) : payload;
     }
-    return handleCatchall(proms, input2, payload, ctx, _normalized.value, inst);
+    return handleCatchall(proms, input, payload, ctx, _normalized.value, inst);
   };
 });
 var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) => {
@@ -34828,12 +34889,12 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
   let value;
   inst._zod.parse = (payload, ctx) => {
     value ?? (value = _normalized.value);
-    const input2 = payload.value;
-    if (!isObject2(input2)) {
+    const input = payload.value;
+    if (!isObject2(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
-        input: input2,
+        input,
         inst
       });
       return payload;
@@ -34844,7 +34905,7 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
       payload = fastpass(payload, ctx);
       if (!catchall)
         return payload;
-      return handleCatchall([], input2, payload, ctx, value, inst);
+      return handleCatchall([], input, payload, ctx, value, inst);
     }
     return superParse(payload, ctx);
   };
@@ -35004,17 +35065,17 @@ var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnio
     return map2;
   });
   inst._zod.parse = (payload, ctx) => {
-    const input2 = payload.value;
-    if (!isObject(input2)) {
+    const input = payload.value;
+    if (!isObject(input)) {
       payload.issues.push({
         code: "invalid_type",
         expected: "object",
-        input: input2,
+        input,
         inst
       });
       return payload;
     }
-    const opt = disc.value.get(input2?.[def.discriminator]);
+    const opt = disc.value.get(input?.[def.discriminator]);
     if (opt) {
       return opt._zod.run(payload, ctx);
     }
@@ -35027,7 +35088,7 @@ var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnio
       note: "No matching discriminator",
       discriminator: def.discriminator,
       options: Array.from(disc.value.keys()),
-      input: input2,
+      input,
       path: [def.discriminator],
       inst
     });
@@ -35037,9 +35098,9 @@ var $ZodDiscriminatedUnion = /* @__PURE__ */ $constructor("$ZodDiscriminatedUnio
 var $ZodIntersection = /* @__PURE__ */ $constructor("$ZodIntersection", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, ctx) => {
-    const input2 = payload.value;
-    const left = def.left._zod.run({ value: input2, issues: [] }, ctx);
-    const right = def.right._zod.run({ value: input2, issues: [] }, ctx);
+    const input = payload.value;
+    const left = def.left._zod.run({ value: input, issues: [] }, ctx);
+    const right = def.right._zod.run({ value: input, issues: [] }, ctx);
     const async = left instanceof Promise || right instanceof Promise;
     if (async) {
       return Promise.all([left, right]).then(([left2, right2]) => {
@@ -35136,10 +35197,10 @@ var $ZodTuple = /* @__PURE__ */ $constructor("$ZodTuple", (inst, def) => {
   $ZodType.init(inst, def);
   const items = def.items;
   inst._zod.parse = (payload, ctx) => {
-    const input2 = payload.value;
-    if (!Array.isArray(input2)) {
+    const input = payload.value;
+    if (!Array.isArray(input)) {
       payload.issues.push({
-        input: input2,
+        input,
         inst,
         expected: "tuple",
         code: "invalid_type"
@@ -35151,23 +35212,23 @@ var $ZodTuple = /* @__PURE__ */ $constructor("$ZodTuple", (inst, def) => {
     const optinStart = getTupleOptStart(items, "optin");
     const optoutStart = getTupleOptStart(items, "optout");
     if (!def.rest) {
-      if (input2.length < optinStart) {
+      if (input.length < optinStart) {
         payload.issues.push({
           code: "too_small",
           minimum: optinStart,
           inclusive: true,
-          input: input2,
+          input,
           inst,
           origin: "array"
         });
         return payload;
       }
-      if (input2.length > items.length) {
+      if (input.length > items.length) {
         payload.issues.push({
           code: "too_big",
           maximum: items.length,
           inclusive: true,
-          input: input2,
+          input,
           inst,
           origin: "array"
         });
@@ -35175,7 +35236,7 @@ var $ZodTuple = /* @__PURE__ */ $constructor("$ZodTuple", (inst, def) => {
     }
     const itemResults = new Array(items.length);
     for (let i = 0; i < items.length; i++) {
-      const r = items[i]._zod.run({ value: input2[i], issues: [] }, ctx);
+      const r = items[i]._zod.run({ value: input[i], issues: [] }, ctx);
       if (r instanceof Promise) {
         proms.push(r.then((rr) => {
           itemResults[i] = rr;
@@ -35186,7 +35247,7 @@ var $ZodTuple = /* @__PURE__ */ $constructor("$ZodTuple", (inst, def) => {
     }
     if (def.rest) {
       let i = items.length - 1;
-      const rest = input2.slice(items.length);
+      const rest = input.slice(items.length);
       for (const el of rest) {
         i++;
         const result = def.rest._zod.run({ value: el, issues: [] }, ctx);
@@ -35198,9 +35259,9 @@ var $ZodTuple = /* @__PURE__ */ $constructor("$ZodTuple", (inst, def) => {
       }
     }
     if (proms.length) {
-      return Promise.all(proms).then(() => handleTupleResults(itemResults, payload, items, input2, optoutStart));
+      return Promise.all(proms).then(() => handleTupleResults(itemResults, payload, items, input, optoutStart));
     }
-    return handleTupleResults(itemResults, payload, items, input2, optoutStart);
+    return handleTupleResults(itemResults, payload, items, input, optoutStart);
   };
 });
 function getTupleOptStart(items, key) {
@@ -35216,10 +35277,10 @@ function handleTupleResult(result, final, index) {
   }
   final.value[index] = result.value;
 }
-function handleTupleResults(itemResults, final, items, input2, optoutStart) {
+function handleTupleResults(itemResults, final, items, input, optoutStart) {
   for (let i = 0; i < items.length; i++) {
     const r = itemResults[i];
-    const isPresent = i < input2.length;
+    const isPresent = i < input.length;
     if (r.issues.length) {
       if (!isPresent && i >= optoutStart) {
         final.value.length = i;
@@ -35229,7 +35290,7 @@ function handleTupleResults(itemResults, final, items, input2, optoutStart) {
     }
     final.value[i] = r.value;
   }
-  for (let i = final.value.length - 1; i >= input2.length; i--) {
+  for (let i = final.value.length - 1; i >= input.length; i--) {
     if (items[i]._zod.optout === "optional" && final.value[i] === void 0) {
       final.value.length = i;
     } else {
@@ -35241,12 +35302,12 @@ function handleTupleResults(itemResults, final, items, input2, optoutStart) {
 var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, ctx) => {
-    const input2 = payload.value;
-    if (!isPlainObject3(input2)) {
+    const input = payload.value;
+    if (!isPlainObject3(input)) {
       payload.issues.push({
         expected: "record",
         code: "invalid_type",
-        input: input2,
+        input,
         inst
       });
       return payload;
@@ -35275,7 +35336,7 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
             continue;
           }
           const outKey = keyResult.value;
-          const result = def.valueType._zod.run({ value: input2[key], issues: [] }, ctx);
+          const result = def.valueType._zod.run({ value: input[key], issues: [] }, ctx);
           if (result instanceof Promise) {
             proms.push(result.then((result2) => {
               if (result2.issues.length) {
@@ -35292,7 +35353,7 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
         }
       }
       let unrecognized;
-      for (const key in input2) {
+      for (const key in input) {
         if (!recordKeys.has(key)) {
           unrecognized = unrecognized ?? [];
           unrecognized.push(key);
@@ -35301,17 +35362,17 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
       if (unrecognized && unrecognized.length > 0) {
         payload.issues.push({
           code: "unrecognized_keys",
-          input: input2,
+          input,
           inst,
           keys: unrecognized
         });
       }
     } else {
       payload.value = {};
-      for (const key of Reflect.ownKeys(input2)) {
+      for (const key of Reflect.ownKeys(input)) {
         if (key === "__proto__")
           continue;
-        if (!Object.prototype.propertyIsEnumerable.call(input2, key))
+        if (!Object.prototype.propertyIsEnumerable.call(input, key))
           continue;
         let keyResult = def.keyType._zod.run({ value: key, issues: [] }, ctx);
         if (keyResult instanceof Promise) {
@@ -35329,7 +35390,7 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
         }
         if (keyResult.issues.length) {
           if (def.mode === "loose") {
-            payload.value[key] = input2[key];
+            payload.value[key] = input[key];
           } else {
             payload.issues.push({
               code: "invalid_key",
@@ -35342,7 +35403,7 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
           }
           continue;
         }
-        const result = def.valueType._zod.run({ value: input2[key], issues: [] }, ctx);
+        const result = def.valueType._zod.run({ value: input[key], issues: [] }, ctx);
         if (result instanceof Promise) {
           proms.push(result.then((result2) => {
             if (result2.issues.length) {
@@ -35367,27 +35428,27 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
 var $ZodMap = /* @__PURE__ */ $constructor("$ZodMap", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, ctx) => {
-    const input2 = payload.value;
-    if (!(input2 instanceof Map)) {
+    const input = payload.value;
+    if (!(input instanceof Map)) {
       payload.issues.push({
         expected: "map",
         code: "invalid_type",
-        input: input2,
+        input,
         inst
       });
       return payload;
     }
     const proms = [];
     payload.value = /* @__PURE__ */ new Map();
-    for (const [key, value] of input2) {
+    for (const [key, value] of input) {
       const keyResult = def.keyType._zod.run({ value: key, issues: [] }, ctx);
       const valueResult = def.valueType._zod.run({ value, issues: [] }, ctx);
       if (keyResult instanceof Promise || valueResult instanceof Promise) {
         proms.push(Promise.all([keyResult, valueResult]).then(([keyResult2, valueResult2]) => {
-          handleMapResult(keyResult2, valueResult2, payload, key, input2, inst, ctx);
+          handleMapResult(keyResult2, valueResult2, payload, key, input, inst, ctx);
         }));
       } else {
-        handleMapResult(keyResult, valueResult, payload, key, input2, inst, ctx);
+        handleMapResult(keyResult, valueResult, payload, key, input, inst, ctx);
       }
     }
     if (proms.length)
@@ -35395,7 +35456,7 @@ var $ZodMap = /* @__PURE__ */ $constructor("$ZodMap", (inst, def) => {
     return payload;
   };
 });
-function handleMapResult(keyResult, valueResult, final, key, input2, inst, ctx) {
+function handleMapResult(keyResult, valueResult, final, key, input, inst, ctx) {
   if (keyResult.issues.length) {
     if (propertyKeyTypes.has(typeof key)) {
       final.issues.push(...prefixIssues(key, keyResult.issues));
@@ -35403,7 +35464,7 @@ function handleMapResult(keyResult, valueResult, final, key, input2, inst, ctx) 
       final.issues.push({
         code: "invalid_key",
         origin: "map",
-        input: input2,
+        input,
         inst,
         issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config()))
       });
@@ -35416,7 +35477,7 @@ function handleMapResult(keyResult, valueResult, final, key, input2, inst, ctx) 
       final.issues.push({
         origin: "map",
         code: "invalid_element",
-        input: input2,
+        input,
         inst,
         key,
         issues: valueResult.issues.map((iss) => finalizeIssue(iss, ctx, config()))
@@ -35428,10 +35489,10 @@ function handleMapResult(keyResult, valueResult, final, key, input2, inst, ctx) 
 var $ZodSet = /* @__PURE__ */ $constructor("$ZodSet", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, ctx) => {
-    const input2 = payload.value;
-    if (!(input2 instanceof Set)) {
+    const input = payload.value;
+    if (!(input instanceof Set)) {
       payload.issues.push({
-        input: input2,
+        input,
         inst,
         expected: "set",
         code: "invalid_type"
@@ -35440,7 +35501,7 @@ var $ZodSet = /* @__PURE__ */ $constructor("$ZodSet", (inst, def) => {
     }
     const proms = [];
     payload.value = /* @__PURE__ */ new Set();
-    for (const item of input2) {
+    for (const item of input) {
       const result = def.valueType._zod.run({ value: item, issues: [] }, ctx);
       if (result instanceof Promise) {
         proms.push(result.then((result2) => handleSetResult(result2, payload)));
@@ -35465,14 +35526,14 @@ var $ZodEnum = /* @__PURE__ */ $constructor("$ZodEnum", (inst, def) => {
   inst._zod.values = valuesSet;
   inst._zod.pattern = new RegExp(`^(${values.filter((k) => propertyKeyTypes.has(typeof k)).map((o) => typeof o === "string" ? escapeRegex(o) : o.toString()).join("|")})$`);
   inst._zod.parse = (payload, _ctx) => {
-    const input2 = payload.value;
-    if (valuesSet.has(input2)) {
+    const input = payload.value;
+    if (valuesSet.has(input)) {
       return payload;
     }
     payload.issues.push({
       code: "invalid_value",
       values,
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -35487,14 +35548,14 @@ var $ZodLiteral = /* @__PURE__ */ $constructor("$ZodLiteral", (inst, def) => {
   inst._zod.values = values;
   inst._zod.pattern = new RegExp(`^(${def.values.map((o) => typeof o === "string" ? escapeRegex(o) : o ? escapeRegex(o.toString()) : String(o)).join("|")})$`);
   inst._zod.parse = (payload, _ctx) => {
-    const input2 = payload.value;
-    if (values.has(input2)) {
+    const input = payload.value;
+    if (values.has(input)) {
       return payload;
     }
     payload.issues.push({
       code: "invalid_value",
       values: def.values,
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -35503,13 +35564,13 @@ var $ZodLiteral = /* @__PURE__ */ $constructor("$ZodLiteral", (inst, def) => {
 var $ZodFile = /* @__PURE__ */ $constructor("$ZodFile", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, _ctx) => {
-    const input2 = payload.value;
-    if (input2 instanceof File)
+    const input = payload.value;
+    if (input instanceof File)
       return payload;
     payload.issues.push({
       expected: "file",
       code: "invalid_type",
-      input: input2,
+      input,
       inst
     });
     return payload;
@@ -35539,8 +35600,8 @@ var $ZodTransform = /* @__PURE__ */ $constructor("$ZodTransform", (inst, def) =>
     return payload;
   };
 });
-function handleOptionalResult(result, input2) {
-  if (input2 === void 0 && (result.issues.length || result.fallback)) {
+function handleOptionalResult(result, input) {
+  if (input === void 0 && (result.issues.length || result.fallback)) {
     return { issues: [], value: void 0 };
   }
   return result;
@@ -35558,11 +35619,11 @@ var $ZodOptional = /* @__PURE__ */ $constructor("$ZodOptional", (inst, def) => {
   });
   inst._zod.parse = (payload, ctx) => {
     if (def.innerType._zod.optin === "optional") {
-      const input2 = payload.value;
+      const input = payload.value;
       const result = def.innerType._zod.run(payload, ctx);
       if (result instanceof Promise)
-        return result.then((r) => handleOptionalResult(r, input2));
-      return handleOptionalResult(result, input2);
+        return result.then((r) => handleOptionalResult(r, input));
+      return handleOptionalResult(result, input);
     }
     if (payload.value === void 0) {
       return payload;
@@ -35987,20 +36048,20 @@ var $ZodCustom = /* @__PURE__ */ $constructor("$ZodCustom", (inst, def) => {
     return payload;
   };
   inst._zod.check = (payload) => {
-    const input2 = payload.value;
-    const r = def.fn(input2);
+    const input = payload.value;
+    const r = def.fn(input);
     if (r instanceof Promise) {
-      return r.then((r2) => handleRefineResult(r2, payload, input2, inst));
+      return r.then((r2) => handleRefineResult(r2, payload, input, inst));
     }
-    handleRefineResult(r, payload, input2, inst);
+    handleRefineResult(r, payload, input, inst);
     return;
   };
 });
-function handleRefineResult(result, payload, input2, inst) {
+function handleRefineResult(result, payload, input, inst) {
   if (!result) {
     const _iss = {
       code: "custom",
-      input: input2,
+      input,
       inst,
       // incorporates params.error into issue reporting
       path: [...inst._zod.def.path ?? []],
@@ -42688,23 +42749,23 @@ function _overwrite(tx) {
 }
 // @__NO_SIDE_EFFECTS__
 function _normalize(form) {
-  return /* @__PURE__ */ _overwrite((input2) => input2.normalize(form));
+  return /* @__PURE__ */ _overwrite((input) => input.normalize(form));
 }
 // @__NO_SIDE_EFFECTS__
 function _trim() {
-  return /* @__PURE__ */ _overwrite((input2) => input2.trim());
+  return /* @__PURE__ */ _overwrite((input) => input.trim());
 }
 // @__NO_SIDE_EFFECTS__
 function _toLowerCase() {
-  return /* @__PURE__ */ _overwrite((input2) => input2.toLowerCase());
+  return /* @__PURE__ */ _overwrite((input) => input.toLowerCase());
 }
 // @__NO_SIDE_EFFECTS__
 function _toUpperCase() {
-  return /* @__PURE__ */ _overwrite((input2) => input2.toUpperCase());
+  return /* @__PURE__ */ _overwrite((input) => input.toUpperCase());
 }
 // @__NO_SIDE_EFFECTS__
 function _slugify() {
-  return /* @__PURE__ */ _overwrite((input2) => slugify(input2));
+  return /* @__PURE__ */ _overwrite((input) => slugify(input));
 }
 // @__NO_SIDE_EFFECTS__
 function _array(Class2, element, params) {
@@ -43009,8 +43070,8 @@ function _stringbool(Classes, _params) {
     type: "pipe",
     in: stringSchema,
     out: booleanSchema,
-    transform: ((input2, payload) => {
-      let data = input2;
+    transform: ((input, payload) => {
+      let data = input;
       if (params.case !== "sensitive")
         data = data.toLowerCase();
       if (truthySet.has(data)) {
@@ -43029,8 +43090,8 @@ function _stringbool(Classes, _params) {
         return {};
       }
     }),
-    reverseTransform: ((input2, _payload) => {
-      if (input2 === true) {
+    reverseTransform: ((input, _payload) => {
+      if (input === true) {
         return truthyArray[0] || "true";
       } else {
         return falsyArray[0] || "false";
@@ -43926,9 +43987,9 @@ var allProcessors = {
   optional: optionalProcessor,
   lazy: lazyProcessor
 };
-function toJSONSchema(input2, params) {
-  if ("_idmap" in input2) {
-    const registry2 = input2;
+function toJSONSchema(input, params) {
+  if ("_idmap" in input) {
+    const registry2 = input;
     const ctx2 = initializeContext({ ...params, processors: allProcessors });
     const defs = {};
     for (const entry of registry2._idmap.entries()) {
@@ -43956,9 +44017,9 @@ function toJSONSchema(input2, params) {
     return { schemas };
   }
   const ctx = initializeContext({ ...params, processors: allProcessors });
-  process2(input2, ctx);
-  extractDefs(ctx, input2);
-  return finalize(ctx, input2);
+  process2(input, ctx);
+  extractDefs(ctx, input);
+  return finalize(ctx, input);
 }
 
 // ../../node_modules/zod/v4/core/json-schema-generator.js
@@ -46295,6 +46356,43 @@ function runHeuristicReview(request2, role = "maintainer") {
   };
 }
 
+// ../core/src/similarity.ts
+var DEFAULT_SIMILARITY_THRESHOLD = 0.6;
+function normalizeText(s) {
+  return s.toLowerCase().replace(/[^\p{L}\p{N}\s]+/gu, " ").replace(/\s+/g, " ").trim();
+}
+function tokenize(s) {
+  const normalized = normalizeText(s);
+  if (!normalized) return [];
+  return normalized.split(" ");
+}
+function jaccard(a, b) {
+  if (a.size === 0 && b.size === 0) return 1;
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection2 = 0;
+  for (const token of a) {
+    if (b.has(token)) intersection2 += 1;
+  }
+  const union2 = a.size + b.size - intersection2;
+  return union2 === 0 ? 0 : intersection2 / union2;
+}
+function titleBodySimilarity(a, b) {
+  const aTokens = new Set(tokenize(`${a.title} ${a.body}`));
+  const bTokens = new Set(tokenize(`${b.title} ${b.body}`));
+  return jaccard(aTokens, bTokens);
+}
+function sameLocation(a, b, lineWindow = 3) {
+  const fileA = a.file ?? void 0;
+  const fileB = b.file ?? void 0;
+  if (fileA !== fileB) return false;
+  if (a.line === void 0 || b.line === void 0) return true;
+  return Math.abs(a.line - b.line) <= lineWindow;
+}
+function areSameFinding(a, b, threshold = DEFAULT_SIMILARITY_THRESHOLD) {
+  if (!sameLocation(a, b)) return false;
+  return titleBodySimilarity(a, b) >= threshold;
+}
+
 // ../core/src/council.ts
 var severityWeight = {
   critical: 5,
@@ -46303,26 +46401,55 @@ var severityWeight = {
   low: 2,
   info: 1
 };
-function findingKey(finding) {
-  return [finding.severity, finding.title, finding.file ?? "", finding.line ?? ""].join("|");
-}
 function sortFindings(findings) {
   return [...findings].sort((left, right) => {
     const severityDelta = severityWeight[right.severity] - severityWeight[left.severity];
     if (severityDelta !== 0) return severityDelta;
+    const agreementDelta = (right.agreement ?? 1) - (left.agreement ?? 1);
+    if (agreementDelta !== 0) return agreementDelta;
     return left.title.localeCompare(right.title);
   });
 }
-function dedupeFindings(findings) {
-  const seen = /* @__PURE__ */ new Set();
-  const deduped = [];
+function clamp01(value) {
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+function confidenceFor(agreement, severity) {
+  const severityBoost = (severityWeight[severity] - 1) * 0.05;
+  return clamp01(0.4 + 0.15 * (agreement - 1) + severityBoost);
+}
+function clusterFindings(findings) {
+  const clusters = [];
   for (const finding of findings) {
-    const key = findingKey(finding);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(finding);
+    const target = clusters.find(
+      (cluster) => cluster.some((member) => areSameFinding(member, finding))
+    );
+    if (target) {
+      target.push(finding);
+    } else {
+      clusters.push([finding]);
+    }
   }
-  return deduped;
+  return clusters.map((cluster) => {
+    const base = [...cluster].sort(
+      (left, right) => severityWeight[right.severity] - severityWeight[left.severity]
+    )[0];
+    const agreedBy = [
+      ...new Set(
+        cluster.map((member) => member.providerId).filter((id) => Boolean(id))
+      )
+    ].sort();
+    const agreement = agreedBy.length > 0 ? agreedBy.length : 1;
+    const suggestion = base.suggestion ?? cluster.find((member) => member.suggestion)?.suggestion;
+    return {
+      ...base,
+      suggestion,
+      agreedBy,
+      agreement,
+      confidence: confidenceFor(agreement, base.severity)
+    };
+  });
 }
 function verdictFor(findings, providerResults) {
   if (findings.some((finding) => finding.severity === "critical" || finding.severity === "high")) {
@@ -46459,7 +46586,7 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       durationMs: 0
     };
   });
-  const findings = sortFindings(dedupeFindings(providerResults.flatMap((result) => result.findings)));
+  const findings = sortFindings(clusterFindings(providerResults.flatMap((result) => result.findings)));
   const baseVerdict = verdictFor(findings, providerResults);
   const realOk = providerResults.filter(
     (result) => (result.providerType === "cli" || result.providerType === "api") && result.status === "ok"
@@ -46509,9 +46636,13 @@ function locationFor(finding) {
   if (!finding.file) return "";
   return finding.line ? `${finding.file}:${finding.line}` : finding.file;
 }
+function agreementFor(finding) {
+  return String(finding.agreement ?? 1);
+}
 function findingRow(finding) {
   return [
     finding.severity,
+    agreementFor(finding),
     finding.providerId ?? "",
     finding.role ?? "",
     locationFor(finding),
@@ -46537,8 +46668,8 @@ function renderMarkdownReport(report, options = {}) {
   } else {
     lines.push(
       "",
-      "Severity | Provider | Role | Location | Title | Details",
-      "--- | --- | --- | --- | --- | ---",
+      "Severity | Agreement | Provider | Role | Location | Title | Details",
+      "--- | --- | --- | --- | --- | --- | ---",
       ...report.findings.map(findingRow)
     );
   }
@@ -46567,75 +46698,90 @@ function shouldFailForReport(report, github) {
 }
 
 // src/diff.ts
-async function buildPullRequestDiff(client, input2) {
+async function buildPullRequestDiff(client, input, maxBytes = 25e4) {
   const files = await client.paginate(client.rest.pulls.listFiles, {
-    owner: input2.owner,
-    repo: input2.repo,
-    pull_number: input2.pullNumber,
+    owner: input.owner,
+    repo: input.repo,
+    pull_number: input.pullNumber,
     per_page: 100
   });
-  return files.map((file2) => {
+  const blocks = [];
+  let size = 0;
+  let shown = 0;
+  for (const file2 of files) {
     const header = `diff --git a/${file2.filename} b/${file2.filename}
 --- a/${file2.filename}
 +++ b/${file2.filename}`;
-    return file2.patch ? `${header}
+    const block = file2.patch ? `${header}
 ${file2.patch}` : `${header}
 # ${file2.status ?? "changed"} file has no textual patch`;
-  }).join("\n");
+    const blockBytes = Buffer.byteLength(block, "utf8");
+    const separatorBytes = blocks.length > 0 ? 1 : 0;
+    if (shown > 0 && size + separatorBytes + blockBytes > maxBytes) {
+      blocks.push(`# diff truncated to ${maxBytes} bytes (${shown} of ${files.length} files shown)`);
+      return blocks.join("\n");
+    }
+    blocks.push(block);
+    size += separatorBytes + blockBytes;
+    shown += 1;
+  }
+  return blocks.join("\n");
 }
 
 // src/comment.ts
-async function upsertReportComment(client, input2) {
-  if (input2.mode === "new") {
+async function upsertReportComment(client, input) {
+  if (input.mode === "new") {
     await client.rest.issues.createComment({
-      owner: input2.owner,
-      repo: input2.repo,
-      issue_number: input2.issueNumber,
-      body: input2.body
+      owner: input.owner,
+      repo: input.repo,
+      issue_number: input.issueNumber,
+      body: input.body
     });
     return "created";
   }
   const comments = await client.paginate(client.rest.issues.listComments, {
-    owner: input2.owner,
-    repo: input2.repo,
-    issue_number: input2.issueNumber,
+    owner: input.owner,
+    repo: input.repo,
+    issue_number: input.issueNumber,
     per_page: 100
   });
-  const existing = comments.find(
-    (comment) => comment.user?.type === "Bot" && comment.body?.includes(reportCommentMarker)
-  );
+  const existing = comments.find((comment) => comment.body?.includes(reportCommentMarker));
   if (existing) {
     await client.rest.issues.updateComment({
-      owner: input2.owner,
-      repo: input2.repo,
+      owner: input.owner,
+      repo: input.repo,
       comment_id: existing.id,
-      body: input2.body
+      body: input.body
     });
     return "updated";
   }
   await client.rest.issues.createComment({
-    owner: input2.owner,
-    repo: input2.repo,
-    issue_number: input2.issueNumber,
-    body: input2.body
+    owner: input.owner,
+    repo: input.repo,
+    issue_number: input.issueNumber,
+    body: input.body
   });
   return "created";
 }
 
 // src/index.ts
-function input(name) {
-  const value = getInput(name);
+function normalizeInput(value) {
+  if (value === void 0) return void 0;
   return value.trim() === "" ? void 0 : value;
 }
-function inputBoolean(name, fallback) {
-  const value = input(name);
-  if (value === void 0) return fallback;
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+function parseBoolean(value, fallback) {
+  const normalized = normalizeInput(value);
+  if (normalized === void 0) return fallback;
+  return ["1", "true", "yes", "on"].includes(normalized.toLowerCase());
 }
-function applyOverrides(config2) {
-  const providers = input("providers");
-  const failOn = input("fail-on");
-  const runnerMode = input("runner-mode");
+function resolveBaseRef(context3) {
+  const base = context3.payload.pull_request?.base;
+  return base?.sha ?? base?.ref ?? context3.payload.repository?.default_branch ?? "main";
+}
+function applyOverrides(config2, inputs) {
+  const providers = normalizeInput(inputs.providers);
+  const failOn = normalizeInput(inputs.failOn);
+  const runnerMode = normalizeInput(inputs.runnerMode);
   const selected = providers ? new Set(providers.split(",").map((provider) => provider.trim()).filter(Boolean)) : void 0;
   return {
     ...config2,
@@ -46672,23 +46818,27 @@ async function loadBaseConfig(client, params) {
   }
   return createDefaultConfig();
 }
-async function run() {
-  const token = input("github-token") ?? process.env.GITHUB_TOKEN;
+async function runAction(deps) {
+  const input = (name) => normalizeInput(deps.getInput(name));
+  const token = input("github-token") ?? deps.env?.GITHUB_TOKEN;
   if (!token) {
     throw new Error("Missing github-token input or GITHUB_TOKEN environment variable.");
   }
-  const pullRequest = context2.payload.pull_request;
+  const pullRequest = deps.context.payload.pull_request;
   if (!pullRequest) {
     throw new Error("Quorate GitHub Action currently runs on pull_request events only.");
   }
-  const { owner, repo } = context2.repo;
+  const { owner, repo } = deps.context.repo;
   const pullNumber = pullRequest.number;
-  const client = getOctokit(token);
-  const base = pullRequest.base;
-  const baseRef = base?.sha ?? base?.ref ?? context2.payload.repository?.default_branch ?? "main";
+  const client = deps.getOctokit(token);
+  const baseRef = resolveBaseRef(deps.context);
   const configPath = input("config-path");
   const candidates = configPath ? [configPath] : [".quorate.yml", ".quorate.yaml", "quorate.config.yml"];
-  const config2 = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }));
+  const config2 = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }), {
+    providers: input("providers"),
+    failOn: input("fail-on"),
+    runnerMode: input("runner-mode")
+  });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const report = await runCouncil(
     {
@@ -46705,11 +46855,11 @@ async function run() {
     config2
   );
   const body = renderMarkdownReport(report, { includeMarker: true });
-  setOutput("verdict", report.verdict);
-  setOutput("findings", String(report.findings.length));
-  summary.addRaw(body);
-  await summary.write();
-  if (inputBoolean("post-comment", true) && config2.github.commentMode !== "off") {
+  deps.setOutput("verdict", report.verdict);
+  deps.setOutput("findings", String(report.findings.length));
+  deps.summary.addRaw(body);
+  await deps.summary.write();
+  if (parseBoolean(input("post-comment"), true) && config2.github.commentMode !== "off") {
     await upsertReportComment(client, {
       owner,
       repo,
@@ -46719,8 +46869,22 @@ async function run() {
     });
   }
   if (shouldFailForReport(report, config2.github)) {
-    setFailed(`Quorate verdict ${report.verdict} meets fail threshold ${config2.github.failOn}.`);
+    deps.setFailed(`Quorate verdict ${report.verdict} meets fail threshold ${config2.github.failOn}.`);
   }
+}
+async function run() {
+  await runAction({
+    getInput: (name) => getInput(name),
+    setOutput: (name, value) => setOutput(name, value),
+    setFailed: (message) => setFailed(message),
+    summary: {
+      addRaw: (text) => summary.addRaw(text),
+      write: () => summary.write()
+    },
+    context: context2,
+    getOctokit: (token) => getOctokit(token),
+    env: process.env
+  });
 }
 if (!process.env.VITEST) {
   run().catch((error52) => {
@@ -46729,8 +46893,13 @@ if (!process.env.VITEST) {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  applyOverrides,
   loadBaseConfig,
-  run
+  normalizeInput,
+  parseBoolean,
+  resolveBaseRef,
+  run,
+  runAction
 });
 /*! Bundled license information:
 

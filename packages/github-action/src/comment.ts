@@ -45,9 +45,9 @@ export async function upsertReportComment(
     issue_number: input.issueNumber,
     per_page: 100
   });
-  const existing = comments.find(
-    (comment) => comment.user?.type === "Bot" && comment.body?.includes(reportCommentMarker)
-  );
+  // Match by the marker alone so the comment is found even when it was authored
+  // by a PAT user (type "User") rather than the GitHub Actions bot.
+  const existing = comments.find((comment) => comment.body?.includes(reportCommentMarker));
 
   if (existing) {
     await client.rest.issues.updateComment({

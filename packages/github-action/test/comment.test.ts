@@ -38,6 +38,41 @@ describe("upsertReportComment", () => {
     expect(calls).toEqual(["update"]);
   });
 
+  it("updates an existing comment authored by a PAT user (type User)", async () => {
+    const calls: string[] = [];
+    const client = {
+      rest: {
+        issues: {
+          listComments: {},
+          createComment: async () => {
+            calls.push("create");
+          },
+          updateComment: async () => {
+            calls.push("update");
+          }
+        }
+      },
+      paginate: async () => [
+        {
+          id: 99,
+          body: `${reportCommentMarker}\nold`,
+          user: { type: "User" }
+        }
+      ]
+    };
+
+    const result = await upsertReportComment(client, {
+      owner: "owner",
+      repo: "repo",
+      issueNumber: 2,
+      body: `${reportCommentMarker}\nnew`,
+      mode: "update"
+    });
+
+    expect(result).toBe("updated");
+    expect(calls).toEqual(["update"]);
+  });
+
   it("creates a new comment when no marker exists", async () => {
     const calls: string[] = [];
     const client = {

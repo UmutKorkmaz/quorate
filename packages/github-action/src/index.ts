@@ -14,21 +14,63 @@ type Octokit = ReturnType<typeof github.getOctokit>;
 import { buildPullRequestDiff } from "./diff.js";
 import { upsertReportComment } from "./comment.js";
 
-function input(name: string): string | undefined {
-  const value = core.getInput(name);
+/**
+ * Minimal shape of the action's GitHub event context. Kept narrow and explicit
+ * so the orchestration logic can be exercised with plain stub objects in tests.
+ */
+export interface ActionContext {
+  repo: { owner: string; repo: string };
+  payload: {
+    pull_request?: {
+      number: number;
+      title?: string;
+      html_url?: string;
+      base?: { sha?: string; ref?: string };
+    };
+    repository?: { default_branch?: string };
+  };
+}
+
+/** Dependencies injected into {@link runAction}; real wiring lives in {@link run}. */
+export interface ActionDeps {
+  getInput: (name: string) => string | undefined;
+  setOutput: (name: string, value: string) => void;
+  setFailed: (message: string) => void;
+  summary: { addRaw: (text: string) => unknown; write: () => Promise<unknown> };
+  context: ActionContext;
+  getOctokit: (token: string) => Octokit;
+  env?: Record<string, string | undefined>;
+}
+
+/** Normalize an input value: trim and treat the empty string as "unset". */
+export function normalizeInput(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
   return value.trim() === "" ? undefined : value;
 }
 
-function inputBoolean(name: string, fallback: boolean): boolean {
-  const value = input(name);
-  if (value === undefined) return fallback;
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+/** Parse a string input into a boolean, honoring the usual truthy spellings. */
+export function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  const normalized = normalizeInput(value);
+  if (normalized === undefined) return fallback;
+  return ["1", "true", "yes", "on"].includes(normalized.toLowerCase());
 }
 
-function applyOverrides(config: QuorateConfig): QuorateConfig {
-  const providers = input("providers");
-  const failOn = input("fail-on");
-  const runnerMode = input("runner-mode");
+/**
+ * Resolve the trusted base ref: prefer the PR base sha, then base ref, then the
+ * repository default branch, and only fall back to "main" as a last resort.
+ */
+export function resolveBaseRef(context: ActionContext): string {
+  const base = context.payload.pull_request?.base;
+  return base?.sha ?? base?.ref ?? context.payload.repository?.default_branch ?? "main";
+}
+
+export function applyOverrides(
+  config: QuorateConfig,
+  inputs: { providers?: string; failOn?: string; runnerMode?: string }
+): QuorateConfig {
+  const providers = normalizeInput(inputs.providers);
+  const failOn = normalizeInput(inputs.failOn);
+  const runnerMode = normalizeInput(inputs.runnerMode);
 
   const selected = providers
     ? new Set(providers.split(",").map((provider) => provider.trim()).filter(Boolean))
@@ -82,25 +124,35 @@ export async function loadBaseConfig(
   return createDefaultConfig();
 }
 
-export async function run(): Promise<void> {
-  const token = input("github-token") ?? process.env.GITHUB_TOKEN;
+/**
+ * Dependency-injected orchestration for the action. Behavior mirrors the real
+ * entry point exactly; {@link run} simply wires up @actions/core and
+ * @actions/github and delegates here so the logic stays unit-testable.
+ */
+export async function runAction(deps: ActionDeps): Promise<void> {
+  const input = (name: string): string | undefined => normalizeInput(deps.getInput(name));
+
+  const token = input("github-token") ?? deps.env?.GITHUB_TOKEN;
   if (!token) {
     throw new Error("Missing github-token input or GITHUB_TOKEN environment variable.");
   }
 
-  const pullRequest = github.context.payload.pull_request;
+  const pullRequest = deps.context.payload.pull_request;
   if (!pullRequest) {
     throw new Error("Quorate GitHub Action currently runs on pull_request events only.");
   }
 
-  const { owner, repo } = github.context.repo;
+  const { owner, repo } = deps.context.repo;
   const pullNumber = pullRequest.number;
-  const client = github.getOctokit(token);
-  const base = pullRequest.base as { sha?: string; ref?: string } | undefined;
-  const baseRef = base?.sha ?? base?.ref ?? github.context.payload.repository?.default_branch ?? "main";
+  const client = deps.getOctokit(token);
+  const baseRef = resolveBaseRef(deps.context);
   const configPath = input("config-path");
   const candidates = configPath ? [configPath] : [".quorate.yml", ".quorate.yaml", "quorate.config.yml"];
-  const config = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }));
+  const config = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }), {
+    providers: input("providers"),
+    failOn: input("fail-on"),
+    runnerMode: input("runner-mode")
+  });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const report = await runCouncil(
     {
@@ -118,12 +170,12 @@ export async function run(): Promise<void> {
   );
   const body = renderMarkdownReport(report, { includeMarker: true });
 
-  core.setOutput("verdict", report.verdict);
-  core.setOutput("findings", String(report.findings.length));
-  core.summary.addRaw(body);
-  await core.summary.write();
+  deps.setOutput("verdict", report.verdict);
+  deps.setOutput("findings", String(report.findings.length));
+  deps.summary.addRaw(body);
+  await deps.summary.write();
 
-  if (inputBoolean("post-comment", true) && config.github.commentMode !== "off") {
+  if (parseBoolean(input("post-comment"), true) && config.github.commentMode !== "off") {
     await upsertReportComment(client, {
       owner,
       repo,
@@ -134,8 +186,23 @@ export async function run(): Promise<void> {
   }
 
   if (shouldFailForReport(report, config.github)) {
-    core.setFailed(`Quorate verdict ${report.verdict} meets fail threshold ${config.github.failOn}.`);
+    deps.setFailed(`Quorate verdict ${report.verdict} meets fail threshold ${config.github.failOn}.`);
   }
+}
+
+export async function run(): Promise<void> {
+  await runAction({
+    getInput: (name) => core.getInput(name),
+    setOutput: (name, value) => core.setOutput(name, value),
+    setFailed: (message) => core.setFailed(message),
+    summary: {
+      addRaw: (text) => core.summary.addRaw(text),
+      write: () => core.summary.write()
+    },
+    context: github.context as unknown as ActionContext,
+    getOctokit: (token) => github.getOctokit(token),
+    env: process.env
+  });
 }
 
 if (!process.env.VITEST) {
