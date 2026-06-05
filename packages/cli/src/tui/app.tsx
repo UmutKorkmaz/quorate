@@ -103,6 +103,7 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
       setSelected(0);
       if (!trimmed) return;
       emit({ id: nextId(), kind: "text", text: `› ${trimmed}` });
+      dispatch({ type: "recordInput", input: trimmed });
       if (trimmed === "/exit" || trimmed === "/quit" || trimmed === "/q") {
         exit();
         return;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFindingsFromText } from "../src/cli-provider.js";
+import { parseFindings, parseFindingsFromText } from "../src/cli-provider.js";
 
 describe("parseFindingsFromText", () => {
   it("keeps the full title and splits file/line/body (regression for the 'F | ocus' bug)", () => {
@@ -37,5 +37,65 @@ describe("parseFindingsFromText", () => {
 
   it("ignores lines that are not findings", () => {
     expect(parseFindingsFromText("Here is my review summary.", "codex", "maintainer")).toEqual([]);
+  });
+});
+
+describe("parseFindings (structured-output path)", () => {
+  it("parses a fenced ```json block of finding objects", () => {
+    const output = [
+      "Here is the review.",
+      "```json",
+      JSON.stringify([
+        { severity: "high", title: "Missing authz", body: "endpoint trusts client claims", file: "api.ts", line: 12 },
+        { severity: "low", title: "Nit", body: "rename variable", suggestion: "use camelCase" }
+      ]),
+      "```"
+    ].join("\n");
+
+    const findings = parseFindings(output, "codex", "security");
+    expect(findings).toHaveLength(2);
+    expect(findings[0]).toMatchObject({
+      severity: "high",
+      title: "Missing authz",
+      file: "api.ts",
+      line: 12,
+      providerId: "codex",
+      role: "security"
+    });
+    expect(findings[1].suggestion).toBe("use camelCase");
+  });
+
+  it("parses a raw JSON array without a fence", () => {
+    const output = '[{"severity":"critical","title":"RCE","body":"unsafe eval of user input"}]';
+    const [finding] = parseFindings(output, "review-bot", "security");
+    expect(finding.severity).toBe("critical");
+    expect(finding.title).toBe("RCE");
+    expect(finding.line).toBeUndefined();
+  });
+
+  it("skips JSON items with invalid severity and falls back to text when none are valid", () => {
+    const output = [
+      "```json",
+      JSON.stringify([{ severity: "blocker", title: "bad sev", body: "x" }]),
+      "```",
+      "- [medium] Real finding (a.ts:1): from the bullet fallback"
+    ].join("\n");
+
+    const findings = parseFindings(output, "codex", "maintainer");
+    expect(findings).toHaveLength(1);
+    expect(findings[0].title).toBe("Real finding");
+    expect(findings[0].file).toBe("a.ts");
+  });
+
+  it("falls back to the Markdown parser when there is no JSON", () => {
+    const [finding] = parseFindings("- [high] Plain bullet finding", "codex", "maintainer");
+    expect(finding.title).toBe("Plain bullet finding");
+  });
+
+  it("falls back to the Markdown parser when the JSON is malformed", () => {
+    const output = "```json\n[ {severity: oops } ]\n```\n- [low] Backup bullet (b.ts:2): recovered";
+    const [finding] = parseFindings(output, "codex", "maintainer");
+    expect(finding.title).toBe("Backup bullet");
+    expect(finding.line).toBe(2);
   });
 });

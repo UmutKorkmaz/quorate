@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findExecutable } from "./providers.js";
+import { severities } from "./types.js";
 import type { CouncilRequest, Finding, ProviderConfig, ProviderResult, Severity } from "./types.js";
 
 interface CommandResult {
@@ -22,7 +23,9 @@ function buildPrompt(provider: ProviderConfig, role: string, request: CouncilReq
     `Subject: ${request.subject}`,
     "Return concise findings as Markdown bullets. Use this finding format when possible:",
     "- [severity] Title (path/to/file.ts:12): concrete evidence and recommendation",
-    "Use severity values: critical, high, medium, low, info."
+    "Use severity values: critical, high, medium, low, info.",
+    "You MAY instead return a JSON array of findings in a fenced ```json block, where each item is",
+    '{"severity","title","body","file?","line?","suggestion?"}.'
   ].join("\n");
 
   const diffSection = request.diff ? `\n\nDiff:\n${request.diff}` : "";
@@ -302,6 +305,95 @@ export function parseFindingsFromText(output: string, providerId: string, role: 
   return findings;
 }
 
+const allowedSeverities = new Set<string>(severities);
+
+function isSeverity(value: unknown): value is Severity {
+  return typeof value === "string" && allowedSeverities.has(value.toLowerCase());
+}
+
+/**
+ * Extracts a candidate JSON payload from provider output. Prefers a fenced
+ * ```json (or generic ```) block; otherwise looks for a raw top-level JSON
+ * array. Returns the matched string, or undefined when nothing JSON-shaped is
+ * present.
+ */
+function extractJsonPayload(output: string): string | undefined {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(output);
+  if (fenced && fenced[1].trim()) return fenced[1].trim();
+
+  const start = output.indexOf("[");
+  const end = output.lastIndexOf("]");
+  if (start !== -1 && end > start) return output.slice(start, end + 1);
+
+  return undefined;
+}
+
+/**
+ * Coerces a single parsed JSON object into a Finding, validating severity and
+ * required string fields. Returns undefined for items that are not valid
+ * findings (these are skipped rather than failing the whole parse).
+ */
+function findingFromJson(item: unknown, providerId: string, role: string): Finding | undefined {
+  if (!item || typeof item !== "object") return undefined;
+  const record = item as Record<string, unknown>;
+  if (!isSeverity(record.severity)) return undefined;
+  if (typeof record.title !== "string" || record.title.trim() === "") return undefined;
+
+  const body =
+    typeof record.body === "string" && record.body.trim() !== ""
+      ? record.body.trim()
+      : "Provider reported this finding.";
+  const file = typeof record.file === "string" && record.file.trim() !== "" ? record.file.trim() : undefined;
+  const lineRaw = record.line;
+  const line =
+    typeof lineRaw === "number" && Number.isFinite(lineRaw)
+      ? lineRaw
+      : typeof lineRaw === "string" && /^\d+$/.test(lineRaw.trim())
+        ? Number(lineRaw.trim())
+        : undefined;
+  const suggestion =
+    typeof record.suggestion === "string" && record.suggestion.trim() !== ""
+      ? record.suggestion.trim()
+      : undefined;
+
+  return {
+    severity: (record.severity as string).toLowerCase() as Severity,
+    title: record.title.trim(),
+    body,
+    file,
+    line,
+    suggestion,
+    providerId,
+    role
+  };
+}
+
+/**
+ * Parses provider output into findings. First attempts a structured-output path
+ * (a fenced ```json block or a raw JSON array of finding objects); when that is
+ * absent or yields no valid findings, falls back to the Markdown bullet parser
+ * (`parseFindingsFromText`).
+ */
+export function parseFindings(output: string, providerId: string, role: string): Finding[] {
+  const payload = extractJsonPayload(output);
+  if (payload) {
+    try {
+      const parsed: unknown = JSON.parse(payload);
+      const items = Array.isArray(parsed) ? parsed : undefined;
+      if (items) {
+        const findings = items
+          .map((item) => findingFromJson(item, providerId, role))
+          .filter((finding): finding is Finding => finding !== undefined);
+        if (findings.length > 0) return findings;
+      }
+    } catch {
+      // Malformed JSON — fall through to the Markdown parser.
+    }
+  }
+
+  return parseFindingsFromText(output, providerId, role);
+}
+
 function firstMeaningfulLine(output: string): string {
   return output
     .split(/\r?\n/)
@@ -401,7 +493,7 @@ export async function runCliProvider(
     }
 
     const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    const findings = parseFindingsFromText(combinedOutput, provider.id, role);
+    const findings = parseFindings(combinedOutput, provider.id, role);
 
     if (result.timedOut || result.exitCode !== 0) {
       return {

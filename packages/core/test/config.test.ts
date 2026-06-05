@@ -48,4 +48,27 @@ github:
     const config = parseConfig("{}");
     expect(config.github.failOnDegraded).toBe(false);
   });
+
+  it("parses github.inlineComments, inlineCommentLimit and gate when present", () => {
+    const config = parseConfig(`
+github:
+  failOn: high
+  inlineComments: true
+  inlineCommentLimit: 10
+  gate:
+    severity: medium
+    minAgreement: 2
+`);
+
+    expect(config.github.inlineComments).toBe(true);
+    expect(config.github.inlineCommentLimit).toBe(10);
+    expect(config.github.gate).toEqual({ severity: "medium", minAgreement: 2 });
+  });
+
+  it("leaves the new github fields undefined when absent", () => {
+    const config = parseConfig("{}");
+    expect(config.github.inlineComments).toBeUndefined();
+    expect(config.github.inlineCommentLimit).toBeUndefined();
+    expect(config.github.gate).toBeUndefined();
+  });
 });

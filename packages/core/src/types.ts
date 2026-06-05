@@ -26,6 +26,12 @@ export interface ProviderConfig {
   envAllowlist?: string[];
   env?: Record<string, string>;
   installHint?: string;
+  /** Base URL of an OpenAI-compatible HTTP endpoint (e.g. a `/v1` base). Used by `type: "api"` providers. */
+  baseUrl?: string;
+  /** Model identifier passed to the endpoint. Required for `type: "api"` providers. */
+  model?: string;
+  /** Name of the env var holding the bearer token. Optional — local runners need none. */
+  apiKeyEnv?: string;
 }
 
 export interface GithubConfig {
@@ -33,6 +39,9 @@ export interface GithubConfig {
   failOn: Severity | "never";
   runnerMode: "auto" | "cli" | "api";
   failOnDegraded?: boolean;
+  inlineComments?: boolean;
+  inlineCommentLimit?: number;
+  gate?: { severity: Severity; minAgreement: number };
 }
 
 export interface QuorateConfig {
@@ -71,6 +80,12 @@ export interface Finding {
   providerId?: string;
   role?: string;
   suggestion?: string;
+  /** Count of distinct providers that raised this (clustered) finding. */
+  agreement?: number;
+  /** Sorted, unique provider ids that raised this finding. */
+  agreedBy?: string[];
+  /** Confidence in the finding, 0..1, derived from agreement and severity. */
+  confidence?: number;
 }
 
 export type ProviderRunStatus = "ok" | "error" | "skipped" | "interrupted";

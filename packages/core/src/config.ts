@@ -25,7 +25,10 @@ const providerSchema = z.object({
   inheritEnv: z.boolean().default(false),
   envAllowlist: z.array(z.string().min(1)).optional(),
   env: z.record(z.string(), z.string()).optional(),
-  installHint: z.string().optional()
+  installHint: z.string().optional(),
+  baseUrl: z.string().url().optional(),
+  model: z.string().min(1).optional(),
+  apiKeyEnv: z.string().min(1).optional()
 });
 
 const configSchema = z.object({
@@ -36,7 +39,12 @@ const configSchema = z.object({
       commentMode: z.enum(["update", "new", "off"]).optional(),
       failOn: z.union([severitySchema, z.literal("never")]).optional(),
       runnerMode: z.enum(["auto", "cli", "api"]).optional(),
-      failOnDegraded: z.boolean().optional()
+      failOnDegraded: z.boolean().optional(),
+      inlineComments: z.boolean().optional(),
+      inlineCommentLimit: z.number().int().positive().optional(),
+      gate: z
+        .object({ severity: severitySchema, minAgreement: z.number().int().positive() })
+        .optional()
     })
     .default({})
 });

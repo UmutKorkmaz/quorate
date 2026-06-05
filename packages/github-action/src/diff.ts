@@ -15,7 +15,8 @@ export interface PullRequestDiffClient {
 
 export async function buildPullRequestDiff(
   client: PullRequestDiffClient,
-  input: { owner: string; repo: string; pullNumber: number }
+  input: { owner: string; repo: string; pullNumber: number },
+  maxBytes = 250_000
 ): Promise<string> {
   const files = await client.paginate<PullRequestFile>(client.rest.pulls.listFiles, {
     owner: input.owner,
@@ -24,10 +25,29 @@ export async function buildPullRequestDiff(
     per_page: 100
   });
 
-  return files
-    .map((file) => {
-      const header = `diff --git a/${file.filename} b/${file.filename}\n--- a/${file.filename}\n+++ b/${file.filename}`;
-      return file.patch ? `${header}\n${file.patch}` : `${header}\n# ${file.status ?? "changed"} file has no textual patch`;
-    })
-    .join("\n");
+  const blocks: string[] = [];
+  let size = 0;
+  let shown = 0;
+
+  for (const file of files) {
+    const header = `diff --git a/${file.filename} b/${file.filename}\n--- a/${file.filename}\n+++ b/${file.filename}`;
+    // status values like removed/renamed/binary have no textual patch; the
+    // fallback line covers any file where `patch` is absent so we never crash.
+    const block = file.patch
+      ? `${header}\n${file.patch}`
+      : `${header}\n# ${file.status ?? "changed"} file has no textual patch`;
+
+    const blockBytes = Buffer.byteLength(block, "utf8");
+    const separatorBytes = blocks.length > 0 ? 1 : 0;
+    if (shown > 0 && size + separatorBytes + blockBytes > maxBytes) {
+      blocks.push(`# diff truncated to ${maxBytes} bytes (${shown} of ${files.length} files shown)`);
+      return blocks.join("\n");
+    }
+
+    blocks.push(block);
+    size += separatorBytes + blockBytes;
+    shown += 1;
+  }
+
+  return blocks.join("\n");
 }

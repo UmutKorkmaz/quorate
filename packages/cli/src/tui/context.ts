@@ -4,19 +4,9 @@ import type {
   CouncilReport,
   CouncilRequest
 } from "@quorate/core";
-import { splitList, type ProviderSnapshot } from "../session.js";
+import { splitList, type ProviderSnapshot, type SessionState } from "../session.js";
 
-export interface SessionState {
-  cwd: string;
-  config: QuorateConfig;
-  mode: CouncilMode;
-  diff?: string;
-  diffLabel?: string;
-  activeProviders?: string[];
-  activeRoles?: string[];
-  lastRequest?: CouncilRequest;
-  lastReport?: CouncilReport;
-}
+export type { SessionState };
 
 export type TranscriptCell = { id: string } & (
   | { kind: "text"; text: string }
@@ -32,6 +22,7 @@ export type SessionAction =
   | { type: "setDiff"; diff: string | undefined; diffLabel: string | undefined }
   | { type: "setLastRequest"; request: CouncilRequest | undefined }
   | { type: "setLastReport"; report: CouncilReport | undefined }
+  | { type: "recordInput"; input: string }
   | { type: "clear" };
 
 export interface ShellContext {
@@ -69,6 +60,11 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return { ...state, lastRequest: action.request };
     case "setLastReport":
       return { ...state, lastReport: action.report };
+    case "recordInput":
+      return {
+        ...state,
+        transcript: [...(state.transcript ?? []), { input: action.input, at: new Date().toISOString() }]
+      };
     case "clear":
       return {
         ...state,

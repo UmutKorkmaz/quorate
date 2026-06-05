@@ -91,7 +91,7 @@ describe("runCouncil streaming events", () => {
     expect(shouldFailForThreshold(report, "high")).toBe(false);
   });
 
-  it("an enabled api provider is skipped and keeps the run degraded", async () => {
+  it("an enabled api provider with no model errors and keeps the run degraded", async () => {
     const config: QuorateConfig = {
       councils: ["maintainer"],
       providers: [{ id: "remote", type: "api", roles: ["maintainer"], enabled: true }],
@@ -110,12 +110,13 @@ describe("runCouncil streaming events", () => {
     );
     expect(done).toBeDefined();
     if (done && done.type === "provider/done") {
-      expect(done.result.status).toBe("skipped");
+      // No model configured → the api provider fails fast (no network call).
+      expect(done.result.status).toBe("error");
       expect(done.result.providerType).toBe("api");
     }
     expect(report.metadata.degraded).toBe(true);
-    // api ran nothing real, so ranProviders excludes the skipped lane
-    expect(report.metadata.ranProviders).toEqual([]);
+    // api produced no real `ok` result; the errored lane still counts as having run.
+    expect(report.metadata.ranProviders).toEqual(["remote:maintainer"]);
     expect(report.metadata.requestedProviders).toEqual(["remote:maintainer"]);
   });
 

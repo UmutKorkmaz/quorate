@@ -14,7 +14,7 @@ inputs:
     description: Comma-separated provider ids to enable for this run.
     required: false
   fail-on:
-    description: Minimum severity that fails the action: critical, high, medium, low, info, or never.
+    description: "Minimum severity that fails the action: critical, high, medium, low, info, or never."
     required: false
     default: high
   post-comment:
@@ -25,9 +25,17 @@ inputs:
     description: GitHub token used to read PR files and write comments.
     required: false
   runner-mode:
-    description: Provider runner mode: auto, cli, or api.
+    description: "Provider runner mode: auto, cli, or api."
     required: false
     default: auto
+  inline-comments:
+    description: Whether to post findings as inline review comments on changed lines.
+    required: false
+    default: "false"
+  inline-comment-limit:
+    description: Maximum number of inline review comments to post per run.
+    required: false
+    default: "10"
 outputs:
   verdict:
     description: Final Quorate verdict.

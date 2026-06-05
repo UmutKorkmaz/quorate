@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { runCouncil } from "../src/council.js";
+import { clusterFindings, runCouncil, sortFindings } from "../src/council.js";
 import { renderMarkdownReport, shouldFailForThreshold } from "../src/render.js";
+import type { Finding } from "../src/types.js";
 
 const riskyDiff = `diff --git a/src/example.test.ts b/src/example.test.ts
 --- a/src/example.test.ts
@@ -49,5 +50,71 @@ describe("runCouncil", () => {
     expect(report.metadata.requestedProviders).toContain("heuristic:maintainer");
     expect(report.metadata.ranProviders).toContain("heuristic:maintainer");
     expect(report.providerResults.every((result) => result.providerType === "mock")).toBe(true);
+  });
+});
+
+describe("clusterFindings", () => {
+  it("collapses two providers describing the same bug in different words into one finding with agreement 2", () => {
+    const fromA: Finding = {
+      severity: "high",
+      title: "SQL injection in the user lookup query",
+      body: "untrusted user input is concatenated directly into the SQL query string",
+      file: "db.ts",
+      line: 40,
+      providerId: "codex",
+      role: "security"
+    };
+    const fromB: Finding = {
+      severity: "critical",
+      title: "SQL injection vulnerability in the user lookup query",
+      body: "untrusted user input is concatenated directly into the SQL query",
+      file: "db.ts",
+      line: 42,
+      providerId: "review-bot",
+      role: "security",
+      suggestion: "Use a parameterized query."
+    };
+
+    const clustered = clusterFindings([fromA, fromB]);
+    expect(clustered).toHaveLength(1);
+
+    const [finding] = clustered;
+    expect(finding.agreement).toBe(2);
+    expect(finding.agreedBy).toEqual(["codex", "review-bot"]);
+    // The highest-severity member is the representative.
+    expect(finding.severity).toBe("critical");
+    // A missing suggestion on the base is filled from a cluster member.
+    expect(finding.suggestion).toBe("Use a parameterized query.");
+    expect(finding.confidence).toBeGreaterThan(0.5);
+  });
+
+  it("preserves a lone critical finding raised by a single provider (popularity-trap guard)", () => {
+    const lone: Finding = {
+      severity: "critical",
+      title: "Hardcoded credential",
+      body: "an API secret is committed in plaintext",
+      file: "config.ts",
+      line: 3,
+      providerId: "codex",
+      role: "security"
+    };
+    const unrelated: Finding = {
+      severity: "low",
+      title: "Trailing whitespace",
+      body: "cosmetic formatting nit in a comment",
+      file: "utils.ts",
+      line: 88,
+      providerId: "codex",
+      role: "maintainer"
+    };
+
+    const clustered = clusterFindings([lone, unrelated]);
+    const survivor = clustered.find((finding) => finding.title === "Hardcoded credential");
+    expect(survivor).toBeDefined();
+    expect(survivor?.severity).toBe("critical");
+    expect(survivor?.agreement).toBe(1);
+
+    // Sorting keeps the critical singleton at the top despite low agreement.
+    expect(sortFindings(clustered)[0].severity).toBe("critical");
   });
 });
