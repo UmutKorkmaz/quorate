@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useInput, useStdin } from "ink";
 import {
+  findConfigPath,
+  glyphs,
+  PALETTE,
   runCouncil,
+  VERDICT_COLOR,
   type QuorateConfig,
   type CouncilEvent,
   type CouncilMode,
@@ -15,10 +19,54 @@ import {
   type ShellContext,
   type TranscriptCell
 } from "./context.js";
-import { withProviderSelection, withRoleSelection, providerRunPreflight } from "../session.js";
+import {
+  withProviderSelection,
+  withRoleSelection,
+  providerRunPreflight,
+  providerSnapshots,
+  type ProviderSnapshot
+} from "../session.js";
 import { commandRegistry, parseAndRun, type SlashCommand } from "./commands.js";
 import { SlashPalette } from "./SlashPalette.js";
-import { Spinner, Elapsed } from "./Spinner.js";
+import { Spinner, Elapsed, BusyLabel, Cursor } from "./Spinner.js";
+import { readVersion } from "../version.js";
+import {
+  Welcome,
+  DiffCard,
+  VerdictReport,
+  RunningCard,
+  ProvidersGrid,
+  HelpView,
+  SkillsView,
+  PluginsView,
+  ProviderDetailView,
+  SettingsView,
+  ThemeView,
+  type RunRow
+} from "./views.js";
+
+/** Live per-provider progress for the running card. */
+interface RunProgress {
+  label: string;
+  rows: RunRow[];
+}
+
+/** A one-time welcome cell, prepended to the transcript so it scrolls into the
+ *  permanent log above the live composer. Derived from a single provider scan. */
+function welcomeCell(cwd: string, config: QuorateConfig, snapshots: ProviderSnapshot[]): TranscriptCell {
+  const real = snapshots.filter((snapshot) => snapshot.id !== "heuristic");
+  return {
+    id: "welcome",
+    kind: "welcome",
+    version: readVersion(),
+    cwd,
+    available: snapshots.filter((snapshot) => snapshot.available).length,
+    detected: real.filter((snapshot) => snapshot.available).map((snapshot) => snapshot.id),
+    totalAgents: real.length,
+    councils: config.councils,
+    firstRun: !findConfigPath(cwd)
+  };
+}
 
 export interface AppProps {
   cwd: string;
@@ -33,10 +81,13 @@ function effectiveConfig(state: SessionState): QuorateConfig {
   return withRoleSelection(withProviderSelection(state.config, state.activeProviders), state.activeRoles);
 }
 
+// Hidden commands are excluded from palette autocomplete but remain executable
+// when typed in full (resolveCommand still resolves them) — that is intentional.
 function matchCommands(query: string): SlashCommand[] {
   return commandRegistry.filter(
     (command) =>
-      command.name.startsWith(query) || (command.aliases ?? []).some((alias) => alias.startsWith(query))
+      !command.hidden &&
+      (command.name.startsWith(query) || (command.aliases ?? []).some((alias) => alias.startsWith(query)))
   );
 }
 
@@ -46,10 +97,16 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
   const [state, dispatch] = useReducer(sessionReducer, undefined, () =>
     createInitialSessionState({ cwd, config, providers, mode })
   );
-  const [cells, setCells] = useState<TranscriptCell[]>([]);
+  const snapshots = useMemo(
+    () => providerSnapshots({ cwd, config, mode: "review", transcript: [] }),
+    [cwd, config]
+  );
+  const availableCount = snapshots.filter((snapshot) => snapshot.available).length;
+  const [cells, setCells] = useState<TranscriptCell[]>(() => [welcomeCell(cwd, config, snapshots)]);
   const [buffer, setBuffer] = useState("");
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<RunProgress | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
   const idRef = useRef(0);
@@ -71,24 +128,45 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
       const current = effectiveConfig(stateRef.current);
       const errors = providerRunPreflight(current);
       if (errors.length > 0) {
-        const message = `Provider preflight failed:\n${errors.map((error) => `- ${error}`).join("\n")}`;
-        emit({ id: nextId(), kind: "text", text: message });
-        throw new Error(message);
+        // Thrown (not emitted) so submit()'s catch surfaces it exactly once.
+        throw new Error(`Provider preflight failed:\n${errors.map((error) => `- ${error}`).join("\n")}`);
       }
+      const setRow = (providerId: string, role: string, patch: Partial<RunRow>): void => {
+        setProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                rows: prev.rows.map((row) =>
+                  row.providerId === providerId && row.role === role ? { ...row, ...patch } : row
+                )
+              }
+            : prev
+        );
+      };
       const onEvent = (event: CouncilEvent): void => {
-        if (event.type === "provider/done") {
-          emit({
-            id: nextId(),
-            kind: "text",
-            text: `${event.role} · ${event.providerId} · ${event.result.status}`
+        if (event.type === "council/started") {
+          setProgress({
+            label: stateRef.current.diffLabel ?? event.subject ?? event.mode,
+            rows: event.planned.map((entry) => ({
+              providerId: entry.providerId,
+              role: entry.role,
+              state: "queued"
+            }))
           });
+        } else if (event.type === "provider/started") {
+          setRow(event.providerId, event.role, { state: "running" });
+        } else if (event.type === "provider/done") {
+          const count = event.result.findings.length;
+          const note =
+            event.result.status === "ok" ? `${count} finding${count === 1 ? "" : "s"}` : event.result.status;
+          setRow(event.providerId, event.role, { state: "done", note });
         }
       };
       const controller = new AbortController();
       abortRef.current = controller;
       return runCouncil(request, current, { onEvent, signal: controller.signal });
     },
-    [emit, nextId]
+    []
   );
 
   const ctx: ShellContext = useMemo(
@@ -112,10 +190,21 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
       setBusy(true);
       try {
         await parseAndRun(ctx, trimmed);
-      } catch {
-        // preflight / run errors already emitted a cell; keep the shell alive.
+      } catch (error) {
+        // Surface the failure instead of swallowing it — an interrupted run or a
+        // thrown error would otherwise leave the user with no feedback at all.
+        const g = glyphs();
+        const message = abortRef.current?.signal.aborted
+          ? `${g.warn} Interrupted — no verdict returned.`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+        emit({ id: nextId(), kind: "text", text: message });
       } finally {
         setBusy(false);
+        // Clear live progress so an interrupted or errored run leaves no stale
+        // tally; the next run repopulates it from council/started.
+        setProgress(null);
         abortRef.current = null;
       }
     },
@@ -127,10 +216,13 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
   const matches = useMemo(() => (paletteOpen ? matchCommands(query) : []), [paletteOpen, query]);
   const clampedSelected = matches.length > 0 ? Math.min(selected, matches.length - 1) : 0;
 
+  // Ink debounces a lone ESC (to disambiguate from escape sequences), so a raw
+  // listener clears the composer immediately. It only acts on ESC; every other
+  // key still flows through useInput below.
   useEffect(() => {
     if (!stdin) return;
     const onData = (chunk: Buffer | string) => {
-      if (String(chunk) === "\u001B") {
+      if (String(chunk) === String.fromCharCode(27)) {
         setBuffer("");
         setSelected(0);
       }
@@ -194,91 +286,54 @@ export function App({ cwd, config, mode, providers }: AppProps): React.ReactElem
     }
   });
 
+  const g = glyphs();
   const providerLabel =
     state.activeProviders?.length === 0
       ? "heuristic"
       : state.activeProviders?.join("+") ?? "config";
   const diffLabel = state.diffLabel ?? "no diff";
-  const degraded = state.lastReport?.metadata.degraded ? " · ⚠ degraded" : "";
+  const degraded = Boolean(state.lastReport?.metadata.degraded);
 
+  const startedAt = startedAtRef.current || Date.now();
   return (
     <Box flexDirection="column">
       <Static items={cells}>{(cell) => <TranscriptItem key={cell.id} cell={cell} />}</Static>
       <Box flexDirection="column" marginTop={1}>
         {busy ? (
-          <Text>
-            <Spinner />
-            <Text color="cyan"> reviewing</Text>
-            <Text dimColor>{` · ${state.mode} · ${providerLabel} · ${diffLabel}${degraded} · `}</Text>
-            <Elapsed since={startedAtRef.current || Date.now()} />
-            <Text dimColor> · esc to interrupt</Text>
-          </Text>
+          progress && progress.rows.length > 0 ? (
+            <RunningCard rows={progress.rows} label={progress.label} startedAt={startedAt} />
+          ) : (
+            <Text>
+              <Spinner />
+              <BusyLabel since={startedAt} />
+              <Text dimColor>{` ${g.separator} convening the council ${g.separator} `}</Text>
+              <Elapsed since={startedAt} />
+              <Text dimColor>{` ${g.separator} esc to interrupt`}</Text>
+            </Text>
+          )
         ) : (
-          <Text dimColor>{`ready · ${state.mode} · ${providerLabel} · ${diffLabel}${degraded}`}</Text>
+          <StatusLine
+            mode={state.mode}
+            providerLabel={providerLabel}
+            available={availableCount}
+            diffLabel={diffLabel}
+            degraded={degraded}
+            lastReport={state.lastReport}
+          />
         )}
-        <Box borderStyle="round" borderColor={paletteOpen ? "cyan" : "gray"} paddingX={1}>
+        <Box borderStyle="round" borderColor={paletteOpen ? PALETTE.command : PALETTE.dim} paddingX={1}>
           <Text>
-            {"› "}
+            <Text color={PALETTE.command} bold>{"› "}</Text>
             <Text>{buffer}</Text>
-            <Text inverse> </Text>
+            <Cursor />
             {buffer.length === 0 ? <Text dimColor> type a message, or /command</Text> : null}
           </Text>
         </Box>
-        {paletteOpen ? <SlashPalette matches={matches} selectedIndex={clampedSelected} /> : null}
-      </Box>
-    </Box>
-  );
-}
-
-const VERDICT_COLOR: Record<string, string> = { pass: "green", warn: "yellow", fail: "red" };
-const SEVERITY_COLOR: Record<string, string> = {
-  critical: "red",
-  high: "red",
-  medium: "yellow",
-  low: "blue",
-  info: "gray"
-};
-
-function FindingsView({ report }: { report: CouncilReport }): React.ReactElement {
-  const verdictColor = VERDICT_COLOR[report.verdict] ?? "white";
-  return (
-    <Box flexDirection="column" marginY={1}>
-      <Box>
-        <Text backgroundColor={verdictColor} color="black" bold>
-          {` ${report.verdict.toUpperCase()} `}
-        </Text>
-        <Text>{` ${report.summary}`}</Text>
-      </Box>
-      {report.findings.length === 0 ? (
-        <Text dimColor>{"  No findings."}</Text>
-      ) : (
-        report.findings.map((finding, index) => {
-          const severityColor = SEVERITY_COLOR[finding.severity] ?? "white";
-          const location = finding.file
-            ? finding.line
-              ? `${finding.file}:${finding.line}`
-              : finding.file
-            : "";
-          return (
-            <Box key={index} flexDirection="column" marginTop={1}>
-              <Text>
-                <Text color={severityColor} bold>
-                  {finding.severity.toUpperCase()}
-                </Text>
-                <Text bold>{`  ${finding.title}`}</Text>
-                {location ? <Text dimColor>{`  ${location}`}</Text> : null}
-              </Text>
-              <Text dimColor>{`    ${finding.body}`}</Text>
-            </Box>
-          );
-        })
-      )}
-      <Box marginTop={1} flexDirection="column">
-        {report.providerResults.map((result, index) => (
-          <Text key={index} dimColor>
-            {`  ${result.providerId} · ${result.role} · ${result.status}`}
-          </Text>
-        ))}
+        {paletteOpen ? (
+          <SlashPalette matches={matches} selectedIndex={clampedSelected} />
+        ) : busy ? null : (
+          <Text dimColor>{`  Enter send ${g.separator} / commands ${g.separator} ctrl+c quit`}</Text>
+        )}
       </Box>
     </Box>
   );
@@ -286,28 +341,71 @@ function FindingsView({ report }: { report: CouncilReport }): React.ReactElement
 
 function TranscriptItem({ cell }: { cell: TranscriptCell }): React.ReactElement {
   switch (cell.kind) {
+    case "welcome":
+      return (
+        <Welcome
+          version={cell.version}
+          cwd={cell.cwd}
+          available={cell.available}
+          detected={cell.detected}
+          totalAgents={cell.totalAgents}
+          councils={cell.councils}
+          firstRun={cell.firstRun}
+        />
+      );
+    case "diff":
+      return <DiffCard label={cell.label} diff={cell.diff} />;
     case "text":
       return <Text>{cell.text}</Text>;
     case "markdown":
       return <Text>{cell.markdown}</Text>;
     case "findings":
-      return <FindingsView report={cell.report} />;
+      return <VerdictReport report={cell.report} />;
     case "providerStatus":
-      return (
-        <Box flexDirection="column">
-          {cell.rows.map((row) => (
-            <Text key={row.id}>
-              <Text color={row.active ? "cyan" : undefined}>{row.active ? "● " : "  "}</Text>
-              <Text bold={row.active}>{row.id.padEnd(10)}</Text>
-              <Text color={row.available ? "green" : "red"}>
-                {` ${row.available ? "available" : "missing"}`}
-              </Text>
-              <Text dimColor>{`  ${row.runnable ? "runnable" : "needs-profile"}`}</Text>
-            </Text>
-          ))}
-        </Box>
-      );
+      return <ProvidersGrid rows={cell.rows} />;
+    case "help":
+      return <HelpView />;
+    case "skills":
+      return <SkillsView roles={cell.roles} />;
+    case "plugins":
+      return <PluginsView items={cell.items} />;
+    case "providerDetail":
+      return <ProviderDetailView provider={cell.provider} available={cell.available} enabled={cell.enabled} />;
+    case "settings":
+      return <SettingsView config={cell.config} />;
+    case "theme":
+      return <ThemeView />;
     default:
       return <Text> </Text>;
   }
+}
+
+interface StatusLineProps {
+  mode: CouncilMode;
+  providerLabel: string;
+  available: number;
+  diffLabel: string;
+  degraded: boolean;
+  lastReport?: CouncilReport;
+}
+
+/** The idle status line: mode · providers available · diff · last verdict gavel. */
+function StatusLine(props: StatusLineProps): React.ReactElement {
+  const g = glyphs();
+  const { mode, providerLabel, available, diffLabel, degraded } = props;
+  const verdict = props.lastReport?.verdict;
+  const verdictColor = degraded ? PALETTE.degraded : verdict ? VERDICT_COLOR[verdict] ?? "white" : "white";
+  return (
+    <Text dimColor>
+      <Text>{`${g.mode} `}</Text>
+      <Text color={PALETTE.command}>{mode}</Text>
+      <Text>{`   ${g.provider} ${providerLabel}`}</Text>
+      <Text>{` (${available} avail)`}</Text>
+      <Text>{`   ${g.diff} ${diffLabel}`}</Text>
+      {degraded ? <Text color={PALETTE.degraded}>{`   ${g.warn} degraded`}</Text> : null}
+      {verdict ? (
+        <Text color={verdictColor}>{`   ${g.verdict[verdict]} ${verdict.toUpperCase()}`}</Text>
+      ) : null}
+    </Text>
+  );
 }

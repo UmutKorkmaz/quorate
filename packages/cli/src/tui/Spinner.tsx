@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Text } from "ink";
+import { PALETTE } from "@quorate/core";
 
 /** Braille spinner frame sets. `braille` is the default running indicator. */
 export const SPINNERS: Record<string, string[]> = {
@@ -20,7 +21,7 @@ export interface SpinnerProps {
 export function Spinner({
   frames = SPINNERS.braille,
   intervalMs = 90,
-  color = "cyan"
+  color = PALETTE.spinner
 }: SpinnerProps): React.ReactElement {
   const [index, setIndex] = useState(0);
   useEffect(() => {
@@ -46,4 +47,38 @@ export function Elapsed({ since }: { since: number }): React.ReactElement {
     return () => clearInterval(id);
   }, []);
   return <Text>{formatElapsed(Date.now() - since)}</Text>;
+}
+
+/** A blinking block caret for the prompt, like the design's animated cursor. */
+export function Cursor(): React.ReactElement {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => setOn((value) => !value), 530);
+    return () => clearInterval(id);
+  }, []);
+  return on ? <Text color={PALETTE.command}>{"█"}</Text> : <Text>{" "}</Text>;
+}
+
+const BUSY_STAGES = [
+  { atMs: 0, label: "reviewing", color: PALETTE.command },
+  { atMs: 10_000, label: "still reviewing", color: PALETTE.warn },
+  { atMs: 30_000, label: "taking a while", color: PALETTE.dim }
+] as const;
+
+/**
+ * The "reviewing" label that escalates with elapsed time — cyan under 10s,
+ * amber 10–30s, dim past 30s — mirroring Claude Code's "still working" cue so a
+ * slow council never looks hung.
+ */
+export function BusyLabel({ since }: { since: number }): React.ReactElement {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    // 500ms matches Elapsed so the label's stage transitions stay in step with
+    // the visible mm:ss counter.
+    const id = setInterval(() => setTick((t) => t + 1), 500);
+    return () => clearInterval(id);
+  }, []);
+  const elapsed = Date.now() - since;
+  const stage = [...BUSY_STAGES].reverse().find((entry) => elapsed >= entry.atMs) ?? BUSY_STAGES[0];
+  return <Text color={stage.color}>{` ${stage.label}`}</Text>;
 }

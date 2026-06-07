@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createDefaultConfig, type CouncilReport, type CouncilRequest } from "@quorate/core";
 import {
   commandRegistry,
+  commandNames,
   resolveCommand,
   parseAndRun
 } from "../src/tui/commands.js";
@@ -80,15 +81,42 @@ describe("commandRegistry", () => {
     expect(resolveCommand("ask")?.name).toBe("plan");
     expect(resolveCommand("md")?.name).toBe("markdown");
   });
+
+  it("commandNames() has no duplicates despite the hidden doctor entry", () => {
+    const names = commandNames();
+    expect(new Set(names).size).toBe(names.length);
+    // `doctor` is the `providers` alias AND a hidden standalone entry; it must
+    // appear exactly once as a suggestion candidate, not twice.
+    expect(names.filter((name) => name === "doctor")).toHaveLength(1);
+    expect(resolveCommand("doctor")).toBeDefined();
+  });
 });
 
 describe("parseAndRun", () => {
-  it("/help emits a text cell listing commands", async () => {
+  it("/help emits a help reference cell", async () => {
     const { ctx, cells } = makeCtx(process.cwd());
     await parseAndRun(ctx, "/help");
-    const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
-    expect(text).toContain("/review");
-    expect(text).toContain("/mode");
+    expect(cells.some((cell) => cell.kind === "help")).toBe(true);
+  });
+
+  it("/skills emits a skills cell with the council roles", async () => {
+    const { ctx, cells } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/skills");
+    const skills = cells.find((cell) => cell.kind === "skills");
+    expect(skills).toBeDefined();
+  });
+
+  it("renders the design's system views via their commands", async () => {
+    const { ctx, cells } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/plugins");
+    await parseAndRun(ctx, "/settings");
+    await parseAndRun(ctx, "/theme");
+    await parseAndRun(ctx, "/provider codex");
+    const kinds = cells.map((cell) => cell.kind);
+    expect(kinds).toContain("plugins");
+    expect(kinds).toContain("settings");
+    expect(kinds).toContain("theme");
+    expect(kinds).toContain("providerDetail");
   });
 
   it("/mode plan dispatches setMode and confirms", async () => {

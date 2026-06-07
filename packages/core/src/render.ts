@@ -40,11 +40,11 @@ export function renderMarkdownReport(
     options.includeMarker ? reportCommentMarker : undefined,
     "# Quorate Report",
     "",
-    `Verdict: **${report.verdict.toUpperCase()}**`,
-    report.metadata.degraded ? "" : undefined,
-    report.metadata.degraded ? `> ⚠ Degraded: ${report.summary}` : undefined,
+    `Verdict: **${report.verdict.toUpperCase()}**${report.metadata.degraded ? " _(heuristic only — not a confident pass)_" : ""}`,
     "",
-    report.summary,
+    // When degraded, the blockquote already carries the full summary, so the
+    // plain paragraph is dropped to avoid printing it twice.
+    report.metadata.degraded ? `> ⚠ Degraded: ${report.summary}` : report.summary,
     hasSummary ? "" : undefined,
     hasSummary ? "## Summary" : undefined,
     hasSummary ? "" : undefined,
@@ -146,4 +146,60 @@ export function summarizeDiff(diff: string): string {
   const heading = `**${files.length} file${files.length === 1 ? "" : "s"} changed**`;
   const bullets = files.map((path) => `- \`${path}\``);
   return [heading, "", ...bullets].join("\n");
+}
+
+export interface DiffFileStat {
+  path: string;
+  added: number;
+  removed: number;
+}
+
+export interface DiffStats {
+  files: DiffFileStat[];
+  added: number;
+  removed: number;
+}
+
+/**
+ * Per-file added/removed line counts from a unified diff, for the TUI's diff
+ * summary card. Deterministic and dependency-free; counts hunk `+`/`-` lines and
+ * ignores the `+++`/`---` headers.
+ */
+export function diffStats(diff: string): DiffStats {
+  const files: DiffFileStat[] = [];
+  let current: DiffFileStat | undefined;
+  let pendingGitPath: string | undefined;
+
+  const open = (path: string): void => {
+    if (!path || path === "/dev/null") {
+      current = undefined;
+      return;
+    }
+    current = { path, added: 0, removed: 0 };
+    files.push(current);
+  };
+
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("+++ b/")) {
+      open(line.slice("+++ b/".length).trim());
+      pendingGitPath = undefined;
+    } else if (line.startsWith("diff --git ")) {
+      const match = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+      pendingGitPath = match ? match[2].trim() : undefined;
+      current = undefined;
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      if (current) current.added += 1;
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      if (current) current.removed += 1;
+    } else if (pendingGitPath && (line.startsWith("Binary ") || line.startsWith("rename "))) {
+      open(pendingGitPath);
+      pendingGitPath = undefined;
+    }
+  }
+
+  return {
+    files,
+    added: files.reduce((sum, file) => sum + file.added, 0),
+    removed: files.reduce((sum, file) => sum + file.removed, 0)
+  };
 }

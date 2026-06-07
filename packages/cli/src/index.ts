@@ -7,8 +7,12 @@ import { Command } from "commander";
 import {
   createDefaultConfig,
   detectAvailableProviders,
+  findConfigPath,
+  findExecutable,
+  glyphs,
   isEmptyReviewDiff,
   loadConfig,
+  PALETTE,
   renderMarkdownReport,
   runCouncil,
   serializeConfig,
@@ -18,7 +22,9 @@ import {
 import { readDiff } from "./diff.js";
 import { startShell } from "./shell.js";
 import { launchInkShell } from "./tui/index.js";
-import { validateProviderSelection } from "./session.js";
+import { providerSnapshots, suggestionSuffix, validateProviderSelection, type ShellState } from "./session.js";
+import { bold, dim, paint } from "./term.js";
+import { readVersion } from "./version.js";
 
 interface GlobalOptions {
   config?: string;
@@ -70,18 +76,124 @@ function printProviderTable(config: QuorateConfig): void {
   }
 }
 
+function shellStateFor(config: QuorateConfig, cwd: string): ShellState {
+  return { cwd, config, mode: "review", transcript: [] };
+}
+
+function doctorRow(glyph: string, color: string, label: string, detail: string, active = false): string {
+  const tag = active ? paint(PALETTE.accent, " (active)") : "";
+  return `  ${paint(color, glyph)} ${label.padEnd(12)} ${dim(detail)}${tag}`;
+}
+
+/**
+ * The verdict-style health checklist behind `quorate doctor`: environment
+ * checks, per-provider state with a copy-paste fix, and a closing verdict that
+ * names the next command. Honest by design — heuristic-only is reported as
+ * DEGRADED, never a confident green.
+ */
+function printDoctor(config: QuorateConfig, cwd: string): void {
+  const g = glyphs();
+  const snapshots = providerSnapshots(shellStateFor(config, cwd));
+  const realRunnable = snapshots.filter((snapshot) => snapshot.runnable && snapshot.id !== "heuristic");
+
+  const lines: string[] = ["", `  ${paint(["bold", PALETTE.accent], "Quorate doctor")}  ${dim(`${g.separator} council readiness`)}`];
+
+  lines.push("", `  ${bold("Environment")}`);
+  const nodeOk = Number(process.versions.node.split(".")[0]) >= 22;
+  lines.push(
+    doctorRow(
+      nodeOk ? g.check : g.cross,
+      nodeOk ? PALETTE.ok : PALETTE.missing,
+      `Node ${process.versions.node}`,
+      nodeOk ? "Node >= 22 — ok" : "Quorate requires Node >= 22"
+    )
+  );
+  for (const tool of ["git", "gh"] as const) {
+    const path = findExecutable(tool);
+    const hint = tool === "gh" ? "optional — enables /pr and --pr" : "recommended for git diffs";
+    lines.push(
+      doctorRow(path ? g.check : g.warn, path ? PALETTE.ok : PALETTE.needsProfile, tool, path ?? hint)
+    );
+  }
+
+  lines.push("", `  ${bold("Providers")}  ${dim(`${realRunnable.length} runnable ${g.separator} ${snapshots.length} known`)}`);
+  for (const snapshot of snapshots) {
+    let glyph = g.cross;
+    let color = PALETTE.missing;
+    let detail: string;
+    if (snapshot.id === "heuristic") {
+      glyph = g.check;
+      color = PALETTE.ok;
+      detail = `built-in ${g.separator} always available`;
+    } else if (snapshot.runnable) {
+      glyph = g.check;
+      color = PALETTE.ok;
+      detail = `runnable${snapshot.installHint ? ` ${g.separator} ${snapshot.installHint}` : ""}`;
+    } else if (snapshot.available) {
+      glyph = g.warn;
+      color = PALETTE.needsProfile;
+      detail = `found ${g.separator} needs a headless profile ${g.arrow} see .quorate.example.yml`;
+    } else {
+      detail = `not installed${snapshot.installHint ? ` ${g.separator} install ${snapshot.installHint}` : ""}`;
+    }
+    lines.push(doctorRow(glyph, color, snapshot.id, detail, snapshot.active));
+  }
+
+  lines.push("", `  ${bold("Verdict")}`);
+  if (realRunnable.length > 0) {
+    const ids = realRunnable.slice(0, 2).map((snapshot) => snapshot.id).join(",");
+    lines.push(`  ${paint(PALETTE.ok, g.check)} Council ready — ${realRunnable.length} real reviewer${realRunnable.length === 1 ? "" : "s"} runnable.`);
+    lines.push(dim(`     Try:  quorate review --providers ${ids} --base main`));
+  } else {
+    lines.push(`  ${paint(PALETTE.degraded, g.warn)} Heuristic-only — reviews report as DEGRADED, never a confident pass.`);
+    lines.push(dim("     Install a reviewer (claude, codex, qwen …), then:"));
+    lines.push(dim("       quorate init      # write .quorate.yml"));
+    lines.push(dim("       quorate doctor    # confirm it is runnable"));
+  }
+  lines.push("", dim(`  Config: ${findConfigPath(cwd) ?? "none — using built-in defaults (run quorate init)"}`));
+  console.log(lines.join("\n"));
+}
+
+function helpExamples(): string {
+  const heading = (text: string): string => paint(["bold", PALETTE.accent], text);
+  return [
+    "",
+    heading("Examples:"),
+    "  $ quorate                            open the interactive council shell",
+    "  $ quorate doctor                     see which AI CLIs are installed",
+    "  $ quorate review --base main         review the current branch against main",
+    "  $ quorate review --pr 42             review a pull request (uses gh)",
+    "  $ quorate review --diff changes.diff one-shot review of a diff file",
+    '  $ quorate plan "add a rate limiter"  evaluate a plan instead of a diff',
+    "",
+    `${heading("Learn more:")}  https://github.com/UmutKorkmaz/quorate`,
+    ""
+  ].join("\n");
+}
+
 export function buildProgram(): Command {
   const program = new Command();
 
   program
     .name("quorate")
     .description("Run a multi-agent code review council from local CLIs or GitHub Actions.")
-    .version("0.3.0")
+    .version(readVersion(), "-v, --version", "Print the installed Quorate version")
     .option("-c, --config <path>", "Path to .quorate.yml")
-    .option("--cwd <path>", "Working directory", defaultCwd);
+    .option("--cwd <path>", "Working directory", defaultCwd)
+    .configureHelp({
+      styleTitle: (title) => paint(["bold", PALETTE.accent], title),
+      styleCommandText: (text) => paint(PALETTE.command, text),
+      styleSubcommandText: (text) => paint(PALETTE.command, text),
+      styleOptionText: (text) => paint(PALETTE.ok, text),
+      styleArgumentText: (text) => paint(PALETTE.warn, text)
+    })
+    .showHelpAfterError("(run `quorate --help` for usage)")
+    .showSuggestionAfterError(true)
+    .addHelpText("after", helpExamples);
 
   program
     .command("init")
+    .helpGroup("Setup:")
     .description("Create a starter .quorate.yml with detected provider commands disabled by default.")
     .option("-f, --force", "Overwrite an existing config file")
     .action((options) => {
@@ -98,7 +210,8 @@ export function buildProgram(): Command {
 
   program
     .command("doctor")
-    .description("Detect local provider CLIs and show current configuration state.")
+    .helpGroup("Setup:")
+    .description("Check council readiness: environment, provider availability, and the next step.")
     .option("--json", "Print machine-readable JSON")
     .action((options) => {
       const config = configFrom(program);
@@ -108,11 +221,12 @@ export function buildProgram(): Command {
         return;
       }
 
-      printProviderTable(config);
+      printDoctor(config, cwdFrom(program));
     });
 
   program
     .command("providers")
+    .helpGroup("Setup:")
     .description("List configured providers.")
     .option("--json", "Print machine-readable JSON")
     .action((options) => {
@@ -127,6 +241,7 @@ export function buildProgram(): Command {
 
   program
     .command("review")
+    .helpGroup("Review:")
     .description("Review a diff using the configured council.")
     .option("--diff <path>", "Read a unified diff from a file")
     .option("--base <ref>", "Base ref for git diff")
@@ -173,6 +288,7 @@ export function buildProgram(): Command {
 
   program
     .command("plan")
+    .helpGroup("Review:")
     .description("Ask the council to evaluate an implementation or architecture plan.")
     .argument("<prompt...>", "Plan prompt")
     .option("--providers <ids>", "Comma-separated provider ids to enable for this run")
@@ -195,6 +311,7 @@ export function buildProgram(): Command {
 
   program
     .command("shell", { isDefault: true })
+    .helpGroup("Interactive:")
     .description("Start an interactive Quorate shell (default when no subcommand is given).")
     .option("--providers <ids>", "Comma-separated provider ids to enable for this shell session")
     .option("--mode <mode>", "Initial mode: review or plan", "review")
@@ -206,7 +323,10 @@ export function buildProgram(): Command {
       const config = configFrom(program);
       const unknownProviders = validateProviderSelection(config, options.providers);
       if (unknownProviders.length > 0) {
-        throw new Error(`Unknown provider id${unknownProviders.length === 1 ? "" : "s"}: ${unknownProviders.join(", ")}`);
+        const ids = config.providers.map((provider) => provider.id);
+        throw new Error(
+          `Unknown provider id${unknownProviders.length === 1 ? "" : "s"}: ${unknownProviders.join(", ")}${suggestionSuffix(unknownProviders, ids)}`
+        );
       }
 
       const cwd = cwdFrom(program);

@@ -3,7 +3,10 @@ import { stdin as input, stdout as output } from "node:process";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  findConfigPath,
+  glyphs,
   isEmptyReviewDiff,
+  PALETTE,
   renderMarkdownReport,
   runCouncil,
   type QuorateConfig,
@@ -11,6 +14,8 @@ import {
   type CouncilReport
 } from "@quorate/core";
 import { readDiff } from "./diff.js";
+import { paint } from "./term.js";
+import { readVersion } from "./version.js";
 import {
   splitList,
   validateProviderSelection,
@@ -23,11 +28,21 @@ import {
   providerSnapshots,
   configuredActiveProviders,
   activeProviderSet,
+  closestMatch,
+  suggestionSuffix,
   shellHelp as buildShellHelp,
   statusText,
   type ProviderSnapshot,
   type ShellState
 } from "./session.js";
+
+/** Shell command tokens (names and recognized aliases), used for "did you mean"
+ *  hints on typos. Every entry must map to a `case` in `parseShellCommand`. */
+const SHELL_COMMAND_NAMES = [
+  "help", "providers", "doctor", "status", "use", "enable", "disable", "roles",
+  "mode", "diff", "git", "pr", "review", "plan", "ask", "last", "rerun", "history",
+  "json", "markdown", "md", "clear", "reset", "exit"
+];
 
 export { providerSnapshots, validateProviderSelection };
 export type { ProviderSnapshot, ShellState };
@@ -293,7 +308,7 @@ export async function handleShellLine(
       const nextProviders = resolveUseProviders(state, command.providers);
       const unknown = nextProviders ? unknownValues(nextProviders, providerIds(state)) : [];
       if (unknown.length > 0) {
-        out = `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`;
+        out = `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, providerIds(state))}`;
         break;
       }
       state.activeProviders = nextProviders;
@@ -305,7 +320,7 @@ export async function handleShellLine(
     case "enable": {
       const unknown = unknownValues(command.providers, providerIds(state));
       if (unknown.length > 0) {
-        out = `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`;
+        out = `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, providerIds(state))}`;
         break;
       }
       const next = activeProviderSet(state);
@@ -317,7 +332,7 @@ export async function handleShellLine(
     case "disable": {
       const unknown = unknownValues(command.providers, providerIds(state));
       if (unknown.length > 0) {
-        out = `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`;
+        out = `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, providerIds(state))}`;
         break;
       }
       const next = activeProviderSet(state);
@@ -333,7 +348,7 @@ export async function handleShellLine(
     {
       const unknown = unknownValues(command.roles, roleIds(state));
       if (unknown.length > 0) {
-        out = `Unknown role${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`;
+        out = `Unknown role${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, roleIds(state))}`;
         break;
       }
       state.activeRoles = command.roles.length > 0 ? command.roles : undefined;
@@ -432,9 +447,12 @@ export async function handleShellLine(
       state.lastRequest = undefined;
       out = "Cleared loaded diff and last report.";
       break;
-    case "unknown":
-      out = `Unknown command: /${command.name}. Use /help.`;
+    case "unknown": {
+      const suggestion = closestMatch(command.name, SHELL_COMMAND_NAMES);
+      const hint = suggestion ? ` Did you mean /${suggestion}?` : "";
+      out = `Unknown command: /${command.name}.${hint} Use /help.`;
       break;
+    }
     }
   } catch (error) {
     out = `Error: ${error instanceof Error ? error.message : String(error)}`;
@@ -457,8 +475,7 @@ export async function startShell(options: {
   }
 
   const state = createShellState(options);
-  output.write("Quorate shell. Use /help for commands, /exit to leave.\n");
-  output.write("Real CLI providers run only after you enable them with /use or config.\n");
+  printShellBanner(state);
 
   const rl = createInterface({ input, output });
 
@@ -470,6 +487,23 @@ export async function startShell(options: {
     }
   } finally {
     rl.close();
+  }
+}
+
+function printShellBanner(state: ShellState): void {
+  const g = glyphs();
+  const available = providerSnapshots(state).filter((snapshot) => snapshot.available).length;
+  const firstRun = !findConfigPath(state.cwd);
+  output.write(`${paint([PALETTE.accent, "bold"], `${g.verdict.pass} Quorate`)} v${readVersion()} — council of AI reviewers\n`);
+  if (firstRun) {
+    output.write(
+      `  ${available} reviewer${available === 1 ? "" : "s"} available ${g.separator} heuristic-only until you enable one ${paint(PALETTE.degraded, "(reported as DEGRADED)")}\n`
+    );
+    output.write(
+      `  Try: ${paint(PALETTE.command, "/providers")} ${g.separator} ${paint(PALETTE.command, "/use claude,codex")} ${g.separator} ${paint(PALETTE.command, "/git")} then ${paint(PALETTE.command, "/review")} ${g.separator} ${paint(PALETTE.command, "/help")}\n`
+    );
+  } else {
+    output.write("  Use /help for commands, /exit to leave.\n");
   }
 }
 

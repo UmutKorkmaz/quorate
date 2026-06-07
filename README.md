@@ -124,6 +124,20 @@ Provider safety fields:
 Session/resume and `--dangerously*`/`--yolo`-style flags are rejected unless a
 profile explicitly opts in with `allowDangerousArgs`.
 
+## Terminal & theming
+
+Quorate adapts to your terminal and honors the standard environment conventions:
+
+- `NO_COLOR` — disable all color (any value, per [no-color.org](https://no-color.org)).
+- `FORCE_COLOR` — force color even when piped; `FORCE_COLOR=0` forces it off.
+- `QUORATE_ASCII=1` — use plain-ASCII glyphs instead of the Unicode council set.
+
+`quorate doctor` reports council readiness as a verdict-style checklist — environment
+checks (Node, git, gh), each provider's state (`runnable` / `needs-profile` / `not
+installed`) with a copy-paste fix, and a closing verdict that names the next command.
+A heuristic-only review is always reported as **degraded**, never a confident green —
+in the shell, the Markdown report, and the PR comment alike.
+
 ## GitHub Action
 
 Run the council on every pull request:
@@ -139,7 +153,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.3.0
+      - uses: UmutKorkmaz/quorate@v0.4.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```

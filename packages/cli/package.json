@@ -1,6 +1,6 @@
 {
   "name": "quorate",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Multi-provider AI code review council CLI.",
   "license": "MIT",
   "repository": {
@@ -30,7 +30,7 @@
     "react": "^19.2.0"
   },
   "devDependencies": {
-    "@quorate/core": "0.3.0",
+    "@quorate/core": "0.4.0",
     "@types/react": "^19.2.0",
     "commander": "^14.0.2",
     "esbuild": "^0.27.7",

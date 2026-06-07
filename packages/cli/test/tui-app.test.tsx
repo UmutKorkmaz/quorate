@@ -65,7 +65,19 @@ describe("App", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("/review");
     expect(frame).toContain("/rerun");
-    expect(frame).toContain("Enter run");
+    expect(frame).toContain("select"); // keycap footer
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("shows the idle footer hint and replaces it with the palette when open", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    await flush();
+    expect(lastFrame() ?? "").toContain("Enter send");
+    stdin.write("/re");
+    await flush();
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("select"); // the palette keycap footer
+    expect(frame).not.toContain("Enter send"); // idle footer hidden while the palette is open
     unmount();
   }, INK_INTERACTION_TIMEOUT_MS);
 

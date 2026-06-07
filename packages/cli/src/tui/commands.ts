@@ -13,8 +13,9 @@ import {
   splitWords,
   resolveUseProviders,
   activeProviderSet,
+  closestMatch,
+  suggestionSuffix,
   providerSnapshots as providerSnapshotsImpl,
-  shellHelp,
   statusText as buildStatusText,
   type ShellState
 } from "../session.js";
@@ -25,6 +26,9 @@ export interface SlashCommand {
   aliases?: string[];
   summary: string;
   argHint?: string;
+  /** Kept in the registry (e.g. for snapshot parity) but hidden from the
+   *  palette and "did you mean" suggestions to avoid duplicate rows. */
+  hidden?: boolean;
   run(ctx: ShellContext, args: string): Promise<void> | void;
 }
 
@@ -82,6 +86,15 @@ function text(ctx: ShellContext, message: string): void {
   ctx.emit({ id: cellId(), kind: "text", text: message });
 }
 
+/** Emit a diff summary card (or a plain note when the diff is empty). */
+function emitDiff(ctx: ShellContext, label: string, diff: string): void {
+  if (!diff || diff.trim().length === 0) {
+    text(ctx, `No changes found in ${label}.`);
+    return;
+  }
+  ctx.emit({ id: cellId(), kind: "diff", label, diff });
+}
+
 export const commandRegistry: SlashCommand[] = [
   {
     name: "providers",
@@ -91,9 +104,12 @@ export const commandRegistry: SlashCommand[] = [
   },
   {
     // Kept as a registry name (the command list snapshot asserts it) but shares the
-    // single `runProviders` implementation rather than duplicating its body.
+    // single `runProviders` implementation rather than duplicating its body. Hidden
+    // from the palette/suggestions since `/providers` already exposes `doctor` as an
+    // alias — listing both would render a duplicate row.
     name: "doctor",
     summary: "Alias for /providers",
+    hidden: true,
     run: runProviders
   },
   {
@@ -112,7 +128,10 @@ export const commandRegistry: SlashCommand[] = [
       const next = resolveUseProviders(asShellState(ctx), requested);
       const unknown = next ? unknownValues(next, providerIdSet(ctx)) : [];
       if (unknown.length > 0) {
-        text(ctx, `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+        text(
+          ctx,
+          `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, providerIdSet(ctx))}`
+        );
         return;
       }
       ctx.dispatch({ type: "setProviders", providers: next });
@@ -127,7 +146,10 @@ export const commandRegistry: SlashCommand[] = [
       const providers = splitList(args);
       const unknown = unknownValues(providers, providerIdSet(ctx));
       if (unknown.length > 0) {
-        text(ctx, `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+        text(
+          ctx,
+          `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, providerIdSet(ctx))}`
+        );
         return;
       }
       const next = activeProviderSet(asShellState(ctx));
@@ -145,7 +167,10 @@ export const commandRegistry: SlashCommand[] = [
       const providers = splitList(args);
       const unknown = unknownValues(providers, providerIdSet(ctx));
       if (unknown.length > 0) {
-        text(ctx, `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+        text(
+          ctx,
+          `Unknown provider id${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, providerIdSet(ctx))}`
+        );
         return;
       }
       const next = activeProviderSet(asShellState(ctx));
@@ -168,7 +193,10 @@ export const commandRegistry: SlashCommand[] = [
       const roles = splitList(args);
       const unknown = unknownValues(roles, roleIdSet(ctx));
       if (unknown.length > 0) {
-        text(ctx, `Unknown role${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+        text(
+          ctx,
+          `Unknown role${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}${suggestionSuffix(unknown, roleIdSet(ctx))}`
+        );
         return;
       }
       const next = roles.length > 0 ? roles : undefined;
@@ -203,7 +231,7 @@ export const commandRegistry: SlashCommand[] = [
       const state = ctx.getState();
       const diff = readDiff({ diff: path }, state.cwd);
       ctx.dispatch({ type: "setDiff", diff, diffLabel: path });
-      text(ctx, `Loaded diff from ${path}.`);
+      emitDiff(ctx, path, diff);
     }
   },
   {
@@ -216,7 +244,7 @@ export const commandRegistry: SlashCommand[] = [
       const diff = readDiff({ base, head }, state.cwd);
       const label = base && head ? `${base}...${head}` : base ?? "git working tree";
       ctx.dispatch({ type: "setDiff", diff, diffLabel: label });
-      text(ctx, `Loaded diff from ${label}.`);
+      emitDiff(ctx, label, diff);
     }
   },
   {
@@ -232,7 +260,7 @@ export const commandRegistry: SlashCommand[] = [
       const state = ctx.getState();
       const diff = readDiff({ pr: number }, state.cwd);
       ctx.dispatch({ type: "setDiff", diff, diffLabel: `PR #${number}` });
-      text(ctx, `Loaded diff from PR #${number}.`);
+      emitDiff(ctx, `PR #${number}`, diff);
     }
   },
   {
@@ -338,6 +366,60 @@ export const commandRegistry: SlashCommand[] = [
     }
   },
   {
+    name: "skills",
+    aliases: ["councils"],
+    summary: "Show the council roles and their routing",
+    run(ctx) {
+      ctx.emit({ id: cellId(), kind: "skills", roles: skillsData(ctx) });
+    }
+  },
+  {
+    name: "plugins",
+    aliases: ["agents"],
+    summary: "Browse the agent CLIs Quorate can drive",
+    run(ctx) {
+      ctx.emit({ id: cellId(), kind: "plugins", items: pluginsData(ctx) });
+    }
+  },
+  {
+    name: "provider",
+    summary: "Show one provider's safety config",
+    argHint: "<id>",
+    run(ctx, args) {
+      const id = args.trim();
+      const config = ctx.getState().config;
+      const provider = config.providers.find((candidate) => candidate.id === id);
+      if (!provider) {
+        const ids = config.providers.map((candidate) => candidate.id);
+        text(ctx, `Unknown provider id: ${id || "(none)"}${suggestionSuffix(id ? [id] : [], ids)}`);
+        return;
+      }
+      const snapshot = providerSnapshotsFor(ctx).find((row) => row.id === id);
+      ctx.emit({
+        id: cellId(),
+        kind: "providerDetail",
+        provider,
+        available: snapshot?.available ?? false,
+        enabled: provider.enabled !== false
+      });
+    }
+  },
+  {
+    name: "settings",
+    aliases: ["config"],
+    summary: "Show current configuration (.quorate.yml)",
+    run(ctx) {
+      ctx.emit({ id: cellId(), kind: "settings", config: ctx.getState().config });
+    }
+  },
+  {
+    name: "theme",
+    summary: "Show the palette and theming",
+    run(ctx) {
+      ctx.emit({ id: cellId(), kind: "theme" });
+    }
+  },
+  {
     name: "clear",
     aliases: ["reset"],
     summary: "Clear loaded diff and last report",
@@ -351,7 +433,7 @@ export const commandRegistry: SlashCommand[] = [
     aliases: ["?"],
     summary: "Show shell commands",
     run(ctx) {
-      text(ctx, shellHelp());
+      ctx.emit({ id: cellId(), kind: "help" });
     }
   },
   {
@@ -372,6 +454,29 @@ function runProviders(ctx: ShellContext): void {
   ctx.emit({ id: cellId(), kind: "providerStatus", rows: providerSnapshotsFor(ctx) });
 }
 
+/** Council roles with the providers configured to cover each — the /skills view. */
+function skillsData(ctx: ShellContext): Array<{ role: string; providers: string[] }> {
+  const config = ctx.getState().config;
+  return config.councils.map((role) => ({
+    role,
+    providers: config.providers
+      .filter((provider) => (provider.roles ?? []).includes(role))
+      .map((provider) => provider.id)
+  }));
+}
+
+/** The agent roster with availability status — the /plugins view. */
+function pluginsData(ctx: ShellContext): Array<{ id: string; name: string; status: string; roles: string[] }> {
+  const byId = new Map(ctx.getState().config.providers.map((provider) => [provider.id, provider]));
+  return providerSnapshotsFor(ctx)
+    .filter((row) => row.id !== "heuristic")
+    .map((row) => {
+      const provider = byId.get(row.id);
+      const status = !row.available ? "install" : row.active ? "enabled" : row.runnable ? "installed" : "available";
+      return { id: row.id, name: provider?.installHint ?? row.id, status, roles: provider?.roles ?? [] };
+    });
+}
+
 const aliasMap: Map<string, SlashCommand> = (() => {
   const map = new Map<string, SlashCommand>();
   for (const command of commandRegistry) {
@@ -385,6 +490,18 @@ const aliasMap: Map<string, SlashCommand> = (() => {
 
 export function resolveCommand(name: string): SlashCommand | undefined {
   return aliasMap.get(name.toLowerCase());
+}
+
+/** Every visible command name and alias, de-duplicated — the candidate set for
+ *  "did you mean" hints. */
+export function commandNames(): string[] {
+  const names = new Set<string>();
+  for (const command of commandRegistry) {
+    if (command.hidden) continue;
+    names.add(command.name);
+    for (const alias of command.aliases ?? []) names.add(alias);
+  }
+  return [...names];
 }
 
 export async function parseAndRun(ctx: ShellContext, line: string): Promise<void> {
@@ -401,7 +518,9 @@ export async function parseAndRun(ctx: ShellContext, line: string): Promise<void
   const [rawName = "", ...rest] = trimmed.slice(1).split(/\s+/);
   const command = resolveCommand(rawName);
   if (!command) {
-    ctx.emit({ id: cellId(), kind: "text", text: `Unknown command: /${rawName}. Use /help.` });
+    const suggestion = closestMatch(rawName, commandNames());
+    const hint = suggestion ? ` Did you mean /${suggestion}?` : "";
+    ctx.emit({ id: cellId(), kind: "text", text: `Unknown command: /${rawName}.${hint} Use /help.` });
     return;
   }
   await command.run(ctx, rest.join(" ").trim());

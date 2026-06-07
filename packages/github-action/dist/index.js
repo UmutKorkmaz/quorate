@@ -46801,11 +46801,11 @@ function renderMarkdownReport(report, options = {}) {
     options.includeMarker ? reportCommentMarker : void 0,
     "# Quorate Report",
     "",
-    `Verdict: **${report.verdict.toUpperCase()}**`,
-    report.metadata.degraded ? "" : void 0,
-    report.metadata.degraded ? `> \u26A0 Degraded: ${report.summary}` : void 0,
+    `Verdict: **${report.verdict.toUpperCase()}**${report.metadata.degraded ? " _(heuristic only \u2014 not a confident pass)_" : ""}`,
     "",
-    report.summary,
+    // When degraded, the blockquote already carries the full summary, so the
+    // plain paragraph is dropped to avoid printing it twice.
+    report.metadata.degraded ? `> \u26A0 Degraded: ${report.summary}` : report.summary,
     hasSummary ? "" : void 0,
     hasSummary ? "## Summary" : void 0,
     hasSummary ? "" : void 0,
@@ -46885,6 +46885,42 @@ function summarizeDiff(diff) {
   const bullets = files.map((path) => `- \`${path}\``);
   return [heading, "", ...bullets].join("\n");
 }
+
+// ../core/src/theme.ts
+var PALETTE = {
+  accent: "#6E97FF",
+  command: "#6E97FF",
+  spinner: "#FBBF24",
+  agreement: "#FBBF24",
+  pass: "#34D399",
+  warn: "#FBBF24",
+  fail: "#F87171",
+  degraded: "#FBBF24",
+  severity: {
+    critical: "#FB7185",
+    high: "#F87171",
+    medium: "#FBBF24",
+    low: "#38BDF8",
+    info: "#7C8597"
+  },
+  roles: {
+    architect: "#8AA6FF",
+    security: "#FB7185",
+    qa: "#34D399",
+    performance: "#FBBF24",
+    maintainer: "#38BDF8"
+  },
+  ok: "#34D399",
+  needsProfile: "#FBBF24",
+  missing: "#F87171",
+  dim: "#6B748A"
+};
+var VERDICT_COLOR = {
+  pass: PALETTE.pass,
+  warn: PALETTE.warn,
+  fail: PALETTE.fail
+};
+var SEVERITY_COLOR = PALETTE.severity;
 
 // src/diff.ts
 async function buildPullRequestDiff(client, input, maxBytes = 25e4) {

@@ -57,6 +57,56 @@ export function splitList(inputText: string): string[] {
     .filter(Boolean);
 }
 
+/** Classic Levenshtein edit distance between two strings. */
+export function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+    }
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+/**
+ * The single closest candidate to `input`, or undefined if nothing is near
+ * enough to be a likely typo. The distance threshold scales with input length
+ * (2 for short tokens, 3 otherwise) so unrelated words never produce a
+ * misleading "did you mean".
+ */
+export function closestMatch(input: string, candidates: Iterable<string>): string | undefined {
+  const threshold = input.length <= 4 ? 2 : 3;
+  let best: string | undefined;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    const distance = levenshtein(input.toLowerCase(), candidate.toLowerCase());
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  return best !== undefined && bestDistance <= threshold ? best : undefined;
+}
+
+/**
+ * A `. Did you mean "x"?` suffix for the first unknown token when a close
+ * candidate exists, otherwise an empty string. Appended to an existing
+ * "Unknown …" message so callers (and their pinned-substring tests) keep the
+ * original prefix intact.
+ */
+export function suggestionSuffix(unknown: string[], candidates: Iterable<string>): string {
+  if (unknown.length === 0) return "";
+  const match = closestMatch(unknown[0], candidates);
+  return match ? `. Did you mean "${match}"?` : "";
+}
+
 /**
  * Split free-form arguments on whitespace (distinct from {@link splitList},
  * which splits on commas). Shared by both the classic shell and the Ink TUI.

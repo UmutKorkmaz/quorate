@@ -2,7 +2,8 @@ import type {
   QuorateConfig,
   CouncilMode,
   CouncilReport,
-  CouncilRequest
+  CouncilRequest,
+  ProviderConfig
 } from "@quorate/core";
 import { splitList, type ProviderSnapshot, type SessionState } from "../session.js";
 
@@ -13,6 +14,23 @@ export type TranscriptCell = { id: string } & (
   | { kind: "markdown"; markdown: string }
   | { kind: "findings"; report: CouncilReport }
   | { kind: "providerStatus"; rows: ProviderSnapshot[] }
+  | { kind: "diff"; label: string; diff: string }
+  | { kind: "help" }
+  | { kind: "skills"; roles: Array<{ role: string; providers: string[] }> }
+  | { kind: "plugins"; items: Array<{ id: string; name: string; status: string; roles: string[] }> }
+  | { kind: "providerDetail"; provider: ProviderConfig; available: boolean; enabled: boolean }
+  | { kind: "settings"; config: QuorateConfig }
+  | { kind: "theme" }
+  | {
+      kind: "welcome";
+      version: string;
+      cwd: string;
+      available: number;
+      detected: string[];
+      totalAgents: number;
+      councils: string[];
+      firstRun: boolean;
+    }
 );
 
 export type SessionAction =

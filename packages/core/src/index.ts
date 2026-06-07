@@ -6,4 +6,5 @@ export * from "./heuristics.js";
 export * from "./providers.js";
 export * from "./render.js";
 export * from "./review.js";
+export * from "./theme.js";
 export * from "./types.js";
