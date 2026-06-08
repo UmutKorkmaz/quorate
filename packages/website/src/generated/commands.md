@@ -11,19 +11,19 @@ Type `/` in the Quorate interactive shell to open the command palette.
 | `/inspect` | Config path, agents, roles, spawn status, and project memory |
 | `/setup` | Guided setup wizard (/git → /use → /review) |
 | `/status` | Show current session state |
-| `/use <ids|default|available|heuristic>` | Use providers: default, available, heuristic, or ids |
+| `/use <ids\|default\|available\|heuristic>` | Use providers: default, available, heuristic, or ids |
 | `/enable <ids>` | Add providers to this session |
 | `/disable <ids>` | Remove providers from this session |
 | `/roles <ids>` | Limit council roles |
-| `/route [role provider...|reset]` | View & reassign role→provider routing for this session |
-| `/mode review|plan` | Set mode: review or plan |
+| `/route [role provider...\|reset]` | View & reassign role→provider routing for this session |
+| `/mode review\|plan` | Set mode: review or plan |
 | `/diff <path>` | Load a unified diff file |
 | `/git [base] [head]` | Load git diff from this repo |
 | `/pr <number>` | Load a PR diff with gh |
 | `/review [subject]` | Review the loaded/current diff |
 | `/plan <text>` (`ask`) | Evaluate a plan prompt |
 | `/last` | Show the last report |
-| `/logs [provider|provider:role]` (`agent`) | Review each agent's full output after a run |
+| `/logs [provider\|provider:role]` (`agent`) | Review each agent's full output after a run |
 | `/rerun` | Run the last request again |
 | `/history` | Show recent shell commands |
 | `/json <path>` | Save last report as JSON |

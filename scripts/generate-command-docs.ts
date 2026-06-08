@@ -91,7 +91,9 @@ export function renderCommandsMarkdown(rows: CommandDocRow[]): string {
     "",
     "| Command | Description |",
     "| --- | --- |",
-    ...unique.map((row) => `| ${formatCommandCell(row)} | ${escapeMarkdownCell(row.summary)} |`),
+    ...unique.map(
+      (row) => `| ${escapeMarkdownCell(formatCommandCell(row))} | ${escapeMarkdownCell(row.summary)} |`
+    ),
     ""
   ].join("\n");
 }

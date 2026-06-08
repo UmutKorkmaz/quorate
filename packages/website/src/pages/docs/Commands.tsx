@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { CodeBlock } from "../../components/CodeBlock";
+
 import { InlineCode } from "../../components/InlineCode";
 import commandsMd from "../../generated/commands.md?raw";
 
@@ -15,8 +17,8 @@ function parseMarkdownTable(markdown: string): { headers: string[]; rows: string
   const parseRow = (line: string): string[] =>
     line
       .slice(1, -1)
-      .split("|")
-      .map((cell) => cell.trim());
+      .split(/(?<!\\)\|/) // split on unescaped pipes only
+      .map((cell) => cell.trim().replace(/\\\|/g, "|")); // then unescape \| -> |
 
   return {
     headers: parseRow(lines[0]),
@@ -41,11 +43,15 @@ export default function Commands() {
     <article className="docs-content">
       <h1>Slash commands</h1>
       <p className="lead">
-        Type <InlineCode>/</InlineCode> in the interactive shell to open the command palette.
-        This table is generated from the CLI <InlineCode>commandRegistry</InlineCode> at build
-        time. Bare text follows the current mode — in <InlineCode>review</InlineCode> it reviews
-        the loaded diff with your text as the subject; in <InlineCode>plan</InlineCode> it
-        evaluates the text as a plan.
+        Slash commands are the fastest way to load code, choose agents, route council roles, run
+        reviews, and export reports from the interactive shell.
+      </p>
+      <p>
+        Type <InlineCode>/</InlineCode> to open the command palette. The table below is generated
+        from the CLI <InlineCode>commandRegistry</InlineCode> at build time, so it stays aligned with
+        the installed command surface. Bare text follows the current mode: in{" "}
+        <InlineCode>review</InlineCode> it reviews the loaded diff with your text as the subject; in{" "}
+        <InlineCode>plan</InlineCode> it evaluates the text as a plan.
       </p>
 
       <div className="command-table">
@@ -70,6 +76,39 @@ export default function Commands() {
           </tbody>
         </table>
       </div>
+
+      <h2>Common workflows</h2>
+      <p>
+        These examples are interactive-shell sessions. Replace provider ids, role names, file paths,
+        and PR numbers with the values from your repo&apos;s <InlineCode>/providers</InlineCode>,{" "}
+        <InlineCode>/skills</InlineCode>, and <InlineCode>/route</InlineCode> output.
+      </p>
+
+      <h3>Review the current working tree</h3>
+      <CodeBlock language="text">{`/providers
+/use available
+/git
+/review Check this change for release blockers`}</CodeBlock>
+
+      <h3>Load a GitHub pull request</h3>
+      <CodeBlock language="text">{`/pr 123
+/use available
+/review Review PR #123 for correctness, tests, and security regressions`}</CodeBlock>
+
+      <h3>Route a role to specific agents, then inspect their output</h3>
+      <CodeBlock language="text">{`/route
+/route security claude codex
+/review Focus on auth, secrets, and data handling
+/logs
+/logs claude:security
+/route reset security`}</CodeBlock>
+
+      <h3>Review a saved diff file and export the report</h3>
+      <CodeBlock language="text">{`/diff /tmp/changes.diff
+/use heuristic
+/review Validate this patch before sharing it
+/markdown .quorate/review.md
+/json .quorate/review.json`}</CodeBlock>
     </article>
   );
 }

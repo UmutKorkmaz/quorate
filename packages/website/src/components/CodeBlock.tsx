@@ -1,9 +1,19 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import Prism from "prismjs";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-yaml";
+import "prismjs/components/prism-json";
 
 interface CodeBlockProps {
   children: ReactNode;
   language?: string;
 }
+
+const LANG_ALIASES: Record<string, string> = {
+  sh: "bash",
+  shell: "bash",
+  yml: "yaml"
+};
 
 function extractText(children: ReactNode): string {
   if (typeof children === "string") return children;
@@ -14,6 +24,19 @@ function extractText(children: ReactNode): string {
 export function CodeBlock({ children, language = "bash" }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const text = extractText(children).trimEnd();
+  const lang = LANG_ALIASES[language] ?? language;
+
+  // Prism highlights synchronously; null falls back to plain monospace for
+  // `text`/unknown languages so nothing ever renders blank.
+  const highlighted = useMemo(() => {
+    const grammar = Prism.languages[lang];
+    if (!grammar) return null;
+    try {
+      return Prism.highlight(text, grammar, lang);
+    } catch {
+      return null;
+    }
+  }, [text, lang]);
 
   const copy = useCallback(async () => {
     try {
@@ -38,8 +61,12 @@ export function CodeBlock({ children, language = "bash" }: CodeBlockProps) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="code-block" data-language={language}>
-        <code>{children}</code>
+      <pre className={`code-block language-${lang}`} data-language={language}>
+        {highlighted ? (
+          <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+        ) : (
+          <code>{children}</code>
+        )}
       </pre>
     </div>
   );

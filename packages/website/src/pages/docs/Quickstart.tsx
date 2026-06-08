@@ -8,7 +8,7 @@ export default function Quickstart() {
     <article className="docs-content">
       <h1>Quick start</h1>
       <p className="lead">
-        Go from install to your first multi-model review in the interactive shell.
+        Open the shell, load a diff, enable detected agents, and run your first council review.
       </p>
 
       <ol className="doc-steps">
@@ -45,7 +45,7 @@ export default function Quickstart() {
 /review`}</CodeBlock>
 
       <h2>One-shot CLI</h2>
-      <p>You can also review without the shell:</p>
+      <p>Use one-shot commands when you want the same review engine without opening the shell:</p>
       <CodeBlock language="bash">{`quorate doctor
 quorate review --diff changes.diff
 quorate review --base main --head HEAD

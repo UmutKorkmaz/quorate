@@ -28,8 +28,8 @@ export default function Providers() {
     <article className="docs-content">
       <h1>Providers</h1>
       <p className="lead">
-        Quorate detects agent CLIs on your machine and runs the ones you enable in headless mode —
-        no API keys required.
+        Quorate detects local agent CLIs, runs only the providers you enable, and keeps the built-in
+        heuristic reviewer available when no external agent is configured.
       </p>
 
       <h2>Detected CLIs</h2>

@@ -22,9 +22,9 @@ export default function DocsHub() {
     <article className="docs-content">
       <h1>Documentation</h1>
       <p className="lead">
-        Quorate turns the AI CLIs already on your machine into a review council for diffs and plans.
-        Use the interactive shell locally, run headless reviews in CI, or install the GitHub Action to
-        put the same verdict on every pull request.
+        Quorate turns local AI CLIs and compatible models into a review council for diffs and plans.
+        Use the interactive shell locally, run headless checks in CI, or install the GitHub Action to
+        put one council verdict on every pull request.
       </p>
 
       <h2>Why Quorate</h2>

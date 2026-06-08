@@ -1232,3 +1232,63 @@ body {
 .doc-pager-title {
   @apply font-medium text-gray-200;
 }
+
+/* ── Prism syntax highlighting (Council Chamber palette) ─────────── */
+
+.code-block code {
+  color: var(--color-quorate-muted);
+}
+
+.code-block .token.comment,
+.code-block .token.prolog,
+.code-block .token.doctype,
+.code-block .token.cdata {
+  color: var(--color-quorate-dim);
+  font-style: italic;
+}
+
+.code-block .token.punctuation {
+  color: var(--color-quorate-dim);
+}
+
+.code-block .token.string,
+.code-block .token.char,
+.code-block .token.attr-value,
+.code-block .token.inserted {
+  color: var(--color-quorate-pass);
+}
+
+.code-block .token.boolean,
+.code-block .token.number,
+.code-block .token.constant,
+.code-block .token.symbol {
+  color: var(--color-quorate-amber);
+}
+
+.code-block .token.key,
+.code-block .token.atrule,
+.code-block .token.attr-name,
+.code-block .token.property,
+.code-block .token.keyword,
+.code-block .token.tag {
+  color: var(--color-quorate-accent);
+}
+
+.code-block .token.function,
+.code-block .token.class-name,
+.code-block .token.deleted {
+  color: var(--color-quorate-security);
+}
+
+.code-block .token.operator,
+.code-block .token.entity,
+.code-block .token.url,
+.code-block .token.variable,
+.code-block .token.regex {
+  color: var(--color-quorate-command);
+}
+
+.code-block .token.important,
+.code-block .token.bold {
+  font-weight: 600;
+}
