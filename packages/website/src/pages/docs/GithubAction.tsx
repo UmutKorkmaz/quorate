@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { CodeBlock } from "../../components/CodeBlock";
 
 import { InlineCode } from "../../components/InlineCode";
@@ -133,9 +134,42 @@ jobs:
       <h2>Runner choice</h2>
       <p>
         The Action posts a single report comment and can fail the check based on <InlineCode>fail-on</InlineCode>{" "}
-        severity. Use a <strong>self-hosted runner</strong> when the bot should call locally authenticated CLIs (
-        <InlineCode>claude</InlineCode>, <InlineCode>codex</InlineCode>, …); use GitHub-hosted runners for the default
-        heuristic.
+        severity. <InlineCode>cli</InlineCode> providers (<InlineCode>claude</InlineCode>,{" "}
+        <InlineCode>codex</InlineCode>, …) need a <strong>self-hosted runner</strong> where those CLIs are
+        installed and authenticated. The default heuristic and any <InlineCode>type: api</InlineCode> provider
+        run on standard <strong>GitHub-hosted runners</strong>.
+      </p>
+
+      <h2>Real AI review on GitHub-hosted runners</h2>
+      <p>
+        The practical way to get real model review in CI without self-hosting: commit a{" "}
+        <InlineCode>.quorate.yml</InlineCode> to your base branch with a <InlineCode>type: api</InlineCode>{" "}
+        provider pointing at a hosted gateway, and pass the key through as an env var from secrets.
+        Set <InlineCode>runner-mode: api</InlineCode> to run only HTTP-endpoint providers.
+      </p>
+      <CodeBlock language="yaml">{`# .quorate.yml (base branch)
+providers:
+  - id: heuristic
+    type: mock
+    enabled: true
+  - id: openrouter
+    type: api
+    enabled: true
+    baseUrl: https://openrouter.ai/api/v1
+    model: anthropic/claude-sonnet-4.6
+    apiKeyEnv: OPENROUTER_API_KEY
+    roles: [security, architect]`}</CodeBlock>
+      <CodeBlock language="yaml">{`# workflow step
+- uses: UmutKorkmaz/quorate@v0.4.0
+  env:
+    OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
+  with:
+    github-token: \${{ secrets.GITHUB_TOKEN }}
+    runner-mode: api`}</CodeBlock>
+      <p>
+        Generate provider entries with <InlineCode>quorate provider add &lt;id&gt; --preset openrouter</InlineCode>;
+        the <InlineCode>roles:</InlineCode> field assigns each model to council roles. See{" "}
+        <Link to="/docs/providers">Providers</Link> and <Link to="/docs/config">Configuration</Link>.
       </p>
 
       <h2>Security</h2>

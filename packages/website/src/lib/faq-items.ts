@@ -27,7 +27,17 @@ export const DOC_FAQ_ITEMS = [
   {
     question: "How do I enable multiple AI reviewers?",
     answer:
-      "In the shell, run /use available to enable every detected, runnable CLI for the session. To persist providers, run quorate init and edit .quorate.yml to enable specific CLIs with explicit headless args."
+      "In the shell, run /use available to enable every detected, runnable CLI for the session. To persist providers, run quorate init and edit .quorate.yml — or use quorate provider add <id> (with --preset for common endpoints) to write the entry for you."
+  },
+  {
+    question: "How do I control which agent reviews which role (qa, security, …)?",
+    answer:
+      "Each provider's roles: array assigns it to council voices — e.g. claude roles: [security, architect], codex roles: [qa, maintainer]. For different models per role, define separate providers and give each its roles. /skills shows the current routing; /route <role> <providers> reassigns it for one session (/route reset to undo); quorate provider add --roles writes it to .quorate.yml."
+  },
+  {
+    question: "Can I run real model review in CI without a self-hosted runner?",
+    answer:
+      "Yes. Commit a .quorate.yml on your base branch with a type: api provider pointing at a hosted gateway (OpenRouter, Hugging Face router, …), pass the key through as an env var from secrets, and set runner-mode: api. API providers run on standard GitHub-hosted runners; only type: cli agents (claude, codex) need a self-hosted runner. See the GitHub Action docs."
   },
   {
     question: "Is it safe to run AI CLIs on my code?",

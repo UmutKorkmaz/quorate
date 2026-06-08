@@ -3,7 +3,10 @@ description: Run a multi-agent code review council on pull requests.
 author: Quorate
 inputs:
   config-path:
-    description: Path to a .quorate.yml config file.
+    description: >-
+      Path to a .quorate.yml config file (read from the base branch). Defines the
+      council: enable type:api providers (hosted/local models) to review on
+      GitHub-hosted runners, or type:cli agents on a self-hosted runner.
     required: false
     default: .quorate.yml
   mode:
@@ -11,7 +14,9 @@ inputs:
     required: false
     default: review
   providers:
-    description: Comma-separated provider ids to enable for this run.
+    description: >-
+      Comma-separated provider ids to enable for this run (overrides enabled: in
+      .quorate.yml). Generate entries locally with `quorate provider add`.
     required: false
   fail-on:
     description: "Minimum severity that fails the action: critical, high, medium, low, info, or never."

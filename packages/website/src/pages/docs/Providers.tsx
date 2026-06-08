@@ -68,6 +68,24 @@ export default function Providers() {
         <InlineCode>/route</InlineCode> remixes this routing for one session.
       </p>
 
+      <h2>Add a provider from the CLI</h2>
+      <p>
+        <InlineCode>quorate provider add</InlineCode> writes the entry to{" "}
+        <InlineCode>.quorate.yml</InlineCode> for you — with presets for the common endpoints
+        (<InlineCode>quorate provider presets</InlineCode> lists them):
+      </p>
+      <CodeBlock language="bash">{`quorate provider add ollama --preset ollama --model qwen2.5-coder:7b
+quorate provider add reviewer --type api \\
+  --base-url http://localhost:8000/v1 --model Qwen/Qwen2.5-Coder-32B-Instruct \\
+  --api-key-env VLLM_API_KEY --roles security,architect
+quorate provider remove reviewer`}</CodeBlock>
+      <p>
+        Presets: <InlineCode>ollama</InlineCode>, <InlineCode>lmstudio</InlineCode>,{" "}
+        <InlineCode>vllm</InlineCode>, <InlineCode>llamacpp</InlineCode>,{" "}
+        <InlineCode>hf-router</InlineCode>, <InlineCode>openrouter</InlineCode>. After a run,{" "}
+        <InlineCode>/logs &lt;provider:role&gt;</InlineCode> shows each agent&apos;s full output.
+      </p>
+
       <h2>Enable for a session</h2>
       <CodeBlock language="text">{`/providers
 /use available`}</CodeBlock>

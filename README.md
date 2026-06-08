@@ -305,6 +305,22 @@ on changed lines) and can fail the check based on severity. Use a **self-hosted
 runner** when the bot should call locally authenticated CLIs (`claude`, `codex`, …);
 use GitHub-hosted runners for the default heuristic or `type: api` providers.
 
+**Real AI review on GitHub-hosted runners** — commit a `.quorate.yml` (base branch)
+with a `type: api` provider pointing at a hosted gateway, pass the key from secrets,
+and set `runner-mode: api`:
+
+```yaml
+      - uses: UmutKorkmaz/quorate@v0.4.0
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          runner-mode: api
+```
+
+See [`packages/github-action/README.md`](./packages/github-action/README.md) for the
+full CI provider guide.
+
 **Inputs:**
 
 | Input | Default | Description |

@@ -587,6 +587,15 @@ export function HelpView(): React.ReactElement {
         </Box>
       ))}
       <Box marginTop={1}>
+        <Text color={PALETTE.dim}>{"Configure agents: "}</Text>
+        <Text color={PALETTE.command}>.quorate.yml</Text>
+        <Text color={PALETTE.dim}>{" or "}</Text>
+        <Text color={PALETTE.command}>quorate provider add</Text>
+        <Text color={PALETTE.dim}>{"  ·  "}</Text>
+        <Text color={PALETTE.command}>/route</Text>
+        <Text color={PALETTE.dim}>{" assigns roles"}</Text>
+      </Box>
+      <Box marginTop={1}>
         <Keycap>Esc</Keycap>
         <Text color={PALETTE.dim}>{" interrupt   "}</Text>
         <Keycap>Ctrl+C</Keycap>
