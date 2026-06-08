@@ -1,18 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultConfig, type QuorateConfig } from "@quorate/core";
+import { buildPlannedLanes, createDefaultConfig, type QuorateConfig } from "@quorate/core";
 import {
   splitList,
   validateProviderSelection,
   withProviderSelection,
   withRoleSelection,
+  withRouteOverrides,
   resolveUseProviders,
   availableProviderIds,
   isRunnableProvider,
   providerRunPreflight,
+  spawnPreviewText,
   configuredActiveProviders,
   activeProviderSet,
   type ShellState
 } from "../src/session.js";
+
+/** A config with claude=[architect,security] + codex=[maintainer,qa], both enabled,
+ *  and every other candidate disabled — so buildPlannedLanes yields exactly four
+ *  lanes we can reason about. */
+function twoProviderConfig(): QuorateConfig {
+  const base = createDefaultConfig([]);
+  return {
+    ...base,
+    providers: base.providers.map((provider) => {
+      if (provider.id === "claude") return { ...provider, enabled: true, roles: ["architect", "security"] };
+      if (provider.id === "codex") return { ...provider, enabled: true, roles: ["maintainer", "qa"] };
+      return { ...provider, enabled: false };
+    })
+  };
+}
 
 function createState(overrides: Partial<ShellState> = {}): ShellState {
   return {
@@ -92,6 +109,59 @@ describe("withRoleSelection", () => {
     expect(next.councils).toEqual(["maintainer"]);
     expect(withRoleSelection(config, [])).toBe(config);
     expect(withRoleSelection(config, undefined)).toBe(config);
+  });
+});
+
+describe("withRouteOverrides", () => {
+  it("returns the config unchanged when there are no overrides", () => {
+    const config = twoProviderConfig();
+    expect(withRouteOverrides(config, undefined)).toBe(config);
+    expect(withRouteOverrides(config, {})).toBe(config);
+  });
+
+  it("reroutes a role to a new provider and drops it from the old one", () => {
+    const config = twoProviderConfig();
+    const routed = withRouteOverrides(config, { security: ["codex"] });
+    const lanes = buildPlannedLanes(routed).map((lane) => `${lane.provider.id}:${lane.role}`);
+    // codex now covers security…
+    expect(lanes).toContain("codex:security");
+    // …and claude no longer does.
+    expect(lanes).not.toContain("claude:security");
+    // Unrelated lanes survive untouched.
+    expect(lanes).toContain("codex:maintainer");
+    expect(lanes).toContain("claude:architect");
+  });
+
+  it("keeps a provider enabled only while it still covers a role", () => {
+    const config = twoProviderConfig();
+    // Move both of codex's roles onto claude; codex should end up with no roles.
+    const routed = withRouteOverrides(config, { maintainer: ["claude"], qa: ["claude"] });
+    const codex = routed.providers.find((provider) => provider.id === "codex")!;
+    expect(codex.roles).toEqual([]);
+    expect(codex.enabled).toBe(false);
+    const lanes = buildPlannedLanes(routed).map((lane) => lane.provider.id);
+    expect(lanes).not.toContain("codex");
+  });
+});
+
+describe("spawnPreviewText", () => {
+  it("returns argv summaries for enabled cli providers", () => {
+    const config = createDefaultConfig([]);
+    const enabled: QuorateConfig = {
+      ...config,
+      providers: config.providers.map((provider) =>
+        provider.id === "codex" ? { ...provider, enabled: true } : { ...provider, enabled: false }
+      )
+    };
+    const preview = spawnPreviewText(enabled, {
+      mode: "review",
+      subject: "Interactive code review",
+      repoPath: "/tmp/session-test"
+    });
+    expect(preview).toContain("Spawn preview:");
+    expect(preview).toContain("codex [");
+    expect(preview).toContain("codex exec");
+    expect(preview).toContain("<stdin>");
   });
 });
 

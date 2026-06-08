@@ -1,8 +1,14 @@
+import { execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createDefaultConfig, type CouncilReport, type CouncilRequest } from "@quorate/core";
+import {
+  createDefaultConfig,
+  type CouncilReport,
+  type CouncilRequest,
+  type ProviderResult
+} from "@quorate/core";
 import {
   commandRegistry,
   commandNames,
@@ -18,12 +24,12 @@ import {
   type TranscriptCell
 } from "../src/tui/context.js";
 
-function makeReport(): CouncilReport {
+function makeReport(providerResults: ProviderResult[] = []): CouncilReport {
   return {
     verdict: "pass",
     summary: "ok",
     findings: [],
-    providerResults: [],
+    providerResults,
     metadata: {
       generatedAt: "now",
       mode: "review",
@@ -36,7 +42,18 @@ function makeReport(): CouncilReport {
   };
 }
 
-function makeCtx(cwd: string): {
+function lane(overrides: Partial<ProviderResult> & Pick<ProviderResult, "providerId" | "role">): ProviderResult {
+  return {
+    status: "ok",
+    summary: "",
+    findings: [],
+    durationMs: 1000,
+    providerType: "cli",
+    ...overrides
+  };
+}
+
+function makeCtx(cwd: string, report?: CouncilReport): {
   ctx: ShellContext;
   cells: TranscriptCell[];
   actions: SessionAction[];
@@ -47,6 +64,9 @@ function makeCtx(cwd: string): {
     config: createDefaultConfig([]),
     mode: "review"
   });
+  if (report) {
+    state = sessionReducer(state, { type: "setLastReport", report });
+  }
   const cells: TranscriptCell[] = [];
   const actions: SessionAction[] = [];
   const ctx: ShellContext = {
@@ -65,9 +85,9 @@ describe("commandRegistry", () => {
   it("declares the canonical command names", () => {
     const names = commandRegistry.map((c) => c.name);
     for (const expected of [
-      "providers", "doctor", "status", "use", "enable", "disable", "roles",
-      "mode", "diff", "git", "pr", "review", "plan", "last", "rerun",
-      "history", "json", "markdown", "clear", "help", "exit"
+      "providers", "doctor", "inspect", "setup", "status", "use", "enable", "disable", "roles",
+      "route", "mode", "diff", "git", "pr", "review", "plan", "last", "logs", "rerun",
+      "history", "json", "markdown", "resume", "rename", "clear", "help", "exit"
     ]) {
       expect(names).toContain(expected);
     }
@@ -82,13 +102,12 @@ describe("commandRegistry", () => {
     expect(resolveCommand("md")?.name).toBe("markdown");
   });
 
-  it("commandNames() has no duplicates despite the hidden doctor entry", () => {
+  it("commandNames() lists doctor as its own command (not a providers alias)", () => {
     const names = commandNames();
     expect(new Set(names).size).toBe(names.length);
-    // `doctor` is the `providers` alias AND a hidden standalone entry; it must
-    // appear exactly once as a suggestion candidate, not twice.
-    expect(names.filter((name) => name === "doctor")).toHaveLength(1);
-    expect(resolveCommand("doctor")).toBeDefined();
+    expect(names).toContain("doctor");
+    expect(resolveCommand("doctor")?.name).toBe("doctor");
+    expect(resolveCommand("providers")?.name).toBe("providers");
   });
 });
 
@@ -143,5 +162,140 @@ describe("parseAndRun", () => {
     await parseAndRun(ctx, "/bogus");
     const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
     expect(text).toContain("Unknown command");
+  });
+
+  it("/doctor emits the full readiness verdict (not the provider grid)", async () => {
+    const { ctx, cells } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/doctor");
+    const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
+    expect(text).toContain("Quorate doctor");
+    expect(text).toContain("Verdict");
+    expect(cells.some((cell) => cell.kind === "providerStatus")).toBe(false);
+  });
+
+  it("/logs with no report yet explains how to produce one", async () => {
+    const { ctx, cells } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/logs");
+    const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
+    expect(text).toContain("No report yet");
+    expect(cells.some((cell) => cell.kind === "logs")).toBe(false);
+  });
+
+  it("/logs with no arg emits an overview cell listing every lane", async () => {
+    const report = makeReport([
+      lane({ providerId: "claude", role: "architect", rawOutput: "looks good" }),
+      lane({ providerId: "codex", role: "qa", status: "error", error: "boom" })
+    ]);
+    const { ctx, cells } = makeCtx(process.cwd(), report);
+    await parseAndRun(ctx, "/logs");
+    const logs = cells.find((cell) => cell.kind === "logs");
+    expect(logs?.kind).toBe("logs");
+    if (logs?.kind === "logs" && logs.variant === "overview") {
+      expect(logs.lanes).toHaveLength(2);
+    } else {
+      throw new Error("expected an overview logs cell");
+    }
+  });
+
+  it("/logs codex:qa emits a detail cell with the verbatim error", async () => {
+    const fullError = "spawn codex ENOENT: the headless profile is missing its required args";
+    const report = makeReport([
+      lane({ providerId: "claude", role: "architect", rawOutput: "ok" }),
+      lane({ providerId: "codex", role: "maintainer", status: "error", error: fullError, rawOutput: "stack" })
+    ]);
+    const { ctx, cells } = makeCtx(process.cwd(), report);
+    await parseAndRun(ctx, "/logs codex:maintainer");
+    const logs = cells.find((cell) => cell.kind === "logs");
+    if (logs?.kind === "logs" && logs.variant === "detail") {
+      expect(logs.result.error).toBe(fullError);
+      expect(logs.result.providerId).toBe("codex");
+    } else {
+      throw new Error("expected a detail logs cell");
+    }
+  });
+
+  it("/logs <provider> covering multiple roles shows an overview + ambiguity hint", async () => {
+    const report = makeReport([
+      lane({ providerId: "codex", role: "maintainer", rawOutput: "a" }),
+      lane({ providerId: "codex", role: "qa", rawOutput: "b" })
+    ]);
+    const { ctx, cells } = makeCtx(process.cwd(), report);
+    await parseAndRun(ctx, "/logs codex");
+    const logs = cells.find((cell) => cell.kind === "logs");
+    expect(logs?.kind === "logs" && logs.variant === "overview").toBe(true);
+    const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
+    expect(text).toContain("covers 2 roles");
+  });
+
+  it("/logs for an unknown lane reports no run with a suggestion suffix", async () => {
+    const report = makeReport([lane({ providerId: "codex", role: "qa", rawOutput: "a" })]);
+    const { ctx, cells } = makeCtx(process.cwd(), report);
+    await parseAndRun(ctx, "/logs ghost");
+    const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
+    expect(text).toContain('No run for "ghost"');
+  });
+
+  it("/route with no arg emits a route cell derived from config councils", async () => {
+    const { ctx, cells } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/route");
+    const route = cells.find((cell) => cell.kind === "route");
+    if (route?.kind === "route") {
+      const roles = route.rows.map((r) => r.role);
+      expect(roles).toEqual(["architect", "security", "qa", "performance", "maintainer"]);
+    } else {
+      throw new Error("expected a route cell");
+    }
+  });
+
+  it("/route security codex dispatches setRoute and re-emits the table", async () => {
+    const { ctx, cells, getState } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/route security codex");
+    expect(getState().roleOverrides?.security).toEqual(["codex"]);
+    const route = cells.find((cell) => cell.kind === "route");
+    if (route?.kind === "route") {
+      const securityRow = route.rows.find((r) => r.role === "security");
+      expect(securityRow?.overridden).toBe(true);
+      expect(securityRow?.providers).toEqual(["codex"]);
+    } else {
+      throw new Error("expected a route cell");
+    }
+  });
+
+  it("/route reset clears the overrides and confirms", async () => {
+    const { ctx, cells, getState } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/route security codex");
+    await parseAndRun(ctx, "/route reset");
+    expect(getState().roleOverrides).toBeUndefined();
+    const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
+    expect(text.toLowerCase()).toContain("restored");
+  });
+
+  it("/route rejects an unknown role and an unknown provider", async () => {
+    const { ctx, cells, getState } = makeCtx(process.cwd());
+    await parseAndRun(ctx, "/route bogusrole codex");
+    await parseAndRun(ctx, "/route security ghostprovider");
+    const text = cells.map((cell) => (cell.kind === "text" ? cell.text : "")).join("\n");
+    expect(text).toContain("Unknown role: bogusrole");
+    expect(text).toContain("Unknown provider id");
+    expect(getState().roleOverrides).toBeUndefined();
+  });
+
+  it("/review with implicit git diff dispatches setDiff and emits a diff cell", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cc-implicit-"));
+    const filePath = join(dir, "x.txt");
+    writeFileSync(filePath, "hello\n", "utf8");
+    execSync("git init -q", { cwd: dir });
+    execSync("git add x.txt", { cwd: dir });
+    execSync('git -c user.email=test@example.com -c user.name=test commit -q -m init', { cwd: dir });
+    writeFileSync(filePath, "hello world\n", "utf8");
+
+    const { ctx, cells, actions } = makeCtx(dir);
+    await parseAndRun(ctx, "/review");
+    expect(actions.some((action) => action.type === "setDiff")).toBe(true);
+    const diffCell = cells.find((cell) => cell.kind === "diff");
+    expect(diffCell).toBeDefined();
+    if (diffCell?.kind === "diff") {
+      expect(diffCell.label).toBe("git working tree");
+    }
   });
 });

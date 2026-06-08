@@ -1,15 +1,21 @@
 import {
+  buildPlannedLanes,
   detectAvailableProviders,
+  findConfigPath,
+  formatSpawnArgv,
+  glyphs,
   type QuorateConfig,
   type CouncilMode,
   type CouncilReport,
   type CouncilRequest
 } from "@quorate/core";
+import { projectMemoryInspectLines, type ProjectMemory } from "./project-memory.js";
 
 export interface ShellState {
   cwd: string;
   config: QuorateConfig;
   mode: CouncilMode;
+  projectMemory?: ProjectMemory;
   diff?: string;
   diffLabel?: string;
   activeProviders?: string[];
@@ -31,13 +37,20 @@ export interface SessionState {
   cwd: string;
   config: QuorateConfig;
   mode: CouncilMode;
+  heuristicOnly?: boolean;
+  projectMemory?: ProjectMemory;
   diff?: string;
   diffLabel?: string;
   activeProviders?: string[];
   activeRoles?: string[];
+  /** Session-only role→provider routing overrides. Threaded into effectiveConfig
+   *  via withRouteOverrides; deliberately never persisted to disk. */
+  roleOverrides?: Record<string, string[]>;
   lastRequest?: CouncilRequest;
   lastReport?: CouncilReport;
   transcript?: Array<{ input: string; at: string }>;
+  sessionId?: string;
+  sessionName?: string;
 }
 
 export interface ProviderSnapshot {
@@ -122,6 +135,8 @@ export function splitWords(inputText: string): string[] {
 export interface StatusStateLike {
   cwd: string;
   mode: CouncilMode;
+  heuristicOnly?: boolean;
+  diff?: string;
   diffLabel?: string;
   activeProviders?: string[];
   activeRoles?: string[];
@@ -129,19 +144,153 @@ export interface StatusStateLike {
 }
 
 export function statusText(state: StatusStateLike): string {
+  const g = glyphs();
   const providerText =
-    state.activeProviders?.length === 0
+    state.heuristicOnly || state.activeProviders?.length === 0
       ? "heuristic fallback"
       : state.activeProviders?.join(", ") ?? "config defaults";
+  const modeText = state.heuristicOnly ? "heuristic-only" : state.mode;
+  const roleText = state.activeRoles?.join(", ") ?? "config defaults";
+  const configPath = findConfigPath(state.cwd);
+  const diffLoaded = Boolean(state.diffLabel ?? state.diff);
+  const lastReport = state.lastReport
+    ? `${state.lastReport.verdict} (${state.lastReport.findings.length} findings)`
+    : "none";
 
   return [
-    `Mode: ${state.mode}`,
+    `Mode: ${modeText}`,
     `Cwd: ${state.cwd}`,
-    `Diff: ${state.diffLabel ?? "not loaded"}`,
+    `Config: ${configPath ?? "built-in defaults (run quorate init)"}`,
+    `Diff: ${state.diffLabel ?? (diffLoaded ? "loaded" : "not loaded")}`,
     `Providers: ${providerText}`,
-    `Roles: ${state.activeRoles?.join(", ") ?? "config defaults"}`,
-    `Last report: ${state.lastReport ? `${state.lastReport.verdict} (${state.lastReport.findings.length} findings)` : "none"}`
+    `Roles: ${roleText}`,
+    `Last report: ${lastReport}`,
+    `Tip: /inspect for spawn status ${g.separator} /doctor for readiness ${g.separator} /setup to get started`
   ].join("\n");
+}
+
+function providerSpawnStatus(snapshot: ProviderSnapshot): string {
+  if (snapshot.id === "heuristic") return "built-in (always available)";
+  if (!snapshot.available) return `not on PATH${snapshot.installHint ? ` — install ${snapshot.installHint}` : ""}`;
+  if (snapshot.runnable) return `spawnable${snapshot.path ? ` (${snapshot.path})` : ""}`;
+  return "needs headless profile — enable args in .quorate.yml (see .quorate.example.yml)";
+}
+
+/**
+ * Session diagnostics for `/inspect`: config path, active agents, roles, diff
+ * label, and per-provider spawn readiness for the current session.
+ */
+export function inspectText(state: ShellState): string {
+  const g = glyphs();
+  const snapshots = providerSnapshots(state);
+  const activeIds =
+    state.activeProviders !== undefined
+      ? state.activeProviders
+      : configuredActiveProviders(state);
+  const providerText =
+    activeIds.length === 0 ? "heuristic fallback" : activeIds.join(", ");
+  const roleText = state.activeRoles?.join(", ") ?? `config defaults (${state.config.councils.join(", ")})`;
+  const configPath = findConfigPath(state.cwd) ?? "built-in defaults (run quorate init)";
+  const activeSnapshots = snapshots.filter((snapshot) => snapshot.active);
+
+  const spawnLines =
+    activeSnapshots.length > 0
+      ? activeSnapshots.map(
+          (snapshot) => `  ${snapshot.id.padEnd(12)} ${providerSpawnStatus(snapshot)}`
+        )
+      : ["  (no active agents — council will use heuristic fallback)"];
+
+  return [
+    `Inspect ${g.separator} session diagnostics`,
+    ...projectMemoryInspectLines(state.projectMemory),
+    "",
+    `Config: ${configPath}`,
+    `Cwd: ${state.cwd}`,
+    `Mode: ${state.mode}`,
+    `Diff: ${state.diffLabel ?? "not loaded"}`,
+    `Active agents: ${providerText}`,
+    `Roles: ${roleText}`,
+    "",
+    "Provider spawn status:",
+    ...spawnLines
+  ].join("\n");
+}
+
+function needsProfileSnippet(provider: QuorateConfig["providers"][number]): string {
+  const lines = [`  - id: ${provider.id}`, "    enabled: true"];
+  if (provider.args && provider.args.length > 0) {
+    lines.push("    args:");
+    for (const arg of provider.args) {
+      lines.push(`      - ${JSON.stringify(arg)}`);
+    }
+  } else {
+    lines.push("    # copy headless args from .quorate.example.yml");
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Guided setup copy for `/setup`: agent checks, install hints, needs-profile
+ * snippets, and the recommended /git → /use → /review flow.
+ */
+export function setupText(state: ShellState): string {
+  const g = glyphs();
+  const snapshots = providerSnapshots(state);
+  const configPath = findConfigPath(state.cwd);
+  const runnable = snapshots.filter((snapshot) => snapshot.runnable && snapshot.id !== "heuristic");
+  const missing = snapshots.filter((snapshot) => snapshot.id !== "heuristic" && !snapshot.available);
+  const needsProfile = snapshots.filter(
+    (snapshot) => snapshot.id !== "heuristic" && snapshot.available && !snapshot.runnable
+  );
+
+  const lines = [
+    `Setup wizard ${g.separator} get your council ready`,
+    "",
+    "1. Config",
+    configPath
+      ? `   ${g.check} ${configPath}`
+      : `   ${g.warn} no .quorate.yml — run quorate init or copy .quorate.example.yml`,
+    "",
+    "2. Agents"
+  ];
+
+  if (runnable.length > 0) {
+    lines.push(`   ${g.check} ${runnable.length} runnable reviewer${runnable.length === 1 ? "" : "s"}: ${runnable.map((row) => row.id).join(", ")}`);
+  } else {
+    lines.push(`   ${g.warn} no runnable reviewers yet — reviews stay heuristic-only (DEGRADED)`);
+  }
+
+  if (missing.length > 0) {
+    lines.push("", "   Install hints:");
+    for (const snapshot of missing) {
+      lines.push(
+        `   ${g.cross} ${snapshot.id}${snapshot.installHint ? ` — ${snapshot.installHint}` : ""}`
+      );
+    }
+  }
+
+  if (needsProfile.length > 0) {
+    lines.push("", "   Needs-profile snippets (paste into .quorate.yml):");
+    for (const snapshot of needsProfile) {
+      const provider = state.config.providers.find((candidate) => candidate.id === snapshot.id);
+      if (!provider) continue;
+      lines.push(`   # ${snapshot.id} is on PATH but disabled — enable a headless profile:`);
+      lines.push(needsProfileSnippet(provider));
+      lines.push("");
+    }
+  }
+
+  lines.push(
+    "3. Guided flow",
+    "   /git                  load git working tree (or /git main HEAD)",
+    "   /use available        enable every runnable agent for this session",
+    "   /review               convene the council on the loaded diff",
+    "",
+    "   /doctor               full readiness verdict",
+    "   /inspect              session + spawn status"
+  );
+
+  return lines.join("\n");
 }
 
 /**
@@ -154,7 +303,9 @@ export function shellHelp(extra: string[] = []): string {
     "Quorate shell commands:",
     "  /help                 Show this help",
     "  /providers            List providers and local availability",
-    "  /doctor               Alias for /providers",
+    "  /doctor               Council readiness verdict (environment + providers)",
+    "  /inspect              Config path, agents, roles, spawn status",
+    "  /setup                Guided setup wizard (/git → /use → /review)",
     "  /status               Show current session state",
     "  /use ids              Enable providers (default, available, heuristic, or ids)",
     "  /enable ids           Add providers to the active session set",
@@ -219,6 +370,45 @@ export function withRoleSelection(config: QuorateConfig, roleIds?: string[]): Qu
   };
 }
 
+/**
+ * Apply session-only role→provider routing overrides. For each overridden role,
+ * the providers that should now cover it are taken from the override map; every
+ * other provider drops that role. Both `roles` and `enabled` are rewritten so
+ * buildPlannedLanes (which only reads ENABLED providers) picks up a routed-in
+ * provider with no engine change. Immutable: returns new objects throughout.
+ */
+export function withRouteOverrides(
+  config: QuorateConfig,
+  roleOverrides?: Record<string, string[]>
+): QuorateConfig {
+  if (!roleOverrides || Object.keys(roleOverrides).length === 0) return config;
+  const overriddenRoles = new Set(Object.keys(roleOverrides));
+  // providerId -> set of overridden roles it should now cover
+  const wanted = new Map<string, Set<string>>();
+  for (const [role, ids] of Object.entries(roleOverrides)) {
+    for (const id of ids) {
+      const set = wanted.get(id) ?? new Set<string>();
+      set.add(role);
+      wanted.set(id, set);
+    }
+  }
+  const providers = config.providers.map((provider) => {
+    const base =
+      provider.roles && provider.roles.length > 0
+        ? provider.roles
+        : [config.councils[0] ?? "maintainer"];
+    // Drop any overridden role this provider is NOT explicitly assigned.
+    const kept = base.filter(
+      (role) => !overriddenRoles.has(role) || (wanted.get(provider.id)?.has(role) ?? false)
+    );
+    // Add overridden roles this provider IS now assigned.
+    const added = [...(wanted.get(provider.id) ?? [])].filter((role) => !kept.includes(role));
+    const roles = [...kept, ...added];
+    return { ...provider, roles, enabled: provider.enabled !== false && roles.length > 0 };
+  });
+  return { ...config, providers };
+}
+
 export function isRunnableProvider(
   provider: QuorateConfig["providers"][number],
   available = true
@@ -246,6 +436,19 @@ export function resolveUseProviders(
   if (requested.length === 0 || requested.includes("default")) return undefined;
   if (requested.includes("available")) return availableProviderIds(state, detected);
   return requested;
+}
+
+/** Brief per-provider argv summary emitted before a council run. */
+export function spawnPreviewText(config: QuorateConfig, request: CouncilRequest): string | undefined {
+  const lanes = buildPlannedLanes(config).filter(
+    (lane) => lane.provider.type === "cli" && lane.provider.id !== "heuristic"
+  );
+  if (lanes.length === 0) return undefined;
+
+  const lines = lanes.map(
+    (lane) => `  ${lane.provider.id} [${lane.role}]: ${formatSpawnArgv(lane.provider, lane.role, request)}`
+  );
+  return ["Spawn preview:", ...lines].join("\n");
 }
 
 export function providerRunPreflight(

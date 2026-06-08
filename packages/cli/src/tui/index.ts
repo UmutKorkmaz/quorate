@@ -1,6 +1,7 @@
 import React from "react";
 import { render } from "ink";
 import type { QuorateConfig, CouncilMode } from "@quorate/core";
+import type { PersistedSession } from "../sessions.js";
 import { App } from "./app.js";
 
 export interface LaunchInkShellOptions {
@@ -8,6 +9,7 @@ export interface LaunchInkShellOptions {
   config: QuorateConfig;
   providers?: string;
   mode?: CouncilMode;
+  restoredSession?: PersistedSession;
 }
 
 export async function launchInkShell(options: LaunchInkShellOptions): Promise<void> {
@@ -16,7 +18,8 @@ export async function launchInkShell(options: LaunchInkShellOptions): Promise<vo
       cwd: options.cwd,
       config: options.config,
       providers: options.providers,
-      mode: options.mode
+      mode: options.mode,
+      restoredSession: options.restoredSession
     })
   );
   await instance.waitUntilExit();

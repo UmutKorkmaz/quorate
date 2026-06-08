@@ -4,11 +4,15 @@ import { glyphs, PALETTE } from "@quorate/core";
 import { Keycap } from "./views.js";
 import type { SlashCommand } from "./commands.js";
 
-const NAME_COLUMN = 12;
-
 export interface SlashPaletteProps {
   matches: SlashCommand[];
   selectedIndex: number;
+}
+
+function formatCommandName(command: SlashCommand): string {
+  const aliases = command.aliases ?? [];
+  const aliasLabel = aliases.length > 0 ? ` (${aliases.join(", ")})` : "";
+  return `/${command.name}${aliasLabel}`;
 }
 
 export function SlashPalette({ matches, selectedIndex }: SlashPaletteProps): React.ReactElement {
@@ -25,7 +29,7 @@ export function SlashPalette({ matches, selectedIndex }: SlashPaletteProps): Rea
     <Box flexDirection="column" marginLeft={2}>
       {matches.map((command, index) => {
         const selected = index === selectedIndex;
-        const name = `/${command.name}`.padEnd(NAME_COLUMN);
+        const name = formatCommandName(command);
         return (
           <Box key={command.name} backgroundColor={selected ? "#171D2E" : undefined}>
             <Text>

@@ -97,9 +97,9 @@ describe("App", () => {
     await flush();
     stdin.write(ENTER);
     await flush();
-    // matches for "re" are [review, rerun, ...]; Down selects rerun, which with no
-    // prior request emits "No request to rerun yet." (proves rerun ran, not review).
-    expect(lastFrame() ?? "").toContain("No request to rerun");
+    // matches for "re" are [review, resume, ...]; Down selects resume, which with no
+    // saved sessions emits "No saved sessions for this repo." (proves resume ran, not review).
+    expect(lastFrame() ?? "").toContain("No saved sessions");
     unmount();
   }, INK_INTERACTION_TIMEOUT_MS);
 

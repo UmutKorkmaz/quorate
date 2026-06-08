@@ -14,8 +14,10 @@ import {
   type CouncilReport
 } from "@quorate/core";
 import { readDiff } from "./diff.js";
+import { formatDoctorReport } from "./doctor.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
+import { applyProjectMemoryDefaults, loadProjectMemory, projectDefaultsLine } from "./project-memory.js";
 import {
   splitList,
   validateProviderSelection,
@@ -32,6 +34,7 @@ import {
   suggestionSuffix,
   shellHelp as buildShellHelp,
   statusText,
+  inspectText,
   type ProviderSnapshot,
   type ShellState
 } from "./session.js";
@@ -39,7 +42,7 @@ import {
 /** Shell command tokens (names and recognized aliases), used for "did you mean"
  *  hints on typos. Every entry must map to a `case` in `parseShellCommand`. */
 const SHELL_COMMAND_NAMES = [
-  "help", "providers", "doctor", "status", "use", "enable", "disable", "roles",
+  "help", "providers", "doctor", "status", "inspect", "use", "enable", "disable", "roles",
   "mode", "diff", "git", "pr", "review", "plan", "ask", "last", "rerun", "history",
   "json", "markdown", "md", "clear", "reset", "exit"
 ];
@@ -52,6 +55,7 @@ export type ParsedShellCommand =
   | { kind: "exit" }
   | { kind: "help" }
   | { kind: "status" }
+  | { kind: "inspect" }
   | { kind: "providers" }
   | { kind: "doctor" }
   | { kind: "use"; providers: string[] }
@@ -117,6 +121,8 @@ export function parseShellCommand(line: string, currentMode: CouncilMode = "revi
       return { kind: "help" };
     case "status":
       return { kind: "status" };
+    case "inspect":
+      return { kind: "inspect" };
     case "providers":
       return { kind: "providers" };
     case "doctor":
@@ -206,13 +212,18 @@ export function createShellState(options: {
   providers?: string;
   mode?: CouncilMode;
 }): ShellState {
-  return {
+  const projectMemory = loadProjectMemory(options.cwd);
+  const base: ShellState = {
     cwd: options.cwd,
     config: options.config,
     mode: options.mode ?? "review",
+    projectMemory,
     activeProviders: options.providers ? splitList(options.providers) : undefined,
     transcript: []
   };
+  return applyProjectMemoryDefaults(base, projectMemory, {
+    providersFromCli: Boolean(options.providers)
+  });
 }
 
 export function getShellStateSnapshot(state: ShellState): ShellStateSnapshot {
@@ -297,11 +308,14 @@ export async function handleShellLine(
     case "status":
       out = statusText(state);
       break;
+    case "inspect":
+      out = inspectText(state);
+      break;
     case "providers":
       out = providerStatus(state);
       break;
     case "doctor":
-      out = providerStatus(state);
+      out = formatDoctorReport(state);
       break;
     case "use":
     {
@@ -504,6 +518,10 @@ function printShellBanner(state: ShellState): void {
     );
   } else {
     output.write("  Use /help for commands, /exit to leave.\n");
+  }
+  const defaults = projectDefaultsLine(state.projectMemory);
+  if (defaults) {
+    output.write(`  ${defaults}\n`);
   }
 }
 

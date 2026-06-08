@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, realpathSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { stdin, stdout } from "node:process";
@@ -7,9 +7,6 @@ import { Command } from "commander";
 import {
   createDefaultConfig,
   detectAvailableProviders,
-  findConfigPath,
-  findExecutable,
-  glyphs,
   isEmptyReviewDiff,
   loadConfig,
   PALETTE,
@@ -20,10 +17,14 @@ import {
   type QuorateConfig
 } from "@quorate/core";
 import { readDiff } from "./diff.js";
+import { buildDoctorBundle } from "./doctor-bundle.js";
+import { printDoctor } from "./doctor.js";
+import { latestSession, loadSession, type PersistedSession } from "./sessions.js";
+import { runCouncilWithJsonStream } from "./json-stream.js";
 import { startShell } from "./shell.js";
 import { launchInkShell } from "./tui/index.js";
-import { providerSnapshots, suggestionSuffix, validateProviderSelection, type ShellState } from "./session.js";
-import { bold, dim, paint } from "./term.js";
+import { suggestionSuffix, validateProviderSelection } from "./session.js";
+import { paint } from "./term.js";
 import { readVersion } from "./version.js";
 
 interface GlobalOptions {
@@ -36,6 +37,21 @@ const defaultCwd = process.env.INIT_CWD ?? process.cwd();
 function cwdFrom(program: Command): string {
   const opts = program.opts<GlobalOptions>();
   return resolve(opts.cwd ?? defaultCwd);
+}
+
+/** Add `entry` to the repo's .gitignore if missing (best-effort, never throws). */
+function ensureGitignored(cwd: string, entry: string): void {
+  try {
+    const gitignorePath = resolve(cwd, ".gitignore");
+    const existing = existsSync(gitignorePath) ? readFileSync(gitignorePath, "utf8") : "";
+    const lines = existing.split("\n").map((line) => line.trim());
+    if (lines.includes(entry) || lines.includes(entry.replace(/\/$/, ""))) return;
+    const prefix = existing && !existing.endsWith("\n") ? "\n" : "";
+    appendFileSync(gitignorePath, `${prefix}\n# Quorate session/report artifacts\n${entry}\n`, "utf8");
+    console.log(`Added ${entry} to .gitignore`);
+  } catch {
+    // Non-fatal: init still succeeds even if .gitignore can't be written.
+  }
 }
 
 function configFrom(program: Command): QuorateConfig {
@@ -74,84 +90,6 @@ function printProviderTable(config: QuorateConfig): void {
       ].join("\t")
     );
   }
-}
-
-function shellStateFor(config: QuorateConfig, cwd: string): ShellState {
-  return { cwd, config, mode: "review", transcript: [] };
-}
-
-function doctorRow(glyph: string, color: string, label: string, detail: string, active = false): string {
-  const tag = active ? paint(PALETTE.accent, " (active)") : "";
-  return `  ${paint(color, glyph)} ${label.padEnd(12)} ${dim(detail)}${tag}`;
-}
-
-/**
- * The verdict-style health checklist behind `quorate doctor`: environment
- * checks, per-provider state with a copy-paste fix, and a closing verdict that
- * names the next command. Honest by design — heuristic-only is reported as
- * DEGRADED, never a confident green.
- */
-function printDoctor(config: QuorateConfig, cwd: string): void {
-  const g = glyphs();
-  const snapshots = providerSnapshots(shellStateFor(config, cwd));
-  const realRunnable = snapshots.filter((snapshot) => snapshot.runnable && snapshot.id !== "heuristic");
-
-  const lines: string[] = ["", `  ${paint(["bold", PALETTE.accent], "Quorate doctor")}  ${dim(`${g.separator} council readiness`)}`];
-
-  lines.push("", `  ${bold("Environment")}`);
-  const nodeOk = Number(process.versions.node.split(".")[0]) >= 22;
-  lines.push(
-    doctorRow(
-      nodeOk ? g.check : g.cross,
-      nodeOk ? PALETTE.ok : PALETTE.missing,
-      `Node ${process.versions.node}`,
-      nodeOk ? "Node >= 22 — ok" : "Quorate requires Node >= 22"
-    )
-  );
-  for (const tool of ["git", "gh"] as const) {
-    const path = findExecutable(tool);
-    const hint = tool === "gh" ? "optional — enables /pr and --pr" : "recommended for git diffs";
-    lines.push(
-      doctorRow(path ? g.check : g.warn, path ? PALETTE.ok : PALETTE.needsProfile, tool, path ?? hint)
-    );
-  }
-
-  lines.push("", `  ${bold("Providers")}  ${dim(`${realRunnable.length} runnable ${g.separator} ${snapshots.length} known`)}`);
-  for (const snapshot of snapshots) {
-    let glyph = g.cross;
-    let color = PALETTE.missing;
-    let detail: string;
-    if (snapshot.id === "heuristic") {
-      glyph = g.check;
-      color = PALETTE.ok;
-      detail = `built-in ${g.separator} always available`;
-    } else if (snapshot.runnable) {
-      glyph = g.check;
-      color = PALETTE.ok;
-      detail = `runnable${snapshot.installHint ? ` ${g.separator} ${snapshot.installHint}` : ""}`;
-    } else if (snapshot.available) {
-      glyph = g.warn;
-      color = PALETTE.needsProfile;
-      detail = `found ${g.separator} needs a headless profile ${g.arrow} see .quorate.example.yml`;
-    } else {
-      detail = `not installed${snapshot.installHint ? ` ${g.separator} install ${snapshot.installHint}` : ""}`;
-    }
-    lines.push(doctorRow(glyph, color, snapshot.id, detail, snapshot.active));
-  }
-
-  lines.push("", `  ${bold("Verdict")}`);
-  if (realRunnable.length > 0) {
-    const ids = realRunnable.slice(0, 2).map((snapshot) => snapshot.id).join(",");
-    lines.push(`  ${paint(PALETTE.ok, g.check)} Council ready — ${realRunnable.length} real reviewer${realRunnable.length === 1 ? "" : "s"} runnable.`);
-    lines.push(dim(`     Try:  quorate review --providers ${ids} --base main`));
-  } else {
-    lines.push(`  ${paint(PALETTE.degraded, g.warn)} Heuristic-only — reviews report as DEGRADED, never a confident pass.`);
-    lines.push(dim("     Install a reviewer (claude, codex, qwen …), then:"));
-    lines.push(dim("       quorate init      # write .quorate.yml"));
-    lines.push(dim("       quorate doctor    # confirm it is runnable"));
-  }
-  lines.push("", dim(`  Config: ${findConfigPath(cwd) ?? "none — using built-in defaults (run quorate init)"}`));
-  console.log(lines.join("\n"));
 }
 
 function helpExamples(): string {
@@ -206,6 +144,10 @@ export function buildProgram(): Command {
       const config = createDefaultConfig(detectAvailableProviders());
       writeFileSync(configPath, serializeConfig(config), "utf8");
       console.log(`Created ${configPath}`);
+
+      // Session/report artifacts (diffs, transcripts, findings) are written under
+      // .quorate/ — keep them out of version control.
+      ensureGitignored(cwd, ".quorate/");
     });
 
   program
@@ -213,15 +155,30 @@ export function buildProgram(): Command {
     .helpGroup("Setup:")
     .description("Check council readiness: environment, provider availability, and the next step.")
     .option("--json", "Print machine-readable JSON")
+    .option("--bundle", "Zip diagnostics to stdout (redacted config, provider grid, last report)")
+    .option("--bundle-file <path>", "Write diagnostic zip to a file")
     .action((options) => {
+      const cwd = cwdFrom(program);
       const config = configFrom(program);
       const detected = detectAvailableProviders();
+
+      if (options.bundle || options.bundleFile) {
+        const buffer = buildDoctorBundle(config, cwd);
+        if (options.bundleFile) {
+          writeFileSync(resolve(cwd, options.bundleFile), buffer);
+          console.log(`Wrote diagnostic bundle to ${options.bundleFile}`);
+        } else {
+          stdout.write(buffer);
+        }
+        return;
+      }
+
       if (options.json) {
         console.log(JSON.stringify({ detected, config }, null, 2));
         return;
       }
 
-      printDoctor(config, cwdFrom(program));
+      printDoctor(config, cwd);
     });
 
   program
@@ -249,7 +206,7 @@ export function buildProgram(): Command {
     .option("--pr <number>", "Read a pull request diff with gh pr diff")
     .option("--subject <text>", "Review subject", "Local code review")
     .option("--providers <ids>", "Comma-separated provider ids to enable for this run")
-    .option("--json", "Print JSON instead of Markdown")
+    .option("--json", "Stream NDJSON events to stdout (final line is the report JSON)")
     .option("--write-json <path>", "Write the JSON report to a file")
     .action(async (options) => {
       const cwd = cwdFrom(program);
@@ -260,24 +217,26 @@ export function buildProgram(): Command {
         process.exitCode = 1;
         return;
       }
-      const report = await runCouncil(
-        {
-          mode: "review",
-          subject: options.subject,
-          diff,
-          repoPath: cwd,
-          pullRequest: options.pr ? { number: Number(options.pr) } : undefined
-        },
-        config
-      );
+      const request = {
+        mode: "review" as const,
+        subject: options.subject,
+        diff,
+        repoPath: cwd,
+        pullRequest: options.pr ? { number: Number(options.pr) } : undefined
+      };
+
+      const report = options.json
+        ? await runCouncilWithJsonStream(request, config, {
+            writeStdout: (line) => process.stdout.write(`${line}\n`),
+            writeStderr: (line) => console.error(line)
+          })
+        : await runCouncil(request, config);
 
       if (options.writeJson) {
         writeFileSync(resolve(cwd, options.writeJson), `${JSON.stringify(report, null, 2)}\n`, "utf8");
       }
 
-      if (options.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
+      if (!options.json) {
         console.log(renderMarkdownReport(report));
       }
 
@@ -292,21 +251,23 @@ export function buildProgram(): Command {
     .description("Ask the council to evaluate an implementation or architecture plan.")
     .argument("<prompt...>", "Plan prompt")
     .option("--providers <ids>", "Comma-separated provider ids to enable for this run")
-    .option("--json", "Print JSON instead of Markdown")
+    .option("--json", "Stream NDJSON events to stdout (final line is the report JSON)")
     .action(async (promptParts: string[], options) => {
       const cwd = cwdFrom(program);
       const config = applyProviderFilter(configFrom(program), options.providers);
       const subject = promptParts.join(" ");
-      const report = await runCouncil(
-        {
-          mode: "plan",
-          subject,
-          repoPath: cwd
-        },
-        config
-      );
+      const request = { mode: "plan" as const, subject, repoPath: cwd };
 
-      console.log(options.json ? JSON.stringify(report, null, 2) : renderMarkdownReport(report));
+      const report = options.json
+        ? await runCouncilWithJsonStream(request, config, {
+            writeStdout: (line) => process.stdout.write(`${line}\n`),
+            writeStderr: (line) => console.error(line)
+          })
+        : await runCouncil(request, config);
+
+      if (!options.json) {
+        console.log(renderMarkdownReport(report));
+      }
     });
 
   program
@@ -315,6 +276,8 @@ export function buildProgram(): Command {
     .description("Start an interactive Quorate shell (default when no subcommand is given).")
     .option("--providers <ids>", "Comma-separated provider ids to enable for this shell session")
     .option("--mode <mode>", "Initial mode: review or plan", "review")
+    .option("--continue", "Resume the most recent saved session for this repo")
+    .option("--resume [id]", "Resume a saved session by id (omit id to use the latest)")
     .option("--classic", "Use the legacy inline shell instead of the Ink TUI")
     .action(async (options) => {
       if (options.mode !== "review" && options.mode !== "plan") {
@@ -330,12 +293,27 @@ export function buildProgram(): Command {
       }
 
       const cwd = cwdFrom(program);
+      let restoredSession: PersistedSession | undefined;
+      if (options.continue) {
+        restoredSession = latestSession(cwd);
+        if (!restoredSession) {
+          throw new Error("No saved sessions for this repo. Run a /review first.");
+        }
+      } else if (options.resume !== undefined) {
+        const id = typeof options.resume === "string" ? options.resume : undefined;
+        restoredSession = id ? loadSession(cwd, id) ?? latestSession(cwd) : latestSession(cwd);
+        if (!restoredSession) {
+          throw new Error("No saved sessions for this repo. Run a /review first.");
+        }
+      }
+
       if (stdin.isTTY && stdout.isTTY && !options.classic) {
         await launchInkShell({
           cwd,
           config,
           providers: options.providers,
-          mode: options.mode
+          mode: options.mode,
+          restoredSession
         });
         return;
       }
