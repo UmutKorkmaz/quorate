@@ -1,0 +1,13 @@
+og.png is referenced by Seo.tsx for Open Graph and Twitter cards.
+
+Source artwork: public/og.svg (mirrors src/components/OgImage.tsx).
+
+Regenerate PNG (1200×630) when branding changes, e.g.:
+
+  # ImageMagick
+  magick public/og.svg -resize 1200x630 public/og.png
+
+  # or rsvg-convert
+  rsvg-convert -w 1200 -h 630 public/og.svg -o public/og.png
+
+The committed og.png is a minimal placeholder until you export the SVG.

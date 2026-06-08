@@ -1,0 +1,1234 @@
+@import "tailwindcss";
+
+@theme {
+  --color-quorate-bg: #0b0f17;
+  --color-quorate-surface: #121826;
+  --color-quorate-elevated: #1a2234;
+  --color-quorate-border: #2a3348;
+  --color-quorate-accent: #6e97ff;
+  --color-quorate-command: #6e97ff;
+  --color-quorate-amber: #fbbf24;
+  --color-quorate-spinner: #fbbf24;
+  --color-quorate-dim: #6b748a;
+  --color-quorate-muted: #9ca3b8;
+  --color-quorate-pass: #34d399;
+  --color-quorate-warn: #fbbf24;
+  --color-quorate-fail: #f87171;
+  --color-quorate-degraded: #fbbf24;
+  --color-quorate-critical: #fb7185;
+  --color-quorate-high: #f87171;
+  --color-quorate-medium: #fbbf24;
+  --color-quorate-low: #38bdf8;
+  --color-quorate-info: #7c8597;
+  --color-quorate-architect: #8aa6ff;
+  --color-quorate-security: #fb7185;
+  --color-quorate-qa: #34d399;
+  --color-quorate-performance: #fbbf24;
+  --color-quorate-maintainer: #38bdf8;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Menlo, Consolas,
+    monospace;
+
+  --shadow-glow: 0 0 60px -12px rgba(110, 151, 255, 0.35);
+  --shadow-glow-strong: 0 0 80px -8px rgba(110, 151, 255, 0.5);
+  --shadow-terminal: 0 24px 80px -20px rgba(0, 0, 0, 0.65);
+  --shadow-terminal-inner: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  --shadow-amber-glow: 0 0 40px -8px rgba(251, 191, 36, 0.3);
+
+  --animate-pulse-soft: pulse-soft 3s ease-in-out infinite;
+  --animate-scroll: scroll 40s linear infinite;
+  --animate-phase-fade: phase-fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-glow-pulse: glow-pulse-pill 2.5s ease-in-out infinite;
+  --animate-float-slow: float-slow 9s ease-in-out infinite;
+  --animate-float-mid: float-slow 7s ease-in-out infinite reverse;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes phase-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow-pulse-pill {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(110, 151, 255, 0);
+  }
+  50% {
+    box-shadow: 0 0 10px 2px rgba(110, 151, 255, 0.45);
+  }
+}
+
+@keyframes float-slow {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(18px, -22px) scale(1.04);
+  }
+  66% {
+    transform: translate(-12px, 14px) scale(0.97);
+  }
+}
+
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-quorate-bg font-sans text-white antialiased;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(110, 151, 255, 0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(251, 191, 36, 0.06), transparent);
+}
+
+::selection {
+  background-color: color-mix(in srgb, var(--color-quorate-accent) 35%, transparent);
+}
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(42, 51, 72, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42, 51, 72, 0.35) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 75%);
+}
+
+/* ── Terminal emulator (homepage) ─────────────────────────────── */
+
+.terminal-emulator {
+  @apply relative mx-auto max-w-4xl;
+}
+
+.terminal-emulator-glow {
+  @apply absolute -inset-8 rounded-3xl blur-3xl;
+  background:
+    radial-gradient(ellipse 60% 50% at 40% 50%, rgba(110, 151, 255, 0.14), transparent),
+    radial-gradient(ellipse 40% 40% at 70% 60%, rgba(251, 191, 36, 0.07), transparent);
+}
+
+.terminal-window {
+  @apply relative overflow-hidden rounded-2xl border border-quorate-border bg-quorate-surface;
+  box-shadow:
+    var(--shadow-terminal),
+    var(--shadow-terminal-inner),
+    0 0 0 1px rgba(110, 151, 255, 0.06);
+}
+
+/* Subtle top reflection */
+.terminal-window::before {
+  content: "";
+  @apply pointer-events-none absolute inset-x-0 top-0 h-px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.08) 60%, transparent);
+}
+
+.terminal-chrome {
+  @apply flex items-center gap-2 border-b border-quorate-border px-4 py-3;
+  background: linear-gradient(180deg, rgba(30, 40, 60, 0.9) 0%, rgba(18, 24, 38, 0.95) 100%);
+}
+
+.terminal-lights {
+  @apply flex items-center gap-2;
+}
+
+.terminal-light {
+  @apply h-3 w-3 rounded-full;
+}
+
+.terminal-light--close {
+  @apply bg-quorate-fail/80;
+}
+
+.terminal-light--min {
+  @apply bg-quorate-warn/80;
+}
+
+.terminal-light--max {
+  @apply bg-quorate-pass/80;
+}
+
+.terminal-title {
+  @apply ml-2 flex-1 truncate font-mono text-xs text-quorate-muted;
+}
+
+.terminal-badge {
+  @apply rounded-full border border-quorate-border bg-quorate-bg px-2.5 py-0.5 font-mono text-[10px] tracking-wide text-quorate-dim uppercase;
+}
+
+.terminal-body {
+  @apply relative space-y-3 p-4 font-mono text-[12px] leading-relaxed md:p-5 md:text-[13px];
+}
+
+.terminal-welcome-top {
+  @apply flex flex-wrap items-start justify-between gap-2;
+}
+
+.terminal-wordmark {
+  @apply font-bold tracking-[0.35em] text-white;
+}
+
+.terminal-meta {
+  @apply text-quorate-dim;
+}
+
+.terminal-tagline {
+  @apply mt-2 text-quorate-spinner;
+}
+
+.terminal-getting-started {
+  @apply mt-3 rounded-xl border border-quorate-border px-3 py-2.5;
+}
+
+.terminal-getting-started-label {
+  @apply text-[10px] tracking-wider text-quorate-dim uppercase;
+}
+
+.terminal-getting-started ul {
+  @apply mt-2 list-none space-y-1 p-0;
+}
+
+.terminal-getting-started li {
+  @apply grid grid-cols-[9rem_1fr] gap-2;
+}
+
+.terminal-getting-started code {
+  @apply font-bold text-quorate-command;
+}
+
+.terminal-getting-started span {
+  @apply text-quorate-dim;
+}
+
+.terminal-roles {
+  @apply mt-3 flex flex-wrap items-center gap-2;
+}
+
+.terminal-roles-label {
+  @apply text-quorate-dim;
+}
+
+.terminal-role-chip {
+  @apply rounded-full border border-quorate-border bg-quorate-elevated/60 px-2 py-0.5 text-[11px];
+}
+
+.terminal-agents-line {
+  @apply text-quorate-muted;
+}
+
+.terminal-diff-card {
+  @apply rounded-xl border border-quorate-border bg-quorate-elevated/40 px-3 py-3;
+}
+
+.terminal-diff-stats {
+  @apply mt-2 flex justify-between font-semibold text-white;
+}
+
+.terminal-running-label {
+  @apply text-quorate-dim;
+}
+
+.terminal-run-row {
+  @apply flex items-center justify-between gap-4 border-b border-quorate-border/50 py-1.5 last:border-0;
+}
+
+.terminal-run-id {
+  @apply text-white;
+}
+
+.terminal-verdict {
+  @apply rounded-xl px-3 py-3;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.06) 0%, rgba(18, 24, 38, 0.8) 100%);
+  box-shadow: 0 0 24px -8px rgba(248, 113, 113, 0.2), inset 0 1px 0 rgba(248, 113, 113, 0.08);
+}
+
+.terminal-verdict-header {
+  @apply mb-2 flex flex-wrap items-center gap-2;
+}
+
+.terminal-finding {
+  @apply flex flex-wrap items-center gap-2 font-semibold;
+}
+
+.terminal-finding-body {
+  @apply mt-2 text-quorate-muted;
+}
+
+.terminal-finding-meta {
+  @apply mt-2 text-xs;
+}
+
+.terminal-status {
+  @apply text-quorate-dim;
+}
+
+.terminal-composer {
+  @apply flex flex-wrap items-center gap-1 rounded-xl border border-quorate-border px-3 py-2.5;
+}
+
+.terminal-composer--palette {
+  @apply border-quorate-command/60 shadow-[0_0_0_1px_rgba(110,151,255,0.15)];
+}
+
+.terminal-composer-input {
+  @apply min-w-[2ch] text-white;
+}
+
+.terminal-cursor {
+  @apply inline-block h-[1.1em] w-[0.55em] animate-pulse-soft bg-quorate-accent;
+}
+
+.terminal-placeholder {
+  @apply text-quorate-dim;
+}
+
+.terminal-palette {
+  @apply rounded-lg border border-quorate-border/80 bg-quorate-bg/80 px-2 py-2;
+}
+
+.terminal-palette-row {
+  @apply grid grid-cols-[1rem_6.5rem_1fr] gap-2 py-0.5 text-quorate-muted;
+}
+
+.terminal-palette-row--active {
+  @apply text-white;
+}
+
+.terminal-palette-hint {
+  @apply mt-2 border-t border-quorate-border/60 pt-2 text-[11px] text-quorate-dim;
+}
+
+.terminal-footer {
+  @apply text-[11px] text-quorate-dim;
+}
+
+.terminal-scanlines {
+  @apply pointer-events-none absolute inset-0 opacity-[0.04];
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.35) 2px,
+    rgba(255, 255, 255, 0.35) 3px
+  );
+}
+
+.terminal-phase-rail {
+  @apply relative border-b border-quorate-border/80 bg-quorate-bg/60 px-3 py-2;
+}
+
+.terminal-phase-rail-pills {
+  @apply flex flex-wrap items-center gap-1.5;
+}
+
+.terminal-phase-pill {
+  @apply rounded-full border border-quorate-border bg-quorate-elevated/50 px-2.5 py-0.5 font-mono text-[10px] text-quorate-dim transition-all duration-200 hover:border-quorate-accent/40 hover:text-quorate-muted cursor-pointer;
+}
+
+.terminal-phase-pill--active {
+  @apply border-quorate-accent/60 bg-quorate-accent/12 text-quorate-accent;
+  animation: var(--animate-glow-pulse);
+}
+
+.terminal-phase-paused {
+  @apply ml-auto font-mono text-[10px] tracking-wide text-quorate-amber uppercase;
+}
+
+.terminal-phase-progress {
+  @apply mt-2 h-0.5 overflow-hidden rounded-full bg-quorate-border/50;
+}
+
+.terminal-phase-progress-fill {
+  @apply h-full rounded-full transition-all duration-700 ease-out;
+  background: linear-gradient(90deg, rgba(110, 151, 255, 0.6), rgba(110, 151, 255, 0.9));
+}
+
+.terminal-phase-content {
+  animation: var(--animate-phase-fade);
+}
+
+.terminal-diff-files {
+  @apply mt-3 space-y-1 border-t border-quorate-border/50 pt-2;
+}
+
+.terminal-diff-files li {
+  @apply flex items-center justify-between gap-3 text-[11px];
+}
+
+.terminal-agreement-bar {
+  @apply my-2 h-1.5 overflow-hidden rounded-full bg-quorate-border/80;
+}
+
+.terminal-agreement-fill {
+  @apply block h-full rounded-full bg-quorate-amber/80;
+}
+
+.terminal-finding--secondary {
+  @apply mt-3 border-t border-quorate-border/40 pt-3;
+}
+
+.terminal-finding-body--secondary {
+  @apply mt-1;
+}
+
+.terminal-window-footer {
+  @apply flex flex-wrap items-center justify-between gap-3 border-t border-quorate-border bg-quorate-elevated/40 px-4 py-2.5;
+}
+
+.terminal-caption {
+  @apply text-[11px] text-quorate-dim;
+}
+
+.terminal-replay {
+  @apply rounded-lg border border-quorate-border bg-quorate-surface px-3 py-1 font-mono text-[11px] text-quorate-muted transition hover:border-quorate-accent/40 hover:text-quorate-accent;
+}
+
+.terminal-showcase-grid {
+  @apply grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start;
+}
+
+.terminal-showcase-aside {
+  @apply space-y-4 lg:sticky lg:top-24 lg:self-start;
+}
+
+.terminal-showcase-panel {
+  @apply rounded-xl p-5;
+  border: 1px solid rgba(42, 51, 72, 0.8);
+  background: linear-gradient(135deg, rgba(26, 34, 52, 0.6) 0%, rgba(18, 24, 38, 0.9) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.terminal-showcase-panel--active {
+  border-color: rgba(110, 151, 255, 0.25);
+  box-shadow: 0 0 20px -8px rgba(110, 151, 255, 0.2), inset 0 1px 0 rgba(110, 151, 255, 0.06);
+}
+
+.terminal-showcase-label {
+  @apply font-mono text-[10px] tracking-wider text-quorate-dim uppercase;
+}
+
+.terminal-showcase-phase-title {
+  @apply mt-2 text-lg font-semibold text-white;
+}
+
+.terminal-showcase-phase-desc {
+  @apply mt-2 text-sm leading-relaxed text-quorate-muted;
+}
+
+.terminal-showcase-checklist {
+  @apply mt-3 list-disc space-y-2 pl-5 text-sm text-quorate-muted;
+}
+
+.terminal-shortcuts {
+  @apply mt-3 space-y-2;
+}
+
+.terminal-shortcut-row {
+  @apply grid grid-cols-[4.5rem_1fr] gap-3 text-sm;
+}
+
+.terminal-shortcut-row kbd {
+  @apply inline-block rounded border border-quorate-border bg-quorate-bg px-2 py-0.5 font-mono text-[11px] text-quorate-accent;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.terminal-shortcut-row dd {
+  @apply text-quorate-muted;
+}
+
+.terminal-showcase-cta {
+  @apply text-sm text-quorate-dim;
+}
+
+/* ── Hero orbs & stat cards ───────────────────────────────────── */
+
+.hero-orb {
+  @apply pointer-events-none absolute rounded-full blur-3xl;
+}
+
+.hero-orb--indigo {
+  animation: var(--animate-float-slow);
+}
+
+.hero-orb--amber {
+  animation: var(--animate-float-mid);
+}
+
+.hero-stat-card {
+  @apply flex flex-col items-center gap-1 rounded-xl px-5 py-4;
+  background: linear-gradient(135deg, rgba(26, 34, 52, 0.7) 0%, rgba(18, 24, 38, 0.5) 100%);
+  border: 1px solid rgba(42, 51, 72, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 16px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+}
+
+.hero-stat-value {
+  @apply font-mono text-2xl font-bold;
+  background: linear-gradient(135deg, #a8c4ff 0%, #6e97ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-stat-label {
+  @apply text-center text-xs leading-tight text-quorate-dim;
+}
+
+.hero-cta-primary {
+  @apply inline-flex items-center gap-2.5 rounded-xl border px-5 py-3 font-mono text-sm font-medium transition-all duration-200;
+  border-color: rgba(110, 151, 255, 0.5);
+  background: linear-gradient(135deg, rgba(110, 151, 255, 0.12) 0%, rgba(110, 151, 255, 0.06) 100%);
+  color: #a8c4ff;
+  box-shadow: 0 0 24px -8px rgba(110, 151, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.hero-cta-primary:hover {
+  border-color: rgba(110, 151, 255, 0.75);
+  background: linear-gradient(135deg, rgba(110, 151, 255, 0.2) 0%, rgba(110, 151, 255, 0.1) 100%);
+  box-shadow: 0 0 36px -8px rgba(110, 151, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: #c4d8ff;
+}
+
+.hero-badge {
+  @apply mb-5 inline-flex items-center gap-2 rounded-full border border-quorate-border px-4 py-1.5 font-mono text-xs text-quorate-accent;
+  background: linear-gradient(135deg, rgba(26, 34, 52, 0.8) 0%, rgba(18, 24, 38, 0.6) 100%);
+  box-shadow: 0 0 16px -6px rgba(110, 151, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ── Feature cards ────────────────────────────────────────────── */
+
+.feature-card {
+  @apply relative overflow-hidden rounded-xl border border-quorate-border p-6 transition-all duration-300;
+  background: linear-gradient(135deg, rgba(18, 24, 38, 0.9) 0%, rgba(26, 34, 52, 0.5) 100%);
+}
+
+.feature-card::before {
+  content: "";
+  @apply pointer-events-none absolute left-0 top-0 h-full w-0.5 rounded-full opacity-0 transition-all duration-300;
+}
+
+.feature-card:hover {
+  border-color: rgba(110, 151, 255, 0.3);
+  box-shadow: var(--shadow-glow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transform: translateY(-1px);
+}
+
+.feature-card:hover::before {
+  @apply opacity-100;
+}
+
+.feature-card--accent::before {
+  background: var(--color-quorate-accent);
+}
+
+.feature-card--amber::before {
+  background: var(--color-quorate-amber);
+}
+
+.feature-card--security::before {
+  background: var(--color-quorate-security);
+}
+
+.feature-card--qa::before {
+  background: var(--color-quorate-qa);
+}
+
+.feature-card--maintainer::before {
+  background: var(--color-quorate-maintainer);
+}
+
+.feature-card-icon {
+  @apply inline-flex h-11 w-11 items-center justify-center rounded-xl border border-quorate-border text-xl transition-all duration-300;
+  background: linear-gradient(135deg, rgba(26, 34, 52, 0.9) 0%, rgba(18, 24, 38, 0.7) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.feature-card:hover .feature-card-icon {
+  border-color: rgba(110, 151, 255, 0.3);
+  box-shadow: 0 0 16px -4px rgba(110, 151, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Manual testing checklist */
+.checklist {
+  @apply my-4 space-y-2;
+}
+
+.checklist li {
+  @apply flex gap-3 rounded-lg border border-quorate-border/60 bg-quorate-surface/40 px-3 py-2.5 text-sm text-quorate-muted;
+}
+
+.checklist-marker {
+  @apply mt-0.5 shrink-0 font-mono text-quorate-dim;
+}
+
+.checklist-body strong {
+  @apply block text-gray-200;
+}
+
+.test-section-note {
+  @apply my-4 rounded-lg border border-quorate-amber/25 bg-quorate-amber/5 px-4 py-3 text-sm text-quorate-muted;
+}
+
+.doc-toc {
+  @apply my-6 rounded-xl border border-quorate-border bg-quorate-surface/60 p-5;
+}
+
+.doc-toc-title {
+  @apply font-mono text-[10px] tracking-wider text-quorate-dim uppercase;
+}
+
+.doc-toc ol {
+  @apply mt-3 list-decimal space-y-1 pl-5 text-sm;
+}
+
+.doc-toc a {
+  @apply text-quorate-muted no-underline transition hover:text-quorate-accent;
+}
+
+/* ── Site header ─────────────────────────────────────────────── */
+
+.site-header {
+  @apply sticky top-0 z-50 border-b border-quorate-border bg-quorate-bg/90 backdrop-blur-md;
+}
+
+.site-header-inner {
+  @apply mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4;
+}
+
+.site-logo {
+  @apply flex items-center gap-2.5 font-semibold tracking-[0.18em] text-white transition-opacity hover:opacity-90;
+}
+
+.site-logo-icon {
+  @apply shrink-0 rounded-md;
+}
+
+.site-logo-text {
+  @apply text-sm;
+}
+
+.menu-toggle {
+  @apply relative flex h-10 w-10 flex-col items-center justify-center gap-1.5 rounded-lg border border-quorate-border bg-quorate-surface md:hidden;
+}
+
+.menu-toggle-bar {
+  @apply block h-0.5 w-5 rounded-full bg-quorate-muted transition-transform;
+}
+
+.site-nav {
+  @apply hidden items-center gap-6 text-sm md:flex;
+}
+
+.site-nav-open {
+  @apply absolute right-6 top-full mt-2 flex w-72 max-w-[calc(100vw-3rem)] flex-col gap-1 rounded-xl border border-quorate-border bg-quorate-surface p-3 shadow-lg md:static md:mt-0 md:w-auto md:max-w-none md:flex-row md:border-0 md:bg-transparent md:p-0 md:shadow-none;
+}
+
+.nav-link {
+  @apply rounded-lg px-3 py-2 text-quorate-dim transition-colors hover:text-quorate-accent md:px-0 md:py-0;
+}
+
+.nav-link-active {
+  @apply font-medium text-quorate-accent;
+}
+
+.nav-link-external {
+  @apply hover:text-quorate-amber;
+}
+
+/* ── Application shell (layout frame) ─────────────────────────── */
+
+.site {
+  @apply flex min-h-screen flex-col;
+}
+
+.site-main {
+  @apply flex-1;
+}
+
+.site-footer {
+  @apply border-t border-quorate-border bg-quorate-bg/60;
+}
+
+.site-footer-inner {
+  @apply mx-auto flex max-w-6xl flex-col gap-3 px-6 py-8 text-sm text-quorate-dim sm:flex-row sm:items-center sm:justify-between;
+}
+
+.site-footer-inner strong {
+  @apply font-semibold tracking-[0.18em] text-quorate-muted;
+}
+
+.site-footer-inner a {
+  @apply text-quorate-muted underline-offset-4 transition-colors hover:text-quorate-accent hover:underline;
+}
+
+.brand-mark {
+  @apply text-quorate-accent;
+}
+
+.site-footer-links {
+  @apply flex flex-wrap items-center gap-5;
+}
+
+/* ── Documentation shell ─────────────────────────────────────── */
+
+.doc-nav {
+  @apply flex flex-col gap-6;
+}
+
+.docs-shell {
+  @apply px-6 py-10 md:py-12;
+}
+
+.docs-shell-inner {
+  @apply mx-auto flex max-w-6xl flex-col gap-8 lg:flex-row lg:gap-12;
+}
+
+.docs-nav-toggle {
+  @apply mb-2 w-full rounded-lg border border-quorate-border bg-quorate-surface px-4 py-2.5 text-left text-sm text-quorate-muted transition-colors hover:border-quorate-accent/40 hover:text-white lg:hidden;
+}
+
+.docs-sidebar {
+  @apply hidden w-full shrink-0 lg:block lg:w-52 lg:self-start;
+}
+
+.docs-sidebar-open {
+  @apply block;
+}
+
+.docs-sidebar-label {
+  @apply mb-3 text-xs font-bold tracking-wider text-quorate-dim uppercase;
+}
+
+.docs-nav {
+  @apply flex flex-col gap-1 text-sm;
+}
+
+.docs-nav-link {
+  @apply rounded-md px-2 py-1.5 text-quorate-dim transition-colors hover:text-gray-200;
+}
+
+.docs-nav-link-active {
+  @apply bg-quorate-accent/10 font-medium text-quorate-accent;
+}
+
+.docs-main {
+  @apply min-w-0 flex-1;
+}
+
+.docs-pager {
+  @apply mt-10 flex justify-between gap-4 border-t border-quorate-border pt-6;
+}
+
+.docs-pager-link {
+  @apply rounded-lg border border-quorate-border px-4 py-3 text-sm transition-colors hover:border-quorate-accent/40 hover:bg-quorate-accent/5;
+}
+
+.docs-pager-link-next {
+  @apply ml-auto text-right;
+}
+
+.docs-pager-dir {
+  @apply block text-xs tracking-wider text-quorate-dim uppercase;
+}
+
+.docs-pager-title {
+  @apply font-medium text-gray-200;
+}
+
+/* ── Documentation content ───────────────────────────────────── */
+
+.docs-content h1 {
+  @apply text-3xl font-bold tracking-tight text-white;
+}
+
+.docs-content .lead {
+  @apply mt-4 text-lg leading-relaxed text-quorate-muted;
+}
+
+.docs-content h2 {
+  @apply mt-10 mb-3 text-xl font-semibold text-white;
+}
+
+.docs-content h3 {
+  @apply mt-6 mb-2 text-lg font-semibold text-white;
+}
+
+.docs-content p {
+  @apply leading-relaxed text-quorate-muted;
+}
+
+.docs-content p + p {
+  @apply mt-4;
+}
+
+.docs-content ul,
+.docs-content ol {
+  @apply mt-4 list-disc space-y-2 pl-6 text-quorate-muted;
+}
+
+.docs-content li strong {
+  @apply text-gray-200;
+}
+
+.docs-content a {
+  @apply text-quorate-accent underline-offset-4 transition-colors hover:text-quorate-amber hover:underline;
+}
+
+.docs-content blockquote {
+  @apply mt-4 rounded-lg border-l-4 border-quorate-amber bg-quorate-amber/5 px-4 py-3 text-quorate-muted;
+}
+
+.docs-content table {
+  @apply mt-4 w-full border-collapse text-sm;
+}
+
+.docs-content th,
+.docs-content td {
+  @apply border border-quorate-border px-3 py-2 text-left align-top;
+}
+
+.docs-content th {
+  @apply bg-quorate-surface font-medium text-gray-200;
+}
+
+.docs-content code:not(.inline-code) {
+  @apply font-mono text-sm text-quorate-accent;
+}
+
+.inline-code {
+  @apply rounded border border-quorate-border bg-quorate-surface px-1.5 py-0.5 font-mono text-sm text-quorate-accent;
+}
+
+.code-block {
+  @apply mt-4 overflow-x-auto rounded-lg border border-quorate-border bg-quorate-surface p-4 font-mono text-sm leading-relaxed text-gray-200;
+}
+
+.diagram {
+  @apply mt-4 overflow-x-auto rounded-lg border border-quorate-border bg-quorate-surface p-4 font-mono text-sm leading-relaxed text-gray-200;
+}
+
+.doc-cards {
+  @apply mt-4 grid gap-4 sm:grid-cols-2;
+}
+
+.doc-card {
+  @apply rounded-xl border border-quorate-border bg-quorate-surface p-4 transition-colors hover:border-quorate-accent/40 hover:bg-quorate-accent/5;
+}
+
+.doc-card-title {
+  @apply font-semibold text-white;
+}
+
+.doc-card-desc {
+  @apply mt-1 text-sm text-quorate-dim;
+}
+
+.provider-strip {
+  @apply flex flex-wrap gap-2;
+}
+
+.command-table {
+  @apply mt-4 overflow-x-auto rounded-lg border border-quorate-border;
+}
+
+.command-table table {
+  @apply mt-0;
+}
+
+.faq-list {
+  @apply mt-6 space-y-3;
+}
+
+.faq-item {
+  @apply rounded-lg border border-quorate-border bg-quorate-surface;
+}
+
+.faq-item summary {
+  @apply cursor-pointer px-4 py-3 font-medium text-gray-200;
+}
+
+.faq-answer {
+  @apply border-t border-quorate-border px-4 py-3 text-sm text-quorate-muted;
+}
+
+/* ── 404 page ────────────────────────────────────────────────── */
+
+.not-found {
+  @apply mx-auto flex max-w-lg flex-col items-center px-6 py-24 text-center;
+}
+
+.not-found-mark {
+  @apply text-4xl text-quorate-accent;
+}
+
+.not-found h1 {
+  @apply mt-4 text-3xl font-bold text-white;
+}
+
+.not-found .lead {
+  @apply mt-4 text-quorate-muted;
+}
+
+.hero-actions {
+  @apply mt-8 flex flex-wrap justify-center gap-4;
+}
+
+.btn {
+  @apply rounded-lg px-5 py-2.5 text-sm font-medium transition-colors;
+}
+
+.btn-primary {
+  @apply border border-quorate-accent bg-quorate-accent/10 text-quorate-accent hover:bg-quorate-accent/20;
+}
+
+.btn-secondary {
+  @apply border border-quorate-border text-quorate-dim hover:border-quorate-dim hover:text-gray-200;
+}
+
+/* Documentation */
+
+.doc-shell {
+  @apply mx-auto grid max-w-6xl gap-10 px-6 py-12 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-14;
+}
+
+.doc-sidebar {
+  @apply lg:sticky lg:top-24 lg:self-start;
+}
+
+.doc-main {
+  @apply min-w-0;
+}
+
+.doc-nav-section + .doc-nav-section {
+  @apply mt-6;
+}
+
+.doc-nav-heading {
+  @apply mb-2 text-[0.65rem] font-semibold tracking-[0.12em] text-quorate-dim uppercase;
+}
+
+.doc-nav-list {
+  @apply m-0 list-none space-y-0.5 p-0;
+}
+
+.doc-nav-link {
+  @apply block rounded-md px-2.5 py-1.5 text-sm text-quorate-muted transition-colors hover:bg-quorate-elevated/60 hover:text-white;
+}
+
+.doc-nav-link-active {
+  @apply bg-quorate-accent/10 font-medium text-quorate-accent hover:text-quorate-accent;
+}
+
+.doc-page {
+  @apply max-w-2xl font-sans leading-relaxed;
+}
+
+.doc-page h1 {
+  @apply mb-3 text-3xl font-bold tracking-tight text-white;
+}
+
+.doc-page h2 {
+  @apply mt-10 mb-3 text-xl font-semibold tracking-tight text-white;
+}
+
+.doc-page h3 {
+  @apply mt-7 mb-2 text-base font-semibold text-white;
+}
+
+.doc-page p {
+  @apply mb-4 text-quorate-muted;
+}
+
+.doc-page p.lead {
+  @apply text-lg text-gray-300;
+}
+
+.doc-page ul,
+.doc-page ol {
+  @apply mb-4 list-outside space-y-1.5 pl-5 text-quorate-muted;
+}
+
+.doc-page li strong {
+  @apply text-gray-200;
+}
+
+.doc-page a {
+  @apply text-quorate-accent underline-offset-2 hover:underline;
+}
+
+.doc-page blockquote {
+  @apply my-4 rounded-r-lg border-l-4 border-quorate-amber bg-quorate-amber/5 px-4 py-3 text-sm text-quorate-muted;
+}
+
+.doc-page table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+
+.doc-page th {
+  @apply border-b border-quorate-border bg-quorate-surface px-3 py-2 text-left text-xs font-semibold tracking-wider text-quorate-dim uppercase;
+}
+
+.doc-page td {
+  @apply border-b border-quorate-border px-3 py-2 align-top text-quorate-muted;
+}
+
+.doc-page code:not(pre code) {
+  @apply rounded bg-quorate-accent/10 px-1.5 py-0.5 font-mono text-sm text-quorate-accent;
+}
+
+.doc-diagram {
+  @apply my-4 overflow-x-auto rounded-xl border border-quorate-border bg-quorate-bg p-4 font-mono text-xs leading-relaxed text-gray-300;
+}
+
+.doc-cards {
+  @apply my-6 grid gap-3 sm:grid-cols-2;
+}
+
+.doc-card {
+  @apply block rounded-xl border border-quorate-border bg-quorate-surface/80 p-4 transition-colors hover:border-quorate-accent/35 hover:bg-quorate-accent/5;
+}
+
+.doc-card-title {
+  @apply m-0 text-sm font-semibold text-white;
+}
+
+.doc-card-desc {
+  @apply mt-1 mb-0 text-xs leading-relaxed text-quorate-dim;
+}
+
+.doc-card:hover .doc-card-title {
+  @apply text-quorate-accent;
+}
+
+.doc-steps {
+  @apply my-5 list-none space-y-3 p-0;
+  counter-reset: docstep;
+}
+
+.doc-steps li {
+  @apply relative rounded-lg border border-quorate-border bg-quorate-surface/80 py-3 pr-4 pl-12;
+  counter-increment: docstep;
+}
+
+.doc-steps li::before {
+  content: counter(docstep);
+  @apply absolute top-3 left-4 flex h-6 w-6 items-center justify-center rounded-full bg-quorate-accent/15 text-xs font-semibold text-quorate-accent;
+}
+
+.doc-steps li strong {
+  @apply block text-white;
+}
+
+.doc-steps li span {
+  @apply text-sm text-quorate-muted;
+}
+
+.provider-strip {
+  @apply flex flex-wrap gap-2;
+}
+
+.command-table {
+  @apply overflow-x-auto rounded-xl border border-quorate-border;
+}
+
+.command-table table {
+  @apply my-0;
+}
+
+.faq-list {
+  @apply my-4 divide-y divide-quorate-border rounded-xl border border-quorate-border;
+}
+
+.faq-item summary {
+  @apply cursor-pointer px-4 py-4 font-medium text-white transition-colors hover:bg-quorate-surface/60;
+  list-style: none;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-answer {
+  @apply px-4 pb-4 text-sm leading-relaxed text-quorate-muted;
+}
+
+.doc-pager {
+  @apply mt-12 flex justify-between gap-4 border-t border-quorate-border pt-8;
+}
+
+.doc-pager-link {
+  @apply rounded-lg border border-quorate-border px-4 py-3 text-sm transition-colors hover:border-quorate-accent/40 hover:bg-quorate-accent/5;
+}
+
+.doc-pager-link-next {
+  @apply ml-auto text-right;
+}
+
+.doc-pager-label {
+  @apply block text-xs tracking-wider text-quorate-dim uppercase;
+}
+
+.doc-pager-title {
+  @apply font-medium text-white;
+}
+
+.code-block-wrap {
+  @apply my-4 overflow-hidden rounded-xl border border-quorate-border bg-quorate-bg;
+}
+
+.code-block-header {
+  @apply flex items-center justify-between border-b border-quorate-border bg-quorate-surface px-3 py-2;
+}
+
+.code-block-lang {
+  @apply font-mono text-[0.65rem] font-medium tracking-wider text-quorate-dim uppercase;
+}
+
+.code-block-copy {
+  @apply rounded border border-quorate-border px-2 py-0.5 font-sans text-xs text-quorate-muted transition-colors hover:border-quorate-dim hover:text-white;
+}
+
+.code-block-copy-done {
+  @apply border-quorate-pass/40 text-quorate-pass;
+}
+
+.code-block {
+  @apply m-0 overflow-x-auto p-4 font-mono text-sm leading-relaxed text-gray-300;
+}
+
+/* Documentation prose */
+.docs-content,
+.doc-page {
+  @apply text-gray-200;
+}
+
+.docs-content h1,
+.doc-page h1 {
+  @apply mb-4 text-3xl font-bold tracking-tight text-white;
+}
+
+.docs-content h2,
+.doc-page h2 {
+  @apply mt-10 mb-3 text-xl font-semibold text-quorate-accent;
+}
+
+.docs-content h3,
+.doc-page h3 {
+  @apply mt-6 mb-2 text-lg font-medium text-white;
+}
+
+.docs-content p,
+.doc-page p {
+  @apply mb-4 leading-relaxed text-quorate-muted;
+}
+
+.docs-content .lead,
+.doc-page .lead {
+  @apply text-lg text-quorate-dim;
+}
+
+.docs-content ul,
+.doc-page ul {
+  @apply mb-4 list-disc space-y-2 pl-6 text-quorate-muted;
+}
+
+.docs-content ol,
+.doc-page ol {
+  @apply mb-4 list-decimal space-y-2 pl-6 text-quorate-muted;
+}
+
+.docs-content code,
+.doc-page code {
+  @apply rounded bg-quorate-elevated px-1.5 py-0.5 font-mono text-sm text-quorate-accent;
+}
+
+.docs-content pre,
+.doc-page pre {
+  @apply mb-4 overflow-x-auto rounded-lg border border-quorate-border bg-quorate-surface p-4 font-mono text-sm leading-relaxed text-quorate-muted;
+}
+
+.docs-content pre.diagram,
+.doc-page pre.diagram {
+  @apply text-quorate-dim;
+}
+
+.docs-content table,
+.doc-page table {
+  @apply mb-6 w-full border-collapse text-sm;
+}
+
+.docs-content th,
+.doc-page th {
+  @apply border-b border-quorate-border px-3 py-2 text-left font-medium text-quorate-accent;
+}
+
+.docs-content td,
+.doc-page td {
+  @apply border-b border-quorate-border/60 px-3 py-2 align-top text-quorate-muted;
+}
+
+.doc-cards {
+  @apply mb-6 grid gap-4 sm:grid-cols-2;
+}
+
+.doc-card {
+  @apply block rounded-xl border border-quorate-border bg-quorate-surface p-4 transition hover:border-quorate-accent/40 hover:bg-quorate-elevated/50;
+}
+
+.doc-card-title {
+  @apply mb-1 font-semibold text-white;
+}
+
+.doc-card-desc {
+  @apply text-sm text-quorate-dim;
+}
+
+.doc-pager {
+  @apply mt-10 flex justify-between gap-4 border-t border-quorate-border pt-6;
+}
+
+.doc-pager-link {
+  @apply rounded-lg border border-quorate-border px-4 py-3 text-sm transition-colors hover:border-quorate-accent/40 hover:bg-quorate-accent/5;
+}
+
+.doc-pager-link-next {
+  @apply text-right;
+}
+
+.doc-pager-label {
+  @apply block text-xs tracking-wider text-quorate-dim uppercase;
+}
+
+.doc-pager-title {
+  @apply font-medium text-gray-200;
+}

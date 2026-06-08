@@ -1,0 +1,55 @@
+# Quorate
+
+> A multi-agent code review council for local CLI and GitHub PR workflows.
+
+Quorate convenes a council of AI code reviewers over a diff or plan, aggregates
+their findings, and returns one verdict with concrete file-and-line evidence. It
+runs the AI CLIs you already have on your machine and ships a GitHub Action.
+
+## Site
+
+- [Home](https://umutkorkmaz.github.io/quorate/): Product overview and install
+- [Documentation](https://umutkorkmaz.github.io/quorate/docs): Guides and reference
+- [Install](https://umutkorkmaz.github.io/quorate/docs/install)
+- [Quick start](https://umutkorkmaz.github.io/quorate/docs/quickstart)
+- [Commands](https://umutkorkmaz.github.io/quorate/docs/commands)
+- [Providers](https://umutkorkmaz.github.io/quorate/docs/providers)
+- [Configuration](https://umutkorkmaz.github.io/quorate/docs/config)
+- [GitHub Action](https://umutkorkmaz.github.io/quorate/docs/github-action)
+- [FAQ](https://umutkorkmaz.github.io/quorate/docs/faq): Common questions
+
+## Repository
+
+- [Source & README](https://github.com/UmutKorkmaz/quorate): Full documentation
+- [npm package](https://www.npmjs.com/package/quorate): `npm install -g quorate`
+
+## Install
+
+```bash
+npm install -g quorate
+quorate
+```
+
+Requires Node.js 22 or newer.
+
+## Key concepts
+
+- **Council**: Multiple AI reviewers (architect, security, QA, performance, maintainer roles)
+- **Verdict**: Single PASS / WARN / FAIL outcome after deduplication
+- **Degraded**: Honest label when only the heuristic provider ran — never a false green
+- **Providers**: Local CLIs (`claude`, `codex`, `qwen`, `kimi`, …) plus a zero-setup heuristic
+- **GitHub Action**: PR reviews; loads `.quorate.yml` from the base branch for safety
+
+## CLI quick reference
+
+```bash
+quorate doctor                            # readiness checklist
+quorate review --base main --head HEAD    # review current branch
+quorate plan "migrate auth to passkeys"   # evaluate a plan
+quorate init                              # write starter .quorate.yml
+```
+
+## Optional
+
+- [Open Graph image](https://umutkorkmaz.github.io/quorate/og.png)
+- [Sitemap](https://umutkorkmaz.github.io/quorate/sitemap.xml)

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Quorate — a council of AI reviewers for your code">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f1117"/>
+      <stop offset="100%" stop-color="#151a24"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6E97FF"/>
+      <stop offset="100%" stop-color="#8AA6FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="72" y="72" width="1056" height="486" rx="24" fill="#1a2030" stroke="#2a3348" stroke-width="2"/>
+  <text x="120" y="220" fill="url(#accent)" font-family="ui-sans-serif, system-ui, sans-serif" font-size="88" font-weight="700">Quorate</text>
+  <text x="120" y="300" fill="#e8ecf4" font-family="ui-sans-serif, system-ui, sans-serif" font-size="36" font-weight="500">A council of AI reviewers for your code</text>
+  <text x="120" y="380" fill="#9aa3b8" font-family="ui-monospace, monospace" font-size="28">npm install -g quorate</text>
+  <text x="120" y="470" fill="#FBBF24" font-family="ui-sans-serif, system-ui, sans-serif" font-size="24" font-weight="600">◆ PASS · WARN · FAIL — one verdict, many models</text>
+</svg>
