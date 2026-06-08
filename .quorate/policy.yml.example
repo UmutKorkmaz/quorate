@@ -1,0 +1,35 @@
+# Quorate Ship — VerdictGate merge policy
+# Copy to .quorate/policy.yml and tune for your repo.
+#
+# FAIL blocks merge when the GitHub check fails (branch protection required).
+# See docs/products/VERDICT-GATE.md for the full spec.
+
+version: 1
+
+merge_gate:
+  enabled: true
+  block_on_verdict:
+    - fail
+  allow_warn_merge: true
+
+verdict:
+  fail_on: high
+  fail_on_degraded: true
+
+agreement:
+  min_agreement: 2
+  gate_severity: high
+
+roles_required:
+  - security
+  - maintainer
+
+providers:
+  min_real_providers: 1
+
+audit:
+  retention_days: 90
+  artifact_path: .quorate/last-report.json
+  export_formats:
+    - json
+    - markdown
