@@ -31165,6 +31165,58 @@ var defaultCouncils = [
   "performance",
   "maintainer"
 ];
+var PROVIDER_PRESETS = {
+  ollama: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:11434/v1",
+    model: "qwen2.5-coder:7b",
+    roles: ["qa", "maintainer", "performance"],
+    timeoutMs: 3e5
+  },
+  lmstudio: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:1234/v1",
+    model: "qwen2.5-coder-7b",
+    roles: ["qa", "maintainer"],
+    timeoutMs: 18e4
+  },
+  vllm: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:8000/v1",
+    model: "Qwen/Qwen2.5-Coder-7B-Instruct",
+    apiKeyEnv: "VLLM_API_KEY",
+    roles: ["architect", "security", "qa", "maintainer"],
+    timeoutMs: 18e4
+  },
+  llamacpp: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:8080/v1",
+    model: "local",
+    roles: ["qa", "maintainer"]
+  },
+  "hf-router": {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://router.huggingface.co/v1",
+    model: "Qwen/Qwen2.5-Coder-32B-Instruct:fastest",
+    apiKeyEnv: "HF_TOKEN",
+    roles: ["qa", "maintainer", "performance"],
+    timeoutMs: 12e4
+  },
+  openrouter: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "anthropic/claude-sonnet-4.6",
+    apiKeyEnv: "OPENROUTER_API_KEY",
+    roles: ["architect", "security"]
+  }
+};
+var PROVIDER_PRESET_NAMES = Object.keys(PROVIDER_PRESETS);
 var defaultProviderCandidates = [
   {
     id: "claude",
