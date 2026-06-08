@@ -5,6 +5,43 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-08
+
+### Added
+
+- **Live council streaming.** Each running lane shows a one-line activity preview
+  of what the agent is doing; drill into a lane (↑/↓ pick, → watch, ←/Esc back) to
+  follow its live output, with Esc-again to interrupt the run.
+- **`/logs`** (alias `/agent`) — review each agent's full captured output after a
+  run, including the real error for a failed provider.
+- **`/route`** — view and reassign role→provider routing for the session
+  (`/route <role> <providers…>`, `/route reset`).
+- **`quorate provider add`** / `remove` / `presets` — manage providers in
+  `.quorate.yml` from the CLI, with presets for Ollama, LM Studio, vLLM, llama.cpp,
+  the Hugging Face router, and OpenRouter.
+- Semantic mode colors in the TUI (review = blue, plan = green, `!` shell = red).
+- A README for the GitHub Action documenting how `type: api` providers run real
+  review on GitHub-hosted runners.
+
+### Changed
+
+- Redesigned the welcome, running panel, and verdict views to match the design.
+- **No input size cap by default** — `maxInputBytes` is now opt-in, and `/git`
+  excludes lockfiles/generated files, so large diffs aren't rejected.
+- Removed the default `--max-budget-usd` from the built-in `claude` profile
+  (subscription auth has no per-token billing).
+- `runner-mode` now actually filters providers by type in the GitHub Action.
+
+### Fixed
+
+- **EPIPE crash** when a provider closed stdin before the prompt finished writing.
+- **Hidden provider errors** — a failed run now surfaces the real reason instead of
+  a generic "all providers failed" / silent degrade.
+- The website CSS pipeline (Tailwind was never wired up, so the docs rendered
+  unstyled) and finished the redesign.
+- Gated untrusted `.quorate/commands` behind `QUORATE_TRUST_WORKSPACE`, constrained
+  `/compare` to the repo, and gitignored `.quorate/` session artifacts.
+
 ## [0.4.0] - 2026-06-06
 
 ### Added
