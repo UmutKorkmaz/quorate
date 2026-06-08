@@ -163,6 +163,30 @@ describe("applyOverrides", () => {
     expect(overridden.github.runnerMode).toBe(base.github.runnerMode);
     expect(overridden.providers.map((p) => p.enabled)).toEqual(base.providers.map((p) => p.enabled));
   });
+
+  it("runner-mode filters enabled providers by type, keeping the heuristic", () => {
+    const base = {
+      ...createDefaultConfig(),
+      providers: [
+        { id: "heuristic", type: "mock" as const, enabled: true },
+        { id: "claude", type: "cli" as const, command: "claude", args: ["--print"], enabled: true },
+        { id: "local-llama", type: "api" as const, model: "llama3.1", enabled: true }
+      ]
+    };
+
+    const cliOnly = applyOverrides(base, { runnerMode: "cli" });
+    expect(cliOnly.providers.find((p) => p.id === "heuristic")?.enabled).toBe(true);
+    expect(cliOnly.providers.find((p) => p.id === "claude")?.enabled).toBe(true);
+    expect(cliOnly.providers.find((p) => p.id === "local-llama")?.enabled).toBe(false);
+
+    const apiOnly = applyOverrides(base, { runnerMode: "api" });
+    expect(apiOnly.providers.find((p) => p.id === "heuristic")?.enabled).toBe(true);
+    expect(apiOnly.providers.find((p) => p.id === "claude")?.enabled).toBe(false);
+    expect(apiOnly.providers.find((p) => p.id === "local-llama")?.enabled).toBe(true);
+
+    const auto = applyOverrides(base, { runnerMode: "auto" });
+    expect(auto.providers.every((p) => p.enabled)).toBe(true);
+  });
 });
 
 describe("resolveBaseRef", () => {

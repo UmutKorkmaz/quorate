@@ -89,18 +89,27 @@ export function applyOverrides(
 
   const parsedLimit = inlineCommentLimit !== undefined ? Number(inlineCommentLimit) : undefined;
 
+  // runner-mode restricts which provider *types* may run on this runner: `cli`
+  // keeps only local CLI agents, `api` keeps only HTTP endpoints, `auto` keeps
+  // everything. The mock heuristic is the always-on safety baseline and is never
+  // filtered out, so a misconfigured mode can never produce an empty council.
+  const effectiveRunnerMode =
+    (runnerMode as "auto" | "cli" | "api" | undefined) ?? config.github.runnerMode;
+
   return {
     ...config,
-    providers: selected
-      ? config.providers.map((provider) => ({
-          ...provider,
-          enabled: selected.has(provider.id)
-        }))
-      : config.providers,
+    providers: config.providers.map((provider) => {
+      const baseEnabled = selected ? selected.has(provider.id) : provider.enabled !== false;
+      const allowedByRunnerMode =
+        effectiveRunnerMode === "auto" ||
+        provider.type === "mock" ||
+        provider.type === effectiveRunnerMode;
+      return { ...provider, enabled: baseEnabled && allowedByRunnerMode };
+    }),
     github: {
       ...config.github,
       failOn: (failOn as Severity | "never" | undefined) ?? config.github.failOn,
-      runnerMode: (runnerMode as "auto" | "cli" | "api" | undefined) ?? config.github.runnerMode,
+      runnerMode: effectiveRunnerMode,
       inlineComments:
         inlineComments !== undefined
           ? ["1", "true", "yes", "on"].includes(inlineComments.toLowerCase())

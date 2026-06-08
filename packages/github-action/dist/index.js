@@ -31178,8 +31178,6 @@ var defaultProviderCandidates = [
       "--permission-mode",
       "plan",
       "--no-session-persistence",
-      "--max-budget-usd",
-      "0.25",
       "--tools",
       ""
     ],
@@ -31308,7 +31306,6 @@ function createDefaultConfig(detected = detectAvailableProviders()) {
       inputMode: candidate.inputMode ?? "stdin",
       timeoutMs: 3e5,
       killGraceMs: 5e3,
-      maxInputBytes: 25e4,
       maxOutputBytes: 1e6,
       inheritEnv: false,
       installHint: candidate.installHint
@@ -31447,6 +31444,8 @@ async function runCommand(command, args, input, options) {
       cleanup();
       resolve({ stdout, stderr, exitCode, signal, timedOut, outputTruncated, aborted: aborted2 });
     });
+    child.stdin.on("error", () => {
+    });
     if (input !== void 0) {
       child.stdin.end(input);
     } else {
@@ -31508,9 +31507,8 @@ function validateCliProvider(provider, args, prompt) {
       return `CLI provider ${provider.id} uses dangerous argument ${dangerous}. Set allowDangerousArgs only if you fully trust this profile.`;
     }
   }
-  const maxInputBytes = provider.maxInputBytes ?? 25e4;
-  if (Buffer.byteLength(prompt) > maxInputBytes) {
-    return `CLI provider ${provider.id} prompt is too large (${Buffer.byteLength(prompt)} bytes > ${maxInputBytes}).`;
+  if (provider.maxInputBytes !== void 0 && Buffer.byteLength(prompt) > provider.maxInputBytes) {
+    return `CLI provider ${provider.id} prompt is too large (${Buffer.byteLength(prompt)} bytes > ${provider.maxInputBytes}).`;
   }
   return void 0;
 }
@@ -46381,7 +46379,7 @@ var providerSchema = external_exports.object({
   killGraceMs: external_exports.number().int().positive().default(5e3),
   stdin: external_exports.boolean().default(true),
   inputMode: external_exports.enum(["stdin", "prompt-file", "none"]).optional(),
-  maxInputBytes: external_exports.number().int().positive().default(25e4),
+  maxInputBytes: external_exports.number().int().positive().optional(),
   maxOutputBytes: external_exports.number().int().positive().default(1e6),
   allowDangerousArgs: external_exports.boolean().default(false),
   headlessAllowlist: external_exports.array(external_exports.string().min(1)).optional(),
@@ -46618,6 +46616,17 @@ function enabledProviders(config2) {
   if (enabled.length > 0) return enabled;
   return createDefaultConfig().providers.filter((provider) => provider.id === "heuristic");
 }
+function buildPlannedLanes(config2) {
+  const providers = enabledProviders(config2);
+  const lanes = [];
+  for (const provider of providers) {
+    const roles = provider.roles && provider.roles.length > 0 ? provider.roles : [config2.councils[0] ?? "maintainer"];
+    for (const role of roles) {
+      lanes.push({ provider, role });
+    }
+  }
+  return lanes;
+}
 function providerTypeOf(provider) {
   return provider.id === "heuristic" ? "mock" : provider.type;
 }
@@ -46693,14 +46702,7 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
     }
   };
   const ctx = { councilRunId, emit, signal };
-  const providers = enabledProviders(config2);
-  const lanes = [];
-  for (const provider of providers) {
-    const roles = provider.roles && provider.roles.length > 0 ? provider.roles : [config2.councils[0] ?? "maintainer"];
-    for (const role of roles) {
-      lanes.push({ provider, role });
-    }
-  }
+  const lanes = buildPlannedLanes(config2);
   const requestedProviders = lanes.map((lane) => `${lane.provider.id}:${lane.role}`);
   emit({
     type: "council/started",
@@ -46765,6 +46767,7 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
     }
   };
   emit({ type: "council/done", councilRunId, report });
+  emit({ type: "verdict", councilRunId, report });
   return report;
 }
 
@@ -47067,16 +47070,18 @@ function applyOverrides(config2, inputs) {
   const inlineCommentLimit = normalizeInput(inputs.inlineCommentLimit);
   const selected = providers ? new Set(providers.split(",").map((provider) => provider.trim()).filter(Boolean)) : void 0;
   const parsedLimit = inlineCommentLimit !== void 0 ? Number(inlineCommentLimit) : void 0;
+  const effectiveRunnerMode = runnerMode ?? config2.github.runnerMode;
   return {
     ...config2,
-    providers: selected ? config2.providers.map((provider) => ({
-      ...provider,
-      enabled: selected.has(provider.id)
-    })) : config2.providers,
+    providers: config2.providers.map((provider) => {
+      const baseEnabled = selected ? selected.has(provider.id) : provider.enabled !== false;
+      const allowedByRunnerMode = effectiveRunnerMode === "auto" || provider.type === "mock" || provider.type === effectiveRunnerMode;
+      return { ...provider, enabled: baseEnabled && allowedByRunnerMode };
+    }),
     github: {
       ...config2.github,
       failOn: failOn ?? config2.github.failOn,
-      runnerMode: runnerMode ?? config2.github.runnerMode,
+      runnerMode: effectiveRunnerMode,
       inlineComments: inlineComments !== void 0 ? ["1", "true", "yes", "on"].includes(inlineComments.toLowerCase()) : config2.github.inlineComments,
       inlineCommentLimit: parsedLimit !== void 0 && Number.isFinite(parsedLimit) ? parsedLimit : config2.github.inlineCommentLimit
     }
