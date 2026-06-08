@@ -1,0 +1,57 @@
+# Quorate config — see .quorate.example.yml for the full reference.
+councils:
+  - architect
+  - security
+  - qa
+  - performance
+  - maintainer
+
+providers:
+  # Always-on safe baseline.
+  - id: heuristic
+    type: mock
+    roles: [maintainer]
+    enabled: true
+    timeoutMs: 5000
+
+  # Claude — the default profile's `--max-budget-usd 0.25` is REMOVED. With a
+  # Claude Code subscription (Pro/Max) there is no per-token dollar billing, so
+  # that flag only made claude abort mid-review ("Exceeded USD budget") and
+  # degrade the run. Subscription plan limits still apply at the account level.
+  - id: claude
+    type: cli
+    command: claude
+    args:
+      - --print
+      - --input-format
+      - text
+      - --output-format
+      - text
+      - --permission-mode
+      - plan
+      - --no-session-persistence
+      - --tools
+      - ""
+    roles: [architect, security]
+    enabled: true
+    inputMode: stdin
+    timeoutMs: 180000
+    killGraceMs: 5000
+    maxOutputBytes: 1000000
+
+  # Codex — no budget flag, so it won't hit a cap.
+  - id: codex
+    type: cli
+    command: codex
+    args: [exec, --ephemeral, --sandbox, read-only, --skip-git-repo-check, "-"]
+    roles: [maintainer, qa]
+    enabled: true
+    inputMode: stdin
+    timeoutMs: 180000
+    killGraceMs: 5000
+    maxOutputBytes: 1000000
+
+github:
+  commentMode: update
+  failOn: high
+  runnerMode: auto

@@ -78,10 +78,12 @@ In the shell, type `/` to open the command palette:
 /skills (councils)    show council roles and routing
 /use available        enable every runnable agent for this session
 /roles <ids>          limit which roles review
+/route <role> <ids>   reassign role→provider for this session
 /git [base] [head]    load a git diff
 /review [subject]     convene the council on the loaded diff
 /plan <text>          evaluate a plan
 /last · /rerun        show or re-run the last report
+/logs [id]            read each agent's full output (and why a run failed)
 /json · /markdown     export the last report
 /exit                 leave
 ```
@@ -126,6 +128,24 @@ Quorate detects these agent CLIs by default:
 The default agent is **`heuristic`** — four fast static checks (focused tests,
 hard-coded secrets, stray `console.log`, TODO/FIXME). It needs no setup and never
 calls an external tool.
+
+### Roles & routing
+
+Each enabled provider runs one lane per entry in its `roles:` array, so one
+provider can cover several roles (e.g. `roles: [architect, security]` makes that
+agent review as **both**). A provider's `roles:` array **is** the role→provider
+map.
+
+To give different roles different **models**, define separate providers — two
+`type: cli` entries with different `args:`, or two `type: api` entries with
+different `model:` — and assign each the roles you want. CLIs share one local
+authentication, so per-role model differences come from distinct providers rather
+than per-role settings.
+
+Use `/route <role> <providers...>` to remix routing for a single session;
+`/route reset` restores the config routing; edit `roles:` in `.quorate.yml` to
+persist a change. `/logs [id]` reads each agent's full captured output after a
+run (and shows why a provider failed).
 
 ## Project defaults & custom commands
 

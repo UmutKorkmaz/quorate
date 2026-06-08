@@ -18,7 +18,10 @@
     "test": "npm run test:js",
     "test:js": "vitest run",
     "ci": "npm run build && npx vitest run",
-    "clean": "rm -rf packages/*/dist coverage"
+    "clean": "rm -rf packages/*/dist coverage",
+    "generate:command-docs": "node --experimental-strip-types scripts/generate-command-docs.ts",
+    "dev:website": "npm run generate:command-docs && npm run dev --workspace @quorate/website",
+    "build:website": "npm run generate:command-docs && npm run build --workspace @quorate/website"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

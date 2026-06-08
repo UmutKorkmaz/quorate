@@ -26,8 +26,6 @@ providers:
       - --permission-mode
       - plan
       - --no-session-persistence
-      - --max-budget-usd
-      - "0.25"
       - --tools
       - ""
     roles:
@@ -37,7 +35,6 @@ providers:
     inputMode: stdin
     timeoutMs: 120000
     killGraceMs: 5000
-    maxInputBytes: 250000
     maxOutputBytes: 1000000
 
   - id: codex
@@ -56,7 +53,6 @@ providers:
     inputMode: stdin
     timeoutMs: 120000
     killGraceMs: 5000
-    maxInputBytes: 250000
     maxOutputBytes: 1000000
 
   - id: qwen
@@ -79,8 +75,138 @@ providers:
     inputMode: stdin
     timeoutMs: 120000
     killGraceMs: 5000
-    maxInputBytes: 250000
     maxOutputBytes: 1000000
+
+  - id: agy
+    type: cli
+    command: agy
+    args:
+      - --print
+      - --print-timeout
+      - 2m
+      - --sandbox
+    roles:
+      - architect
+    enabled: false
+    inputMode: stdin
+    timeoutMs: 120000
+    killGraceMs: 5000
+    maxOutputBytes: 1000000
+
+  - id: grok
+    type: cli
+    command: grok
+    args:
+      - --permission-mode
+      - plan
+      - --sandbox
+      - read-only
+      - --output-format
+      - plain
+      - --prompt-file
+      - "{promptFile}"
+    roles:
+      - architect
+    enabled: false
+    inputMode: prompt-file
+    timeoutMs: 120000
+    killGraceMs: 5000
+    maxOutputBytes: 1000000
+
+  # NOTE: unlike `agy` (--sandbox) and `grok` (--sandbox read-only), this `droid`
+  # example has no sandbox flag. Add your droid build's read-only/sandbox flag
+  # before enabling it, so a review can't trigger write or network side effects.
+  - id: droid
+    type: cli
+    command: droid
+    args:
+      - exec
+      - -f
+      - "{promptFile}"
+    roles:
+      - qa
+    enabled: false
+    inputMode: prompt-file
+    timeoutMs: 120000
+    killGraceMs: 5000
+    maxOutputBytes: 1000000
+
+  - id: kilo
+    type: cli
+    command: kilo
+    args:
+      - run
+    roles:
+      - architect
+    enabled: false
+    inputMode: stdin
+    timeoutMs: 120000
+    killGraceMs: 5000
+    maxOutputBytes: 1000000
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # API model presets (type: api) — uncomment ONE block and adjust the model.
+  # Any OpenAI-compatible /v1 endpoint works: local servers or hosted gateways.
+  # `model` is required; `baseUrl` defaults to http://localhost:11434/v1; a key,
+  # if needed, is read from the named env var (never stored here).
+  # Full catalog (ports, models, gateways): docs/providers-research.md
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # Ollama — local, no key. Run `ollama serve` + `ollama pull qwen2.5-coder:7b`.
+  # - id: ollama-coder
+  #   type: api
+  #   enabled: true
+  #   baseUrl: http://localhost:11434/v1
+  #   model: qwen2.5-coder:7b
+  #   roles: [qa, maintainer, performance]
+  #   timeoutMs: 300000
+
+  # LM Studio — start the server (Developer tab / `lms server start`).
+  # - id: lmstudio
+  #   type: api
+  #   enabled: true
+  #   baseUrl: http://localhost:1234/v1
+  #   model: qwen2.5-coder-7b          # must match GET /v1/models
+  #   roles: [qa, maintainer]
+  #   timeoutMs: 180000
+
+  # vLLM — GPU serving. `docker run --gpus all -p 8000:8000 vllm/vllm-openai …`
+  # - id: vllm-coder
+  #   type: api
+  #   enabled: true
+  #   baseUrl: http://localhost:8000/v1
+  #   model: Qwen/Qwen2.5-Coder-7B-Instruct
+  #   apiKeyEnv: VLLM_API_KEY          # omit for an unsecured local server
+  #   roles: [architect, security, qa, maintainer]
+  #   timeoutMs: 180000
+
+  # llama.cpp server — lightweight CPU/GPU. `llama-server -m model.gguf`
+  # - id: llamacpp
+  #   type: api
+  #   enabled: true
+  #   baseUrl: http://localhost:8080/v1
+  #   model: local
+  #   roles: [qa, maintainer]
+
+  # Hugging Face Inference Providers router — hosted, one HF_TOKEN.
+  # Model suffixes: :fastest · :cheapest · :groq · :together · :fireworks-ai
+  # - id: hf-router
+  #   type: api
+  #   enabled: true
+  #   baseUrl: https://router.huggingface.co/v1
+  #   model: Qwen/Qwen2.5-Coder-32B-Instruct:fastest
+  #   apiKeyEnv: HF_TOKEN
+  #   roles: [qa, maintainer, performance]
+  #   timeoutMs: 120000
+
+  # OpenRouter — hosted gateway, broad catalog. Model format: provider/model.
+  # - id: openrouter-sonnet
+  #   type: api
+  #   enabled: true
+  #   baseUrl: https://openrouter.ai/api/v1
+  #   model: anthropic/claude-sonnet-4.6
+  #   apiKeyEnv: OPENROUTER_API_KEY
+  #   roles: [architect, security]
 
 github:
   commentMode: update

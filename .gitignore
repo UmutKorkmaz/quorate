@@ -21,6 +21,9 @@ coverage/
 council-report.json
 *.tgz
 
+# Quorate session/report artifacts (contain diffs, transcripts, findings)
+.quorate/
+
 # Local agent / session artifacts (not part of the project)
 AGENTS.md
 docs/superpowers/
@@ -28,3 +31,6 @@ docs/superpowers/
 .agents/
 .antigravitycli/
 .claude/
+
+# Quorate report exports (/markdown output)
+findings.md
