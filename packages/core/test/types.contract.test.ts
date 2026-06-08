@@ -60,6 +60,32 @@ describe("core type contract", () => {
     expect(event.type).toBe("provider/chunk");
   });
 
+  it("CouncilEvent verdict carries the full report", () => {
+    const event: CouncilEvent = {
+      type: "verdict",
+      councilRunId: "id",
+      report: {
+        verdict: "warn",
+        summary: "summary",
+        findings: [],
+        providerResults: [],
+        metadata: {
+          generatedAt: "now",
+          mode: "review",
+          subject: "fixture",
+          providers: [],
+          requestedProviders: [],
+          ranProviders: [],
+          degraded: true
+        }
+      }
+    };
+    expect(event.type).toBe("verdict");
+    if (event.type === "verdict") {
+      expect(event.report.verdict).toBe("warn");
+    }
+  });
+
   it("RunCouncilOptions exposes onEvent and signal", () => {
     const seen: CouncilEvent[] = [];
     const options: RunCouncilOptions = {

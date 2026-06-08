@@ -148,6 +148,15 @@ async function runCommand(
       resolve({ stdout, stderr, exitCode, signal, timedOut, outputTruncated, aborted });
     });
 
+    // A provider may close its stdin before we finish writing the prompt (it
+    // read what it needed, errored, or exited early). That turns the pipe write
+    // into an EPIPE 'error' event on the stdin socket — with no listener, Node
+    // throws it as an unhandled exception and takes the whole CLI down. Swallow
+    // it: the child's exit code / output is the real signal, handled in 'close'.
+    child.stdin.on("error", () => {
+      /* child closed stdin early (EPIPE) — not fatal; the run is judged by close */
+    });
+
     if (input !== undefined) {
       child.stdin.end(input);
     } else {
@@ -243,9 +252,10 @@ export function validateCliProvider(
     }
   }
 
-  const maxInputBytes = provider.maxInputBytes ?? 250_000;
-  if (Buffer.byteLength(prompt) > maxInputBytes) {
-    return `CLI provider ${provider.id} prompt is too large (${Buffer.byteLength(prompt)} bytes > ${maxInputBytes}).`;
+  // No input size cap by default: a prompt is only rejected when a provider
+  // explicitly sets `maxInputBytes`. Large diffs are sent in full otherwise.
+  if (provider.maxInputBytes !== undefined && Buffer.byteLength(prompt) > provider.maxInputBytes) {
+    return `CLI provider ${provider.id} prompt is too large (${Buffer.byteLength(prompt)} bytes > ${provider.maxInputBytes}).`;
   }
 
   return undefined;
@@ -399,6 +409,44 @@ function firstMeaningfulLine(output: string): string {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean) ?? "Provider returned output.";
+}
+
+/** Placeholder paths used in spawn previews (no temp files are created). */
+export const SPAWN_PREVIEW_PATHS = {
+  promptFile: "<prompt.md>",
+  diffFile: "<diff.patch>"
+} as const;
+
+function quoteSpawnArg(arg: string): string {
+  return /\s/.test(arg) ? JSON.stringify(arg) : arg;
+}
+
+/**
+ * Summarize the argv a CLI provider will spawn with, substituting request
+ * placeholders using stable preview paths instead of real temp files.
+ */
+export function formatSpawnArgv(
+  provider: ProviderConfig,
+  role: string,
+  request: CouncilRequest
+): string {
+  const command = provider.command ?? provider.id;
+  if (provider.type === "mock" || provider.id === "heuristic") {
+    return `${command} (built-in)`;
+  }
+
+  const args = (provider.args ?? []).map((arg) =>
+    arg
+      .replaceAll("{promptFile}", SPAWN_PREVIEW_PATHS.promptFile)
+      .replaceAll("{diffFile}", SPAWN_PREVIEW_PATHS.diffFile)
+      .replaceAll("{role}", role)
+      .replaceAll("{subject}", request.subject)
+  );
+  const inputMode = provider.inputMode ?? (provider.stdin === false ? "none" : "stdin");
+  const inputNote =
+    inputMode === "stdin" || inputMode === "prompt-file" ? " <stdin>" : "";
+  const argv = [command, ...args.map(quoteSpawnArg), inputNote.trim()].filter(Boolean);
+  return argv.join(" ");
 }
 
 export async function runCliProvider(

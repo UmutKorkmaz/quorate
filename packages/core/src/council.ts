@@ -18,6 +18,15 @@ import type {
   Verdict
 } from "./types.js";
 
+export type {
+  CouncilEvent,
+  CouncilReport,
+  CouncilRequest,
+  RunCouncilOptions,
+  ProviderResult,
+  Verdict
+} from "./types.js";
+
 const severityWeight: Record<Severity, number> = {
   critical: 5,
   high: 4,
@@ -115,11 +124,26 @@ export function verdictFor(findings: Finding[], providerResults: ProviderResult[
   return "pass";
 }
 
-function enabledProviders(config: QuorateConfig): ProviderConfig[] {
+export function enabledProviders(config: QuorateConfig): ProviderConfig[] {
   const enabled = config.providers.filter((provider) => provider.enabled !== false);
   if (enabled.length > 0) return enabled;
 
   return createDefaultConfig().providers.filter((provider) => provider.id === "heuristic");
+}
+
+export function buildPlannedLanes(
+  config: QuorateConfig
+): Array<{ provider: ProviderConfig; role: string }> {
+  const providers = enabledProviders(config);
+  const lanes: Array<{ provider: ProviderConfig; role: string }> = [];
+  for (const provider of providers) {
+    const roles =
+      provider.roles && provider.roles.length > 0 ? provider.roles : [config.councils[0] ?? "maintainer"];
+    for (const role of roles) {
+      lanes.push({ provider, role });
+    }
+  }
+  return lanes;
 }
 
 function providerTypeOf(provider: ProviderConfig): ProviderType {
@@ -235,16 +259,7 @@ export async function runCouncil(
   };
 
   const ctx: RunContext = { councilRunId, emit, signal };
-  const providers = enabledProviders(config);
-
-  const lanes: Array<{ provider: ProviderConfig; role: string }> = [];
-  for (const provider of providers) {
-    const roles =
-      provider.roles && provider.roles.length > 0 ? provider.roles : [config.councils[0] ?? "maintainer"];
-    for (const role of roles) {
-      lanes.push({ provider, role });
-    }
-  }
+  const lanes = buildPlannedLanes(config);
 
   const requestedProviders = lanes.map((lane) => `${lane.provider.id}:${lane.role}`);
 
@@ -326,6 +341,7 @@ export async function runCouncil(
   };
 
   emit({ type: "council/done", councilRunId, report });
+  emit({ type: "verdict", councilRunId, report });
 
   return report;
 }

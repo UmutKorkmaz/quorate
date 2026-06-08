@@ -154,6 +154,11 @@ export type CouncilEvent =
       type: "council/done";
       councilRunId: string;
       report: CouncilReport;
+    }
+  | {
+      type: "verdict";
+      councilRunId: string;
+      report: CouncilReport;
     };
 
 export interface RunCouncilOptions {

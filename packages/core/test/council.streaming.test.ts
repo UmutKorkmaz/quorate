@@ -32,7 +32,7 @@ function heuristicOnlyConfig(): QuorateConfig {
 }
 
 describe("runCouncil streaming events", () => {
-  it("emits council/started, then per-lane started before done, with council/done strictly last", async () => {
+  it("emits council/started, then per-lane started before done, with verdict strictly last", async () => {
     const events: CouncilEvent[] = [];
     const report = await runCouncil(
       { mode: "review", subject: "fixture", diff: cleanDiff },
@@ -41,7 +41,8 @@ describe("runCouncil streaming events", () => {
     );
 
     expect(events[0].type).toBe("council/started");
-    expect(events[events.length - 1].type).toBe("council/done");
+    expect(events[events.length - 1].type).toBe("verdict");
+    expect(events.some((event) => event.type === "council/done")).toBe(true);
 
     const startedAt = events.findIndex(
       (event) => event.type === "provider/started" && event.providerId === "heuristic"
@@ -52,10 +53,9 @@ describe("runCouncil streaming events", () => {
     expect(startedAt).toBeGreaterThan(0);
     expect(doneAt).toBeGreaterThan(startedAt);
 
-    // council/done report matches the resolved report
-    const doneEvent = events[events.length - 1];
-    if (doneEvent.type === "council/done") {
-      expect(doneEvent.report.verdict).toBe(report.verdict);
+    const verdictEvent = events[events.length - 1];
+    if (verdictEvent.type === "verdict") {
+      expect(verdictEvent.report.verdict).toBe(report.verdict);
     }
   });
 
@@ -120,20 +120,20 @@ describe("runCouncil streaming events", () => {
     expect(report.metadata.requestedProviders).toEqual(["remote:maintainer"]);
   });
 
-  it("a throwing onEvent does not prevent council/done", async () => {
-    let sawDone = false;
+  it("a throwing onEvent does not prevent verdict", async () => {
+    let sawVerdict = false;
     const report = await runCouncil(
       { mode: "review", subject: "fixture", diff: cleanDiff },
       heuristicOnlyConfig(),
       {
         onEvent: (event) => {
-          if (event.type === "council/done") sawDone = true;
+          if (event.type === "verdict") sawVerdict = true;
           throw new Error("subscriber boom");
         }
       }
     );
 
-    expect(sawDone).toBe(true);
+    expect(sawVerdict).toBe(true);
     expect(report).toBeDefined();
     expect(report.verdict).toBe("warn");
   });

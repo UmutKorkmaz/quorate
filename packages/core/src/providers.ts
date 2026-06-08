@@ -25,8 +25,6 @@ export const defaultProviderCandidates: Array<
       "--permission-mode",
       "plan",
       "--no-session-persistence",
-      "--max-budget-usd",
-      "0.25",
       "--tools",
       ""
     ],
@@ -169,7 +167,6 @@ export function createDefaultConfig(detected = detectAvailableProviders()): Quor
       inputMode: candidate.inputMode ?? "stdin",
       timeoutMs: 300_000,
       killGraceMs: 5_000,
-      maxInputBytes: 250_000,
       maxOutputBytes: 1_000_000,
       inheritEnv: false,
       installHint: candidate.installHint

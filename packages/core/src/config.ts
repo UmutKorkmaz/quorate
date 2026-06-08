@@ -18,7 +18,7 @@ const providerSchema = z.object({
   killGraceMs: z.number().int().positive().default(5_000),
   stdin: z.boolean().default(true),
   inputMode: z.enum(["stdin", "prompt-file", "none"]).optional(),
-  maxInputBytes: z.number().int().positive().default(250_000),
+  maxInputBytes: z.number().int().positive().optional(),
   maxOutputBytes: z.number().int().positive().default(1_000_000),
   allowDangerousArgs: z.boolean().default(false),
   headlessAllowlist: z.array(z.string().min(1)).optional(),
