@@ -104,6 +104,8 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | `quorate plan "<text>"` | Evaluate an implementation/architecture plan. | `--providers <ids>`, `--json` |
 | `quorate doctor` | Council-readiness verdict: environment + provider grid + next step. | `--json`, `--bundle`, `--bundle-file <path>` |
 | `quorate providers` | List configured providers and availability. | `--json` |
+| `quorate provider add <id>` | Add a provider to `.quorate.yml`. | `--preset <name>`, `--type`, `--base-url`, `--model`, `--api-key-env`, `--command`, `--args`, `--roles`, `--enabled/--disabled`, `-f` |
+| `quorate provider remove <id>` / `presets` | Remove a provider; list API presets. | — |
 | `quorate init` | Write a starter `.quorate.yml` (real providers disabled). | `-f, --force` |
 
 `--diff`, `--base/--head`, and `--pr` select the diff source; `--json` streams NDJSON
@@ -222,6 +224,20 @@ providers:
 (the built-in `heuristic`). For `api` providers, **`model` is required**; `baseUrl`
 is optional and defaults to `http://localhost:11434/v1`; and the key — if any — is
 read from `apiKeyEnv`, never stored in the file.
+
+Or skip the hand-editing — **`quorate provider add`** writes the entry for you,
+with presets for the common endpoints (`quorate provider presets` lists them):
+
+```bash
+quorate provider add ollama --preset ollama --model qwen2.5-coder:7b
+quorate provider add reviewer --type api \
+  --base-url http://localhost:8000/v1 --model Qwen/Qwen2.5-Coder-32B-Instruct \
+  --api-key-env VLLM_API_KEY --roles security,architect
+```
+
+Presets cover **ollama · lmstudio · vllm · llamacpp · hf-router · openrouter** —
+see [`docs/providers-research.md`](./docs/providers-research.md) for the full catalog
+(ports, models, gateways, and example councils).
 
 ## Terminal & theming
 

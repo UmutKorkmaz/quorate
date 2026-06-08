@@ -96,6 +96,20 @@ providers:
         defaults to <InlineCode>http://localhost:11434/v1</InlineCode>, and any key is read from the
         named environment variable — never stored in the file.
       </p>
+      <p>
+        Or let the CLI write the entry for you with{" "}
+        <InlineCode>quorate provider add</InlineCode> (presets for the common endpoints —{" "}
+        <InlineCode>quorate provider presets</InlineCode> lists them):
+      </p>
+      <CodeBlock language="bash">{`quorate provider add ollama --preset ollama --model qwen2.5-coder:7b
+quorate provider add reviewer --type api \\
+  --base-url http://localhost:8000/v1 --model Qwen/Qwen2.5-Coder-32B-Instruct \\
+  --api-key-env VLLM_API_KEY --roles security,architect`}</CodeBlock>
+      <p>
+        Presets: <InlineCode>ollama</InlineCode>, <InlineCode>lmstudio</InlineCode>,{" "}
+        <InlineCode>vllm</InlineCode>, <InlineCode>llamacpp</InlineCode>,{" "}
+        <InlineCode>hf-router</InlineCode>, <InlineCode>openrouter</InlineCode>.
+      </p>
 
       <h2>Provider safety fields</h2>
       <table>

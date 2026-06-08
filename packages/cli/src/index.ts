@@ -7,15 +7,19 @@ import { Command } from "commander";
 import {
   createDefaultConfig,
   detectAvailableProviders,
+  findConfigPath,
   isEmptyReviewDiff,
   loadConfig,
   PALETTE,
+  PROVIDER_PRESETS,
+  PROVIDER_PRESET_NAMES,
   renderMarkdownReport,
   runCouncil,
   serializeConfig,
   shouldFailForReport,
   type QuorateConfig
 } from "@quorate/core";
+import { buildProvider } from "./provider-add.js";
 import { readDiff } from "./diff.js";
 import { buildDoctorBundle } from "./doctor-bundle.js";
 import { printDoctor } from "./doctor.js";
@@ -194,6 +198,81 @@ export function buildProgram(): Command {
       }
 
       printProviderTable(config);
+    });
+
+  const providerCmd = program
+    .command("provider")
+    .helpGroup("Setup:")
+    .description("Manage providers in .quorate.yml (add, remove, presets).");
+
+  providerCmd
+    .command("add <id>")
+    .description("Add a provider to .quorate.yml. Use --preset for a ready template.")
+    .option("--preset <name>", `Template: ${PROVIDER_PRESET_NAMES.join(", ")}`)
+    .option("--type <type>", "Provider type: cli or api (default: api, or the preset's type)")
+    .option("--base-url <url>", "OpenAI-compatible base URL (api providers)")
+    .option("--model <model>", "Model id (required for api providers)")
+    .option("--api-key-env <var>", "Env var holding the API key (api providers, optional)")
+    .option("--command <cmd>", "Executable to run (cli providers; default: the id)")
+    .option("--args <list>", "Headless args, comma/space-separated (cli providers)")
+    .option("--input-mode <mode>", "stdin | prompt-file | none (cli providers)")
+    .option("--roles <list>", "Council roles, comma-separated (e.g. qa,security)")
+    .option("--enabled", "Add the provider enabled (default)")
+    .option("--disabled", "Add the provider disabled")
+    .option("-f, --force", "Replace an existing provider with the same id")
+    .action((id: string, options) => {
+      const cwd = cwdFrom(program);
+      const provider = buildProvider(id, options);
+      const configPath = findConfigPath(cwd) ?? resolve(cwd, ".quorate.yml");
+      const config = existsSync(configPath)
+        ? loadConfig(configPath, cwd)
+        : createDefaultConfig(detectAvailableProviders());
+      const index = config.providers.findIndex((entry) => entry.id === id);
+      if (index >= 0 && !options.force) {
+        throw new Error(`Provider "${id}" already exists in ${configPath}. Use --force to replace it.`);
+      }
+      const providers =
+        index >= 0
+          ? config.providers.map((entry, i) => (i === index ? provider : entry))
+          : [...config.providers, provider];
+      writeFileSync(configPath, serializeConfig({ ...config, providers }), "utf8");
+      ensureGitignored(cwd, ".quorate/");
+
+      const detail = provider.type === "api" ? `api · ${provider.model}` : `cli · ${provider.command}`;
+      console.log(`${index >= 0 ? "Replaced" : "Added"} provider "${id}" (${detail}) in ${configPath}`);
+      console.log(`Roles: ${provider.roles?.join(", ") ?? "(config default)"}.`);
+      if (provider.apiKeyEnv) console.log(`Set ${provider.apiKeyEnv} in your environment before running.`);
+      console.log("Restart quorate to load it; /route to see role assignments, /review to run.");
+    });
+
+  providerCmd
+    .command("remove <id>")
+    .alias("rm")
+    .description("Remove a provider from .quorate.yml.")
+    .action((id: string) => {
+      const cwd = cwdFrom(program);
+      const configPath = findConfigPath(cwd);
+      if (!configPath) {
+        throw new Error("No .quorate.yml found. Run `quorate init` first.");
+      }
+      const config = loadConfig(configPath, cwd);
+      if (!config.providers.some((entry) => entry.id === id)) {
+        throw new Error(`No provider "${id}" in ${configPath}.`);
+      }
+      const providers = config.providers.filter((entry) => entry.id !== id);
+      writeFileSync(configPath, serializeConfig({ ...config, providers }), "utf8");
+      console.log(`Removed provider "${id}" from ${configPath}.`);
+    });
+
+  providerCmd
+    .command("presets")
+    .description("List the built-in API provider presets.")
+    .action(() => {
+      for (const name of PROVIDER_PRESET_NAMES) {
+        const preset = PROVIDER_PRESETS[name];
+        console.log(`  ${name.padEnd(11)} ${preset.baseUrl}  ${preset.model}`);
+      }
+      console.log("\nAdd one with: quorate provider add <id> --preset <name> [--model <model>]");
     });
 
   program

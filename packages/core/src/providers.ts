@@ -10,6 +10,66 @@ export const defaultCouncils = [
   "maintainer"
 ];
 
+/**
+ * Ready-to-use `type: api` provider templates for `quorate provider add --preset`.
+ * Mirrors the presets documented in .quorate.example.yml and docs/providers-research.md.
+ * Each is an id-less ProviderConfig; the CLI assembles it with the chosen id and overrides.
+ */
+export const PROVIDER_PRESETS: Record<string, Omit<ProviderConfig, "id">> = {
+  ollama: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:11434/v1",
+    model: "qwen2.5-coder:7b",
+    roles: ["qa", "maintainer", "performance"],
+    timeoutMs: 300_000
+  },
+  lmstudio: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:1234/v1",
+    model: "qwen2.5-coder-7b",
+    roles: ["qa", "maintainer"],
+    timeoutMs: 180_000
+  },
+  vllm: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:8000/v1",
+    model: "Qwen/Qwen2.5-Coder-7B-Instruct",
+    apiKeyEnv: "VLLM_API_KEY",
+    roles: ["architect", "security", "qa", "maintainer"],
+    timeoutMs: 180_000
+  },
+  llamacpp: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:8080/v1",
+    model: "local",
+    roles: ["qa", "maintainer"]
+  },
+  "hf-router": {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://router.huggingface.co/v1",
+    model: "Qwen/Qwen2.5-Coder-32B-Instruct:fastest",
+    apiKeyEnv: "HF_TOKEN",
+    roles: ["qa", "maintainer", "performance"],
+    timeoutMs: 120_000
+  },
+  openrouter: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "anthropic/claude-sonnet-4.6",
+    apiKeyEnv: "OPENROUTER_API_KEY",
+    roles: ["architect", "security"]
+  }
+};
+
+/** Preset names available to `quorate provider add --preset <name>`. */
+export const PROVIDER_PRESET_NAMES = Object.keys(PROVIDER_PRESETS);
+
 export const defaultProviderCandidates: Array<
   Omit<ProviderConfig, "type" | "enabled"> & { aliases?: string[]; installHint?: string }
 > = [
