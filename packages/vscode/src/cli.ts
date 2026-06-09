@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
+import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
 
-/** Shapes shared with @quorate/core (kept as local type-only mirrors). */
+export const MIN_CLI = "0.6.0";
+
+/** Shapes shared with @quorate/core (local type-only mirrors). */
 export type Verdict = "pass" | "warn" | "fail";
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
@@ -34,7 +38,6 @@ export interface CouncilReport {
   metadata: { degraded: boolean };
 }
 
-/** A configured provider from `quorate providers --json`. */
 export interface ProviderConfig {
   id: string;
   type: "mock" | "cli" | "api";
@@ -45,18 +48,17 @@ export interface ProviderConfig {
   apiKeyEnv?: string;
 }
 
-/** A detected agent + the configured roster from `quorate doctor --json`. */
 export interface DoctorReport {
   detected: Array<{ id: string; command?: string; path?: string; available: boolean; installHint?: string }>;
   config: ProviderConfig[];
 }
 
-function cliPath(): string {
-  return vscode.workspace.getConfiguration("quorate").get<string>("cliPath", "quorate");
-}
-
-function workspaceCwd(): string | undefined {
-  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+/** A streamed NDJSON progress event (provider/started, provider/done, …). */
+export interface StreamEvent {
+  type: string;
+  providerId?: string;
+  role?: string;
+  result?: { status: string; findings: Finding[]; durationMs?: number };
 }
 
 export interface SpawnResult {
@@ -65,14 +67,71 @@ export interface SpawnResult {
   stderr: string;
 }
 
-/** Run the quorate CLI, collecting stdout/stderr. Rejects only if it can't spawn. */
-export function runCli(args: string[], token?: vscode.CancellationToken): Promise<SpawnResult> {
-  const cwd = workspaceCwd();
+function workspaceCwd(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+export function cmpVersion(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
+  }
+  return 0;
+}
+
+function probeVersion(cmd: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, ["--version"], { shell: false });
+    let out = "";
+    child.on("error", () => resolve(null));
+    child.stdout.on("data", (c: Buffer) => (out += c.toString()));
+    child.on("close", () => {
+      const m = out.match(/\d+\.\d+\.\d+/);
+      resolve(m ? m[0] : null);
+    });
+  });
+}
+
+let cachedCli: { path: string; version: string | null } | undefined;
+
+/**
+ * Resolve the quorate binary. Honors an explicit `quorate.cliPath`; otherwise
+ * prefers a >= MIN_CLI binary, falling back to `~/.local/bin` / `~/.hermes` so a
+ * stale binary first on a GUI editor's PATH doesn't win.
+ */
+export async function resolveCli(force = false): Promise<{ path: string; version: string | null }> {
+  if (cachedCli && !force) return cachedCli;
+  const configured = vscode.workspace.getConfiguration("quorate").get<string>("cliPath", "quorate");
+  const home = os.homedir();
+  const candidates = path.isAbsolute(configured)
+    ? [configured]
+    : [configured, path.join(home, ".local/bin/quorate"), path.join(home, ".hermes/node/bin/quorate")];
+
+  let firstWorking: { path: string; version: string | null } | undefined;
+  for (const candidate of candidates) {
+    const version = await probeVersion(candidate);
+    if (version === null) continue;
+    firstWorking ??= { path: candidate, version };
+    if (cmpVersion(version, MIN_CLI) >= 0) {
+      cachedCli = { path: candidate, version };
+      return cachedCli;
+    }
+  }
+  cachedCli = firstWorking ?? { path: configured, version: null };
+  return cachedCli;
+}
+
+export async function runCli(
+  args: string[],
+  opts: { token?: vscode.CancellationToken; env?: NodeJS.ProcessEnv } = {}
+): Promise<SpawnResult> {
+  const { path: cli } = await resolveCli();
   return new Promise((resolve, reject) => {
-    const child = spawn(cliPath(), args, { cwd, shell: false });
+    const child = spawn(cli, args, { cwd: workspaceCwd(), shell: false, env: opts.env });
     let stdout = "";
     let stderr = "";
-    token?.onCancellationRequested(() => child.kill());
+    opts.token?.onCancellationRequested(() => child.kill());
     child.stdout.on("data", (c: Buffer) => (stdout += c.toString()));
     child.stderr.on("data", (c: Buffer) => (stderr += c.toString()));
     child.on("error", reject);
@@ -80,33 +139,16 @@ export function runCli(args: string[], token?: vscode.CancellationToken): Promis
   });
 }
 
-/** The installed CLI version, or null if quorate can't be run. */
-export async function cliVersion(): Promise<string | null> {
-  try {
-    const { stdout } = await runCli(["--version"]);
-    const match = stdout.match(/\d+\.\d+\.\d+/);
-    return match ? match[0] : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Run a `--json` command and parse the single JSON object/array it prints. */
 export async function runJson<T>(args: string[]): Promise<T | undefined> {
-  const { stdout } = await runCli([...args, "--json"]);
-  // doctor/providers print one JSON document; review streams NDJSON (use runReview).
   try {
-    return JSON.parse(stdout.trim()) as T;
-  } catch {
-    // Fall back to the last JSON-looking line.
-    const last = stdout.split("\n").map((l) => l.trim()).filter(Boolean).pop();
-    if (last) {
-      try {
-        return JSON.parse(last) as T;
-      } catch {
-        /* not json */
-      }
+    const { stdout } = await runCli([...args, "--json"]);
+    try {
+      return JSON.parse(stdout.trim()) as T;
+    } catch {
+      const last = stdout.split("\n").map((l) => l.trim()).filter(Boolean).pop();
+      return last ? (JSON.parse(last) as T) : undefined;
     }
+  } catch {
     return undefined;
   }
 }
@@ -114,34 +156,59 @@ export async function runJson<T>(args: string[]): Promise<T | undefined> {
 export interface ReviewOutcome {
   report?: CouncilReport;
   error?: string;
+  stale?: boolean;
 }
 
-/** Run `quorate review … --json`, returning the final CouncilReport (NDJSON last line). */
-export async function runReview(
+/** Run `review … --json`, streaming progress events and resolving the final report. */
+export async function runReviewStreaming(
   reviewArgs: string[],
-  token: vscode.CancellationToken
+  onEvent: (e: StreamEvent) => void,
+  token: vscode.CancellationToken,
+  env?: NodeJS.ProcessEnv
 ): Promise<ReviewOutcome> {
-  let result: SpawnResult;
-  try {
-    result = await runCli(["review", ...reviewArgs, "--json"], token);
-  } catch (err) {
-    return { error: `Could not run "${cliPath()}" — install it with \`npm i -g quorate\`. (${(err as Error).message})` };
-  }
-  const report = parseReport(result.stdout);
-  if (report) return { report };
-  const stderrTail = result.stderr.trim().split("\n").filter(Boolean).pop();
-  return { error: stderrTail ?? "No report produced — check the diff source and that quorate is up to date." };
+  const { path: cli } = await resolveCli();
+  return new Promise((resolve) => {
+    const child = spawn(cli, ["review", ...reviewArgs, "--json"], { cwd: workspaceCwd(), shell: false, env });
+    let buffer = "";
+    let stderr = "";
+    let report: CouncilReport | undefined;
+
+    token.onCancellationRequested(() => child.kill());
+    child.on("error", (err) => resolve({ error: `Could not run "${cli}" — ${err.message}` }));
+    child.stderr.on("data", (c: Buffer) => (stderr += c.toString()));
+    child.stdout.on("data", (c: Buffer) => {
+      buffer += c.toString();
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        report = consumeLine(line, onEvent) ?? report;
+      }
+    });
+    child.on("close", () => {
+      report = consumeLine(buffer.trim(), onEvent) ?? report;
+      if (report) {
+        resolve({ report });
+        return;
+      }
+      const tail = stderr.trim().split("\n").filter(Boolean).pop() ?? "No report produced.";
+      // A help-dump on stderr means a stale CLI rejected --json.
+      const stale = /Options:|Usage:|--output|--write-json/.test(stderr) && !stderr.includes("No changes");
+      resolve({ error: tail, stale });
+    });
+  });
 }
 
-function parseReport(stdout: string): CouncilReport | undefined {
-  const lines = stdout.split("\n").map((l) => l.trim()).filter(Boolean);
-  for (let i = lines.length - 1; i >= 0; i--) {
-    try {
-      const parsed = JSON.parse(lines[i]) as unknown;
-      if (isCouncilReport(parsed)) return parsed;
-    } catch {
-      /* not the report */
+function consumeLine(line: string, onEvent: (e: StreamEvent) => void): CouncilReport | undefined {
+  if (!line) return undefined;
+  try {
+    const obj = JSON.parse(line) as unknown;
+    if (isCouncilReport(obj)) return obj;
+    if (typeof obj === "object" && obj !== null && typeof (obj as StreamEvent).type === "string") {
+      onEvent(obj as StreamEvent);
     }
+  } catch {
+    /* non-JSON line */
   }
   return undefined;
 }

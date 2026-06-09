@@ -67,7 +67,7 @@ export class CouncilTree implements vscode.TreeDataProvider<CouncilNode> {
     item.checkboxState = this.isEnabled(p)
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
-    item.contextValue = p.type === "mock" ? "providerHeuristic" : "provider";
+    item.contextValue = p.type === "mock" ? "providerHeuristic" : p.type === "api" ? "providerApi" : "provider";
     item.tooltip = p.apiKeyEnv ? `Needs $${p.apiKeyEnv} in the environment` : undefined;
     return item;
   }
@@ -111,19 +111,65 @@ type ResultNode =
   | { kind: "fileGroup"; file: string; findings: Finding[] }
   | { kind: "finding"; finding: Finding }
   | { kind: "providersGroup" }
-  | { kind: "providerRun"; text: string; ok: boolean };
+  | { kind: "providerRun"; text: string; ok: boolean }
+  | { kind: "liveHeader" }
+  | { kind: "live"; key: string };
+
+interface LiveProvider {
+  role: string;
+  status: "running" | "done" | "error";
+  count: number;
+}
 
 export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
   private readonly emitter = new vscode.EventEmitter<ResultNode | undefined>();
   readonly onDidChangeTreeData = this.emitter.event;
   private report?: CouncilReport;
+  private running = false;
+  private readonly live = new Map<string, LiveProvider>();
+
+  beginRun(): void {
+    this.running = true;
+    this.report = undefined;
+    this.live.clear();
+    this.emitter.fire(undefined);
+  }
+
+  applyEvent(event: { type: string; providerId?: string; role?: string; result?: { status: string; findings: unknown[] } }): void {
+    if (!event.providerId || !event.role) return;
+    const key = `${event.providerId}:${event.role}`;
+    if (event.type === "provider/started") {
+      this.live.set(key, { role: event.role, status: "running", count: 0 });
+    } else if (event.type === "provider/done") {
+      const ok = event.result?.status === "ok";
+      this.live.set(key, { role: event.role, status: ok ? "done" : "error", count: event.result?.findings.length ?? 0 });
+    } else {
+      return;
+    }
+    this.emitter.fire(undefined);
+  }
 
   setReport(report: CouncilReport | undefined): void {
+    this.running = false;
     this.report = report;
     this.emitter.fire(undefined);
   }
 
   getTreeItem(node: ResultNode): vscode.TreeItem {
+    if (node.kind === "liveHeader") {
+      const item = new vscode.TreeItem("Convening the council…");
+      item.iconPath = new vscode.ThemeIcon("sync~spin");
+      return item;
+    }
+    if (node.kind === "live") {
+      const lp = this.live.get(node.key)!;
+      const item = new vscode.TreeItem(node.key);
+      item.iconPath = new vscode.ThemeIcon(
+        lp.status === "running" ? "sync~spin" : lp.status === "done" ? "pass" : "error"
+      );
+      item.description = lp.status === "running" ? "reviewing…" : lp.status === "done" ? `${lp.count} finding${lp.count === 1 ? "" : "s"}` : "failed";
+      return item;
+    }
     const r = this.report!;
     if (node.kind === "verdict") {
       const v = r.verdict;
@@ -173,12 +219,17 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
   }
 
   getChildren(node?: ResultNode): ResultNode[] {
-    const r = this.report;
-    if (!r) return [];
     if (!node) {
-      const groups = groupByFile(r.findings).map(([file, findings]) => ({ kind: "fileGroup" as const, file, findings }));
+      if (this.running) {
+        return [{ kind: "liveHeader" }, ...[...this.live.keys()].map((key) => ({ kind: "live" as const, key }))];
+      }
+      const report = this.report;
+      if (!report) return [];
+      const groups = groupByFile(report.findings).map(([file, findings]) => ({ kind: "fileGroup" as const, file, findings }));
       return [{ kind: "verdict" }, { kind: "summary" }, ...groups, { kind: "providersGroup" }];
     }
+    const r = this.report;
+    if (!r) return [];
     if (node.kind === "fileGroup") {
       return node.findings.map((finding) => ({ kind: "finding" as const, finding }));
     }

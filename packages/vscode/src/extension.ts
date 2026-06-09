@@ -1,12 +1,19 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { cliVersion, runCli, runJson, runReview, type CouncilReport, type DoctorReport, type ProviderConfig } from "./cli";
+import {
+  cmpVersion,
+  MIN_CLI,
+  resolveCli,
+  runCli,
+  runJson,
+  runReviewStreaming,
+  type CouncilReport,
+  type DoctorReport,
+  type ProviderConfig
+} from "./cli";
 import { diffSourceLabel, pickDiffSource, toReviewArgs, type DiffSource } from "./diff";
 import { CouncilTree, findingDiagnostics, ResultsTree, StatusTree } from "./trees";
 
-const MIN_CLI = "0.6.0";
-
-/** The 15 built-in api presets (mirrors @quorate/core PROVIDER_PRESETS). */
 const PRESETS: Array<{ name: string; model: string; local: boolean; keyEnv?: string }> = [
   { name: "ollama", model: "qwen2.5-coder:7b", local: true },
   { name: "lmstudio", model: "qwen2.5-coder-7b", local: true },
@@ -25,6 +32,7 @@ const PRESETS: Array<{ name: string; model: string; local: boolean; keyEnv?: str
   { name: "gemini", model: "gemini-2.0-flash", local: false, keyEnv: "GEMINI_API_KEY" }
 ];
 const ROLES = ["architect", "security", "qa", "performance", "maintainer"];
+const secretKey = (env: string): string => `quorate.key.${env}`;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const council = new CouncilTree();
@@ -32,10 +40,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusTree = new StatusTree();
   const diagnostics = vscode.languages.createDiagnosticCollection("quorate");
 
-  vscode.window.registerTreeDataProvider("quorate.council", council);
   vscode.window.registerTreeDataProvider("quorate.results", results);
   vscode.window.registerTreeDataProvider("quorate.status", statusTree);
-
   const councilView = vscode.window.createTreeView("quorate.council", { treeDataProvider: council });
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -44,124 +50,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBar.tooltip = "Run the Quorate review council";
   statusBar.show();
 
-  // ── State (persisted per-workspace) ──────────────────────────────
   let diffSource: DiffSource = context.workspaceState.get<DiffSource>("quorate.diffSource") ?? { kind: "working" };
-  let enabled: Set<string> | null = null; // null = config default
+  let enabled: Set<string> | null = null;
 
-  async function reload(): Promise<void> {
-    const version = await cliVersion();
-    const ready = version !== null;
-    void vscode.commands.executeCommand("setContext", "quorate.cliReady", ready);
-    void vscode.commands.executeCommand("setContext", "quorate.hasWorkspace", !!vscode.workspace.workspaceFolders?.length);
-    if (version && cmpVersion(version, MIN_CLI) < 0) {
-      void vscode.window.showWarningMessage(`Quorate CLI ${version} is older than ${MIN_CLI}. Run \`npm i -g quorate\` to update.`);
-    }
-    const providers = ready ? (await runJson<ProviderConfig[]>(["providers"])) ?? [] : [];
-    void vscode.commands.executeCommand("setContext", "quorate.hasConfig", providers.length > 0);
-    council.setData(providers, enabled, diffSourceLabel(diffSource));
-    const doctor = ready ? await runJson<DoctorReport>(["doctor"]) : undefined;
-    statusTree.setDoctor(doctor, version);
+  const setContext = (key: string, value: boolean): void => void vscode.commands.executeCommand("setContext", key, value);
+
+  async function listProviders(): Promise<ProviderConfig[]> {
+    return (await runJson<ProviderConfig[]>(["providers"])) ?? [];
   }
 
-  // ── Commands ─────────────────────────────────────────────────────
-  context.subscriptions.push(
-    diagnostics,
-    statusBar,
-    councilView,
-
-    councilView.onDidChangeCheckboxState((e) => {
-      // Start from the current effective set (materialize the config default once).
-      const set = new Set<string>(enabled ?? council.defaultEnabledIds());
-      for (const [node, state] of e.items) {
-        if (node.kind !== "provider") continue;
-        if (state === vscode.TreeItemCheckboxState.Checked) set.add(node.provider.id);
-        else set.delete(node.provider.id);
-      }
-      enabled = set;
-      council.updateEnabled(enabled);
-    }),
-
-    vscode.commands.registerCommand("quorate.run", () => runReviewCommand()),
-
-    vscode.commands.registerCommand("quorate.pickDiffSource", async () => {
-      const next = await pickDiffSource(diffSource);
-      if (!next) return;
-      diffSource = next;
-      await context.workspaceState.update("quorate.diffSource", diffSource);
-      const providers = (await runJson<ProviderConfig[]>(["providers"])) ?? [];
-      council.setData(providers, enabled, diffSourceLabel(diffSource));
-    }),
-
-    vscode.commands.registerCommand("quorate.addProvider", async () => {
-      await addProviderFlow();
-      await reload();
-    }),
-
-    vscode.commands.registerCommand("quorate.removeProvider", async (node?: { provider?: ProviderConfig }) => {
-      const id = node?.provider?.id ?? (await vscode.window.showInputBox({ title: "Provider id to remove" }));
-      if (!id) return;
-      await runCli(["provider", "remove", id]);
-      await reload();
-    }),
-
-    vscode.commands.registerCommand("quorate.editRoles", async (node?: { provider?: ProviderConfig }) => {
-      const provider = node?.provider;
-      if (!provider) return;
-      const picked = await vscode.window.showQuickPick(
-        ROLES.map((role) => ({ label: role, picked: provider.roles?.includes(role) ?? false })),
-        { title: `Roles for ${provider.id}`, canPickMany: true }
+  async function reload(): Promise<void> {
+    const { path: cliResolved, version } = await resolveCli(true);
+    const ready = version !== null;
+    setContext("quorate.cliReady", ready);
+    setContext("quorate.hasWorkspace", !!vscode.workspace.workspaceFolders?.length);
+    if (version && cmpVersion(version, MIN_CLI) < 0) {
+      void vscode.window.showWarningMessage(
+        `Quorate CLI ${version} (${cliResolved}) is older than ${MIN_CLI}. Run \`npm i -g quorate\`, or set quorate.cliPath to a 0.6.0 binary.`
       );
-      if (!picked) return;
-      const roles = picked.map((p) => p.label).join(",");
-      const args = ["provider", "add", provider.id, "--force", "--roles", roles, "--type", provider.type];
-      if (provider.model) args.push("--model", provider.model);
-      await runCli(args);
-      await reload();
-    }),
+    }
+    const providers = ready ? await listProviders() : [];
+    setContext("quorate.hasConfig", providers.length > 0);
+    council.setData(providers, enabled, diffSourceLabel(diffSource));
+    statusTree.setDoctor(ready ? await runJson<DoctorReport>(["doctor"]) : undefined, version);
+  }
 
-    vscode.commands.registerCommand("quorate.openFinding", async (file: string, line: number) => {
-      const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
-      const uri = vscode.Uri.file(path.isAbsolute(file) ? file : path.join(cwd, file));
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const editor = await vscode.window.showTextDocument(doc);
-      const pos = new vscode.Position(Math.max(0, line - 1), 0);
-      editor.selection = new vscode.Selection(pos, pos);
-      editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
-    }),
-
-    vscode.commands.registerCommand("quorate.refresh", () => reload()),
-    vscode.commands.registerCommand("quorate.runDoctor", () => reload()),
-    vscode.commands.registerCommand("quorate.clearFindings", () => {
-      diagnostics.clear();
-      results.setReport(undefined);
-      statusBar.text = "$(law) Quorate";
-    }),
-    vscode.commands.registerCommand("quorate.openConfig", async () => {
-      const cwd = vscode.workspace.workspaceFolders?.[0]?.uri;
-      if (!cwd) return;
-      const uri = vscode.Uri.joinPath(cwd, ".quorate.yml");
-      try {
-        await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
-      } catch {
-        void vscode.commands.executeCommand("quorate.init");
+  /** process.env plus any keychain-stored API keys whose env var isn't already set. */
+  async function buildEnv(): Promise<NodeJS.ProcessEnv> {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    for (const p of await listProviders()) {
+      if (p.type === "api" && p.apiKeyEnv && !env[p.apiKeyEnv]) {
+        const secret = await context.secrets.get(secretKey(p.apiKeyEnv));
+        if (secret) env[p.apiKeyEnv] = secret;
       }
-    }),
-    vscode.commands.registerCommand("quorate.openSettings", () =>
-      vscode.commands.executeCommand("workbench.action.openSettings", "quorate")
-    ),
-    vscode.commands.registerCommand("quorate.init", async () => {
-      await runCli(["init"]);
-      await reload();
-      void vscode.window.showInformationMessage("Quorate: wrote a starter .quorate.yml (real providers disabled).");
-    }),
-    vscode.commands.registerCommand("quorate.installCli", () => {
-      const term = vscode.window.createTerminal("Install Quorate");
-      term.show();
-      term.sendText("npm i -g quorate");
-    })
-  );
+    }
+    return env;
+  }
 
-  // ── The review command ───────────────────────────────────────────
+  function applyReport(report: CouncilReport, cwd: string): void {
+    results.setReport(report);
+    diagnostics.clear();
+    for (const [file, diags] of findingDiagnostics(report, cwd)) diagnostics.set(vscode.Uri.file(file), diags);
+    const v = report.verdict;
+    statusBar.text = v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS";
+  }
+
   async function runReviewCommand(): Promise<void> {
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
@@ -177,21 +110,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return;
     }
     if (enabled) sourceArgs.push("--providers", [...enabled].join(","));
+    const env = await buildEnv();
 
     diagnostics.clear();
     statusBar.text = "$(sync~spin) Quorate reviewing…";
+    results.beginRun();
+    void vscode.commands.executeCommand("quorate.results.focus");
 
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Quorate — convening the council…", cancellable: true },
       async (_p, token) => {
-        const outcome = await runReview(sourceArgs, token);
+        const outcome = await runReviewStreaming(sourceArgs, (e) => results.applyEvent(e), token, env);
         if (token.isCancellationRequested) {
           statusBar.text = "$(law) Quorate";
+          results.setReport(undefined);
           return;
         }
         if (!outcome.report) {
           statusBar.text = "$(law) Quorate";
-          void vscode.window.showWarningMessage(`Quorate: ${outcome.error}`);
+          results.setReport(undefined);
+          const msg = outcome.stale
+            ? "Your quorate CLI looks outdated — run `npm i -g quorate`, or set quorate.cliPath to a 0.6.0 binary (e.g. ~/.local/bin/quorate)."
+            : outcome.error;
+          void vscode.window.showWarningMessage(`Quorate: ${msg}`);
           return;
         }
         applyReport(outcome.report, cwd);
@@ -199,15 +140,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
   }
 
-  function applyReport(report: CouncilReport, cwd: string): void {
-    results.setReport(report);
-    diagnostics.clear();
-    for (const [file, diags] of findingDiagnostics(report, cwd)) {
-      diagnostics.set(vscode.Uri.file(file), diags);
+  async function setKey(keyEnv?: string): Promise<void> {
+    if (!keyEnv) {
+      const envs = [...new Set((await listProviders()).filter((p) => p.type === "api" && p.apiKeyEnv).map((p) => p.apiKeyEnv!))];
+      keyEnv = await vscode.window.showQuickPick(envs, { title: "Which API key env var?" });
     }
-    const v = report.verdict;
-    statusBar.text = v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS";
-    void vscode.commands.executeCommand("quorate.results.focus");
+    if (!keyEnv) return;
+    const value = await vscode.window.showInputBox({
+      title: `Set ${keyEnv}`,
+      password: true,
+      prompt: "Stored in the OS keychain and injected at review time — never written to .quorate.yml."
+    });
+    if (value === undefined) return;
+    if (value) await context.secrets.store(secretKey(keyEnv), value);
+    else await context.secrets.delete(secretKey(keyEnv));
+    void vscode.window.showInformationMessage(`Quorate: ${value ? "stored" : "cleared"} ${keyEnv}.`);
   }
 
   async function addProviderFlow(): Promise<void> {
@@ -239,22 +186,106 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void vscode.window.showErrorMessage(`Quorate: provider add failed — ${stderr.trim().split("\n").pop()}`);
       return;
     }
-    const note = preset.keyEnv ? ` Set $${preset.keyEnv} in your environment to use it.` : "";
-    void vscode.window.showInformationMessage(`Quorate: added provider "${id}".${note}`);
+    if (preset.keyEnv) {
+      const choice = await vscode.window.showInformationMessage(
+        `Added "${id}". Set $${preset.keyEnv} now? (stored in the OS keychain)`,
+        "Set key",
+        "Later"
+      );
+      if (choice === "Set key") await setKey(preset.keyEnv);
+    } else {
+      void vscode.window.showInformationMessage(`Quorate: added provider "${id}".`);
+    }
   }
+
+  context.subscriptions.push(
+    diagnostics,
+    statusBar,
+    councilView,
+
+    councilView.onDidChangeCheckboxState((e) => {
+      const set = new Set<string>(enabled ?? council.defaultEnabledIds());
+      for (const [node, state] of e.items) {
+        if (node.kind !== "provider") continue;
+        if (state === vscode.TreeItemCheckboxState.Checked) set.add(node.provider.id);
+        else set.delete(node.provider.id);
+      }
+      enabled = set;
+      council.updateEnabled(enabled);
+    }),
+
+    vscode.commands.registerCommand("quorate.run", () => runReviewCommand()),
+    vscode.commands.registerCommand("quorate.refresh", () => reload()),
+    vscode.commands.registerCommand("quorate.runDoctor", () => reload()),
+    vscode.commands.registerCommand("quorate.addProvider", async () => {
+      await addProviderFlow();
+      await reload();
+    }),
+    vscode.commands.registerCommand("quorate.setKey", (node?: { provider?: ProviderConfig }) => setKey(node?.provider?.apiKeyEnv)),
+    vscode.commands.registerCommand("quorate.removeProvider", async (node?: { provider?: ProviderConfig }) => {
+      const id = node?.provider?.id ?? (await vscode.window.showInputBox({ title: "Provider id to remove" }));
+      if (!id) return;
+      await runCli(["provider", "remove", id]);
+      await reload();
+    }),
+    vscode.commands.registerCommand("quorate.editRoles", async (node?: { provider?: ProviderConfig }) => {
+      const provider = node?.provider;
+      if (!provider) return;
+      const picked = await vscode.window.showQuickPick(
+        ROLES.map((role) => ({ label: role, picked: provider.roles?.includes(role) ?? false })),
+        { title: `Roles for ${provider.id}`, canPickMany: true }
+      );
+      if (!picked) return;
+      const args = ["provider", "add", provider.id, "--force", "--roles", picked.map((p) => p.label).join(","), "--type", provider.type];
+      if (provider.model) args.push("--model", provider.model);
+      await runCli(args);
+      await reload();
+    }),
+    vscode.commands.registerCommand("quorate.pickDiffSource", async () => {
+      const next = await pickDiffSource(diffSource);
+      if (!next) return;
+      diffSource = next;
+      await context.workspaceState.update("quorate.diffSource", diffSource);
+      council.setData(await listProviders(), enabled, diffSourceLabel(diffSource));
+    }),
+    vscode.commands.registerCommand("quorate.openFinding", async (file: string, line: number) => {
+      const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      const uri = vscode.Uri.file(path.isAbsolute(file) ? file : path.join(cwd, file));
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+      const pos = new vscode.Position(Math.max(0, line - 1), 0);
+      editor.selection = new vscode.Selection(pos, pos);
+      editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+    }),
+    vscode.commands.registerCommand("quorate.clearFindings", () => {
+      diagnostics.clear();
+      results.setReport(undefined);
+      statusBar.text = "$(law) Quorate";
+    }),
+    vscode.commands.registerCommand("quorate.openConfig", async () => {
+      const cwd = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (!cwd) return;
+      try {
+        await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(vscode.Uri.joinPath(cwd, ".quorate.yml")));
+      } catch {
+        void vscode.commands.executeCommand("quorate.init");
+      }
+    }),
+    vscode.commands.registerCommand("quorate.openSettings", () => vscode.commands.executeCommand("workbench.action.openSettings", "quorate")),
+    vscode.commands.registerCommand("quorate.init", async () => {
+      await runCli(["init"]);
+      await reload();
+      void vscode.window.showInformationMessage("Quorate: wrote a starter .quorate.yml (real providers disabled).");
+    }),
+    vscode.commands.registerCommand("quorate.installCli", () => {
+      const term = vscode.window.createTerminal("Install Quorate");
+      term.show();
+      term.sendText("npm i -g quorate");
+    })
+  );
 
   await reload();
 }
 
 export function deactivate(): void {
   /* disposables handled via context.subscriptions */
-}
-
-function cmpVersion(a: string, b: string): number {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
-  }
-  return 0;
 }

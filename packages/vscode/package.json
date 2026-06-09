@@ -66,7 +66,8 @@
       { "command": "quorate.installCli", "title": "Install Quorate CLI", "category": "Quorate" },
       { "command": "quorate.runDoctor", "title": "Re-run Doctor", "category": "Quorate", "icon": "$(refresh)" },
       { "command": "quorate.openFinding", "title": "Open Finding", "category": "Quorate" },
-      { "command": "quorate.clearFindings", "title": "Clear Findings", "category": "Quorate", "icon": "$(clear-all)" }
+      { "command": "quorate.clearFindings", "title": "Clear Findings", "category": "Quorate", "icon": "$(clear-all)" },
+      { "command": "quorate.setKey", "title": "Set API Key…", "category": "Quorate", "icon": "$(key)" }
     ],
     "menus": {
       "view/title": [
@@ -80,8 +81,9 @@
         { "command": "quorate.runDoctor", "when": "view == quorate.status", "group": "navigation@1" }
       ],
       "view/item/context": [
-        { "command": "quorate.editRoles", "when": "view == quorate.council && viewItem == provider", "group": "inline@1" },
-        { "command": "quorate.removeProvider", "when": "view == quorate.council && viewItem == provider", "group": "inline@2" }
+        { "command": "quorate.setKey", "when": "view == quorate.council && viewItem == providerApi", "group": "inline@1" },
+        { "command": "quorate.editRoles", "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/", "group": "inline@2" },
+        { "command": "quorate.removeProvider", "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/", "group": "inline@3" }
       ]
     },
     "configuration": {
