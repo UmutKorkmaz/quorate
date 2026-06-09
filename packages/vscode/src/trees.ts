@@ -1,6 +1,13 @@
 import * as vscode from "vscode";
-import { resolveFindingPath } from "./cli";
-import type { CouncilReport, DoctorReport, Finding, ProviderConfig, Severity } from "./cli";
+import { providerRunState, resolveFindingPath } from "./cli";
+import type { CouncilReport, DoctorReport, Finding, ProviderConfig, RunState, Severity } from "./cli";
+
+const RUN_STATE_META: Record<RunState, { icon: string; hint: string }> = {
+  ready: { icon: "pass", hint: "ready" },
+  "not-installed": { icon: "error", hint: "not installed" },
+  "needs-args": { icon: "warning", hint: "needs headless args" },
+  "needs-key": { icon: "warning", hint: "set its API key" }
+};
 
 const SEVERITY_ICON: Record<Severity, string> = {
   critical: "error",
@@ -25,11 +32,18 @@ export class CouncilTree implements vscode.TreeDataProvider<CouncilNode> {
   private providers: ProviderConfig[] = [];
   private enabled: Set<string> | null = null; // null = config default
   private diffLabel = "Working tree";
+  private detected = new Map<string, { available: boolean }>();
 
-  setData(providers: ProviderConfig[], enabled: Set<string> | null, diffLabel: string): void {
+  setData(
+    providers: ProviderConfig[],
+    enabled: Set<string> | null,
+    diffLabel: string,
+    detected = this.detected
+  ): void {
     this.providers = providers;
     this.enabled = enabled;
     this.diffLabel = diffLabel;
+    this.detected = detected;
     this.emitter.fire(undefined);
   }
 
@@ -58,17 +72,25 @@ export class CouncilTree implements vscode.TreeDataProvider<CouncilNode> {
       return item;
     }
     const p = node.provider;
+    const state = providerRunState(p, this.detected);
+    const meta = RUN_STATE_META[state];
     const item = new vscode.TreeItem(
       p.id,
       (p.roles?.length ?? 0) > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
     );
-    item.description = p.type === "api" ? `api · ${p.model ?? "?"}` : p.type === "cli" ? `cli · ${p.command ?? p.id}` : "built-in";
-    item.iconPath = new vscode.ThemeIcon(p.type === "mock" ? "law" : p.type === "api" ? "cloud" : "terminal");
+    const typeLabel = p.type === "api" ? `api · ${p.model ?? "?"}` : p.type === "cli" ? "cli" : "built-in";
+    item.description = state === "ready" ? typeLabel : `${typeLabel} · ${meta.hint}`;
+    item.iconPath = new vscode.ThemeIcon(p.type === "mock" ? "pass" : meta.icon);
     item.checkboxState = this.isEnabled(p)
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
     item.contextValue = p.type === "mock" ? "providerHeuristic" : p.type === "api" ? "providerApi" : "provider";
-    item.tooltip = p.apiKeyEnv ? `Needs $${p.apiKeyEnv} in the environment` : undefined;
+    item.tooltip =
+      state === "ready"
+        ? p.apiKeyEnv
+          ? `Needs $${p.apiKeyEnv} in the environment`
+          : undefined
+        : `${p.id} — ${meta.hint}${p.apiKeyEnv ? ` ($${p.apiKeyEnv})` : ""}`;
     return item;
   }
 
@@ -111,7 +133,7 @@ type ResultNode =
   | { kind: "fileGroup"; file: string; findings: Finding[] }
   | { kind: "finding"; finding: Finding }
   | { kind: "providersGroup" }
-  | { kind: "providerRun"; text: string; ok: boolean }
+  | { kind: "providerRun"; id: string; role: string; status: string; count: number; error?: string }
   | { kind: "liveHeader" }
   | { kind: "live"; key: string };
 
@@ -119,6 +141,7 @@ interface LiveProvider {
   role: string;
   status: "running" | "done" | "error";
   count: number;
+  error?: string;
 }
 
 export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
@@ -135,14 +158,19 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
     this.emitter.fire(undefined);
   }
 
-  applyEvent(event: { type: string; providerId?: string; role?: string; result?: { status: string; findings: unknown[] } }): void {
+  applyEvent(event: { type: string; providerId?: string; role?: string; result?: { status: string; findings: unknown[]; error?: string } }): void {
     if (!event.providerId || !event.role) return;
     const key = `${event.providerId}:${event.role}`;
     if (event.type === "provider/started") {
       this.live.set(key, { role: event.role, status: "running", count: 0 });
     } else if (event.type === "provider/done") {
       const ok = event.result?.status === "ok";
-      this.live.set(key, { role: event.role, status: ok ? "done" : "error", count: event.result?.findings.length ?? 0 });
+      this.live.set(key, {
+        role: event.role,
+        status: ok ? "done" : "error",
+        count: event.result?.findings.length ?? 0,
+        error: event.result?.error
+      });
     } else {
       return;
     }
@@ -167,7 +195,15 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
       item.iconPath = new vscode.ThemeIcon(
         lp.status === "running" ? "sync~spin" : lp.status === "done" ? "pass" : "error"
       );
-      item.description = lp.status === "running" ? "reviewing…" : lp.status === "done" ? `${lp.count} finding${lp.count === 1 ? "" : "s"}` : "failed";
+      item.description =
+        lp.status === "running"
+          ? "reviewing…"
+          : lp.status === "done"
+            ? `${lp.count} finding${lp.count === 1 ? "" : "s"}`
+            : lp.error
+              ? `failed — ${lp.error.split("\n")[0].slice(0, 80)}`
+              : "failed";
+      if (lp.error) item.tooltip = new vscode.MarkdownString(`\`\`\`\n${lp.error}\n\`\`\``);
       return item;
     }
     const r = this.report!;
@@ -190,8 +226,18 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
       return item;
     }
     if (node.kind === "providerRun") {
-      const item = new vscode.TreeItem(node.text);
-      item.iconPath = new vscode.ThemeIcon(node.ok ? "pass" : "error");
+      const ok = node.status === "ok";
+      const skipped = node.status === "skipped";
+      const item = new vscode.TreeItem(`${node.id}:${node.role}`);
+      item.iconPath = new vscode.ThemeIcon(ok ? "pass" : skipped ? "circle-slash" : "error");
+      item.description = ok
+        ? `${node.count} finding${node.count === 1 ? "" : "s"}`
+        : node.error
+          ? `failed — ${node.error.split("\n")[0].slice(0, 80)}`
+          : node.status;
+      if (node.error) {
+        item.tooltip = new vscode.MarkdownString(`**${node.id}:${node.role} ${node.status}**\n\n\`\`\`\n${node.error}\n\`\`\``);
+      }
       return item;
     }
     if (node.kind === "fileGroup") {
@@ -236,8 +282,11 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
     if (node.kind === "providersGroup") {
       return r.providerResults.map((pr) => ({
         kind: "providerRun" as const,
-        ok: pr.status === "ok",
-        text: `${pr.providerId}:${pr.role} · ${pr.status}${pr.findings ? ` · ${pr.findings.length}` : ""}`
+        id: pr.providerId,
+        role: pr.role,
+        status: pr.status,
+        count: pr.findings?.length ?? 0,
+        error: pr.error
       }));
     }
     return [];

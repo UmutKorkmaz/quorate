@@ -75,8 +75,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     const providers = ready ? await listProviders() : [];
     setContext("quorate.hasConfig", providers.length > 0);
-    council.setData(providers, enabled, diffSourceLabel(diffSource));
-    statusTree.setDoctor(ready ? await runJson<DoctorReport>(["doctor"]) : undefined, version);
+    const doctor = ready ? await runJson<DoctorReport>(["doctor"]) : undefined;
+    const detected = new Map((doctor?.detected ?? []).map((d) => [d.id, { available: d.available }]));
+    council.setData(providers, enabled, diffSourceLabel(diffSource), detected);
+    statusTree.setDoctor(doctor, version);
   }
 
   /** process.env plus any keychain-stored API keys whose env var isn't already set. */

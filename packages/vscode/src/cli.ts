@@ -29,6 +29,8 @@ export interface ProviderResult {
   status: string;
   findings?: Finding[];
   durationMs?: number;
+  error?: string;
+  summary?: string;
 }
 
 export interface CouncilReport {
@@ -47,6 +49,21 @@ export interface ProviderConfig {
   model?: string;
   command?: string;
   apiKeyEnv?: string;
+  args?: string[];
+}
+
+/** Per-provider runnability for the Council view. */
+export type RunState = "ready" | "not-installed" | "needs-args" | "needs-key";
+
+export function providerRunState(
+  p: ProviderConfig,
+  detected: Map<string, { available: boolean }>
+): RunState {
+  if (p.type === "mock") return "ready";
+  if (p.type === "api") return p.model ? "ready" : "needs-key";
+  if (!detected.get(p.id)?.available) return "not-installed";
+  if ((p.args?.length ?? 0) === 0) return "needs-args";
+  return "ready";
 }
 
 export interface DoctorReport {
@@ -59,7 +76,7 @@ export interface StreamEvent {
   type: string;
   providerId?: string;
   role?: string;
-  result?: { status: string; findings: Finding[]; durationMs?: number };
+  result?: { status: string; findings: Finding[]; durationMs?: number; error?: string };
 }
 
 export interface SpawnResult {
