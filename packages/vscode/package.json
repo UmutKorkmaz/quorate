@@ -6,7 +6,6 @@
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",
-  "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/UmutKorkmaz/quorate.git",
@@ -20,18 +19,71 @@
   "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "quorate", "title": "Quorate", "icon": "media/quorate.svg" }
+      ]
+    },
+    "views": {
+      "quorate": [
+        { "id": "quorate.council", "name": "Council" },
+        { "id": "quorate.results", "name": "Results" },
+        { "id": "quorate.status", "name": "Status", "visibility": "collapsed" }
+      ]
+    },
+    "viewsWelcome": [
       {
-        "command": "quorate.reviewChanges",
-        "title": "Review Current Changes",
-        "category": "Quorate"
+        "view": "quorate.council",
+        "contents": "Quorate CLI not found.\n[Install (npm i -g quorate)](command:quorate.installCli)\n[Set CLI path](command:quorate.openSettings)",
+        "when": "!quorate.cliReady"
       },
       {
-        "command": "quorate.clearFindings",
-        "title": "Clear Findings",
-        "category": "Quorate"
+        "view": "quorate.council",
+        "contents": "Open a folder to review changes.\n[Open Folder](command:vscode.openFolder)",
+        "when": "quorate.cliReady && !quorate.hasWorkspace"
+      },
+      {
+        "view": "quorate.council",
+        "contents": "No council config yet.\n[Run quorate init](command:quorate.init)\n[Open Settings](command:quorate.openSettings)",
+        "when": "quorate.cliReady && quorate.hasWorkspace && !quorate.hasConfig"
+      },
+      {
+        "view": "quorate.results",
+        "contents": "No review yet.\n[Run Review](command:quorate.run)\nPick a diff source in the Council view, then convene the council.",
+        "when": "quorate.cliReady"
       }
     ],
+    "commands": [
+      { "command": "quorate.run", "title": "Run Review", "category": "Quorate", "icon": "$(play)" },
+      { "command": "quorate.pickDiffSource", "title": "Change Diff Source", "category": "Quorate", "icon": "$(git-compare)" },
+      { "command": "quorate.refresh", "title": "Refresh", "category": "Quorate", "icon": "$(refresh)" },
+      { "command": "quorate.addProvider", "title": "Add Provider…", "category": "Quorate", "icon": "$(add)" },
+      { "command": "quorate.removeProvider", "title": "Remove Provider", "category": "Quorate", "icon": "$(trash)" },
+      { "command": "quorate.editRoles", "title": "Edit Roles…", "category": "Quorate", "icon": "$(gear)" },
+      { "command": "quorate.openConfig", "title": "Open .quorate.yml", "category": "Quorate", "icon": "$(go-to-file)" },
+      { "command": "quorate.openSettings", "title": "Open Settings", "category": "Quorate", "icon": "$(settings-gear)" },
+      { "command": "quorate.init", "title": "Run quorate init", "category": "Quorate" },
+      { "command": "quorate.installCli", "title": "Install Quorate CLI", "category": "Quorate" },
+      { "command": "quorate.runDoctor", "title": "Re-run Doctor", "category": "Quorate", "icon": "$(refresh)" },
+      { "command": "quorate.openFinding", "title": "Open Finding", "category": "Quorate" },
+      { "command": "quorate.clearFindings", "title": "Clear Findings", "category": "Quorate", "icon": "$(clear-all)" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "quorate.run", "when": "view == quorate.council && quorate.cliReady", "group": "navigation@1" },
+        { "command": "quorate.pickDiffSource", "when": "view == quorate.council", "group": "navigation@2" },
+        { "command": "quorate.refresh", "when": "view == quorate.council", "group": "navigation@3" },
+        { "command": "quorate.addProvider", "when": "view == quorate.council", "group": "1_config@1" },
+        { "command": "quorate.openConfig", "when": "view == quorate.council", "group": "1_config@2" },
+        { "command": "quorate.openSettings", "when": "view == quorate.council", "group": "1_config@3" },
+        { "command": "quorate.clearFindings", "when": "view == quorate.results", "group": "navigation@1" },
+        { "command": "quorate.runDoctor", "when": "view == quorate.status", "group": "navigation@1" }
+      ],
+      "view/item/context": [
+        { "command": "quorate.editRoles", "when": "view == quorate.council && viewItem == provider", "group": "inline@1" },
+        { "command": "quorate.removeProvider", "when": "view == quorate.council && viewItem == provider", "group": "inline@2" }
+      ]
+    },
     "configuration": {
       "title": "Quorate",
       "properties": {
@@ -39,16 +91,6 @@
           "type": "string",
           "default": "quorate",
           "description": "Path to the quorate CLI, or just \"quorate\" if it is on your PATH (npm i -g quorate)."
-        },
-        "quorate.baseBranch": {
-          "type": "string",
-          "default": "main",
-          "description": "Base branch to diff the current branch against when reviewing."
-        },
-        "quorate.providers": {
-          "type": "string",
-          "default": "",
-          "description": "Comma-separated provider ids to enable for the review (blank = use .quorate.yml)."
         }
       }
     }
