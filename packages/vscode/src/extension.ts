@@ -15,23 +15,54 @@ import {
 import { diffSourceLabel, pickDiffSource, toReviewArgs, type DiffSource } from "./diff";
 import { CouncilTree, findingDiagnostics, ResultsTree, StatusTree } from "./trees";
 
-const PRESETS: Array<{ name: string; model: string; local: boolean; keyEnv?: string }> = [
-  { name: "ollama", model: "qwen2.5-coder:7b", local: true },
-  { name: "lmstudio", model: "qwen2.5-coder-7b", local: true },
-  { name: "vllm", model: "Qwen/Qwen2.5-Coder-7B-Instruct", local: true, keyEnv: "VLLM_API_KEY" },
-  { name: "llamacpp", model: "local", local: true },
-  { name: "hf-router", model: "Qwen/Qwen2.5-Coder-32B-Instruct:fastest", local: false, keyEnv: "HF_TOKEN" },
-  { name: "openrouter", model: "anthropic/claude-sonnet-4.6", local: false, keyEnv: "OPENROUTER_API_KEY" },
-  { name: "openai", model: "gpt-4o", local: false, keyEnv: "OPENAI_API_KEY" },
-  { name: "tgi", model: "tgi", local: true },
-  { name: "litellm", model: "gpt-4o", local: true, keyEnv: "LITELLM_API_KEY" },
-  { name: "together", model: "Qwen/Qwen2.5-Coder-32B-Instruct", local: false, keyEnv: "TOGETHER_API_KEY" },
-  { name: "groq", model: "llama-3.3-70b-versatile", local: false, keyEnv: "GROQ_API_KEY" },
-  { name: "fireworks", model: "accounts/fireworks/models/qwen2p5-coder-32b-instruct", local: false, keyEnv: "FIREWORKS_API_KEY" },
-  { name: "deepseek", model: "deepseek-chat", local: false, keyEnv: "DEEPSEEK_API_KEY" },
-  { name: "mistral", model: "codestral-latest", local: false, keyEnv: "MISTRAL_API_KEY" },
-  { name: "gemini", model: "gemini-2.0-flash", local: false, keyEnv: "GEMINI_API_KEY" }
+interface Preset {
+  name: string;
+  model: string;
+  baseUrl: string;
+  local: boolean;
+  keyEnv?: string;
+}
+const PRESETS: Preset[] = [
+  { name: "ollama", model: "qwen2.5-coder:7b", baseUrl: "http://localhost:11434/v1", local: true },
+  { name: "lmstudio", model: "qwen2.5-coder-7b", baseUrl: "http://localhost:1234/v1", local: true },
+  { name: "vllm", model: "Qwen/Qwen2.5-Coder-7B-Instruct", baseUrl: "http://localhost:8000/v1", local: true, keyEnv: "VLLM_API_KEY" },
+  { name: "llamacpp", model: "local", baseUrl: "http://localhost:8080/v1", local: true },
+  { name: "hf-router", model: "Qwen/Qwen2.5-Coder-32B-Instruct:fastest", baseUrl: "https://router.huggingface.co/v1", local: false, keyEnv: "HF_TOKEN" },
+  { name: "openrouter", model: "anthropic/claude-sonnet-4.6", baseUrl: "https://openrouter.ai/api/v1", local: false, keyEnv: "OPENROUTER_API_KEY" },
+  { name: "openai", model: "gpt-4o", baseUrl: "https://api.openai.com/v1", local: false, keyEnv: "OPENAI_API_KEY" },
+  { name: "tgi", model: "tgi", baseUrl: "http://localhost:8080/v1", local: true },
+  { name: "litellm", model: "gpt-4o", baseUrl: "http://localhost:4000/v1", local: true, keyEnv: "LITELLM_API_KEY" },
+  { name: "together", model: "Qwen/Qwen2.5-Coder-32B-Instruct", baseUrl: "https://api.together.ai/v1", local: false, keyEnv: "TOGETHER_API_KEY" },
+  { name: "groq", model: "llama-3.3-70b-versatile", baseUrl: "https://api.groq.com/openai/v1", local: false, keyEnv: "GROQ_API_KEY" },
+  { name: "fireworks", model: "accounts/fireworks/models/qwen2p5-coder-32b-instruct", baseUrl: "https://api.fireworks.ai/inference/v1", local: false, keyEnv: "FIREWORKS_API_KEY" },
+  { name: "deepseek", model: "deepseek-chat", baseUrl: "https://api.deepseek.com", local: false, keyEnv: "DEEPSEEK_API_KEY" },
+  { name: "mistral", model: "codestral-latest", baseUrl: "https://api.mistral.ai/v1", local: false, keyEnv: "MISTRAL_API_KEY" },
+  { name: "gemini", model: "gemini-2.0-flash", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", local: false, keyEnv: "GEMINI_API_KEY" }
 ];
+
+/** Fetch model ids from an OpenAI-compatible `{baseUrl}/models` (or Ollama's /api/tags). */
+async function fetchModels(baseUrl: string, apiKey?: string): Promise<string[]> {
+  const url = `${baseUrl.replace(/\/$/, "")}/models`;
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 6000);
+  try {
+    const res = await fetch(url, { headers, signal: controller.signal });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { data?: Array<{ id?: string }>; models?: Array<{ id?: string; name?: string }> };
+    const ids = Array.isArray(json.data)
+      ? json.data.map((m) => m.id)
+      : Array.isArray(json.models)
+        ? json.models.map((m) => m.id ?? m.name)
+        : [];
+    return ids.filter((x): x is string => typeof x === "string").sort();
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
 const ROLES = ["architect", "security", "qa", "performance", "maintainer"];
 const secretKey = (env: string): string => `quorate.key.${env}`;
 
@@ -177,32 +208,64 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const id = await vscode.window.showInputBox({ title: "Provider id", value: preset.name });
     if (!id) return;
-    const model = await vscode.window.showInputBox({ title: "Model", value: preset.model });
-    if (model === undefined) return;
+
+    // Resolve a key (env or keychain) so the model list can be fetched for hosted providers.
+    let key: string | undefined;
+    if (preset.keyEnv) {
+      key = process.env[preset.keyEnv] || (await context.secrets.get(secretKey(preset.keyEnv))) || undefined;
+      if (!key) {
+        const entered = await vscode.window.showInputBox({
+          title: `$${preset.keyEnv} (optional — to list models)`,
+          password: true,
+          prompt: "Stored in the OS keychain. Leave blank to type the model name instead."
+        });
+        if (entered) {
+          key = entered;
+          await context.secrets.store(secretKey(preset.keyEnv), entered);
+        }
+      }
+    }
+
+    // Live model list (OpenAI-compatible /models), with a free-text fallback.
+    const models = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Quorate — fetching ${preset.name} models…` },
+      () => fetchModels(preset.baseUrl, key)
+    );
+    let model: string | undefined;
+    if (models.length) {
+      const pick = await vscode.window.showQuickPick(
+        [...models.map((m) => ({ label: m, custom: false })), { label: "$(edit) Enter a custom model…", custom: true }],
+        { title: `Model for ${id} — ${models.length} available`, matchOnDescription: true }
+      );
+      if (!pick) return;
+      model = pick.custom ? await vscode.window.showInputBox({ title: "Model", value: preset.model }) : pick.label;
+    } else {
+      model = await vscode.window.showInputBox({
+        title: `Model for ${id}`,
+        value: preset.model,
+        prompt: `Couldn't reach ${preset.baseUrl}/models — type the model name`
+      });
+    }
+    if (!model) return;
+
     const roles = await vscode.window.showQuickPick(
       ROLES.map((role) => ({ label: role, picked: ["qa", "maintainer"].includes(role) })),
       { title: "Roles for this provider", canPickMany: true }
     );
     if (!roles) return;
 
-    const args = ["provider", "add", id, "--preset", preset.name, "--force"];
-    if (model) args.push("--model", model);
+    const args = ["provider", "add", id, "--preset", preset.name, "--force", "--model", model];
     if (roles.length) args.push("--roles", roles.map((r) => r.label).join(","));
     const { code, stderr } = await runCli(args);
     if (code !== 0) {
       void vscode.window.showErrorMessage(`Quorate: provider add failed — ${stderr.trim().split("\n").pop()}`);
       return;
     }
-    if (preset.keyEnv) {
-      const choice = await vscode.window.showInformationMessage(
-        `Added "${id}". Set $${preset.keyEnv} now? (stored in the OS keychain)`,
-        "Set key",
-        "Later"
-      );
-      if (choice === "Set key") await setKey(preset.keyEnv);
-    } else {
-      void vscode.window.showInformationMessage(`Quorate: added provider "${id}".`);
-    }
+    const stillMissing =
+      preset.keyEnv && !(process.env[preset.keyEnv] || (await context.secrets.get(secretKey(preset.keyEnv))));
+    void vscode.window.showInformationMessage(
+      `Quorate: added "${id}" (${model}).${stillMissing ? ` Set $${preset.keyEnv} to use it.` : ""}`
+    );
   }
 
   context.subscriptions.push(
