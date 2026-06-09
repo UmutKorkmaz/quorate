@@ -742,7 +742,7 @@ function TranscriptItem({ cell }: { cell: TranscriptCell }): React.ReactElement 
     case "markdown":
       return <Text>{cell.markdown}</Text>;
     case "findings":
-      return <VerdictReport report={cell.report} />;
+      return <VerdictReport report={cell.report} maxWidth={process.stdout.columns ?? 80} />;
     case "providerStatus":
       return <ProvidersGrid rows={cell.rows} />;
     case "help":

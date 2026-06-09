@@ -228,10 +228,13 @@ const SEVERITY_ABBR: Record<string, string> = {
   info: "INFO"
 };
 
-/** A filled amber agreement meter, proportional to the agreement percentage. */
-function AgreementBar({ pct }: { pct: number }): React.ReactElement {
+/** Max width of the verdict card; contains it on wide terminals to match the design. */
+const VERDICT_CARD_MAX = 72;
+
+/** A filled amber agreement meter, proportional to the agreement percentage.
+ *  Spans `width` cells so it tracks the verdict card rather than a fixed stub. */
+function AgreementBar({ pct, width = 28 }: { pct: number; width?: number }): React.ReactElement {
   const g = glyphs();
-  const width = 28;
   const filled = Math.max(0, Math.min(width, Math.round((pct / 100) * width)));
   return (
     <Text>
@@ -243,8 +246,18 @@ function AgreementBar({ pct }: { pct: number }): React.ReactElement {
 
 /** The verdict card: one verdict-colored box with the verdict header, an
  *  agreement meter, and findings rendered inline — the design's result view. */
-export function VerdictReport({ report }: { report: CouncilReport }): React.ReactElement {
+export function VerdictReport({
+  report,
+  maxWidth
+}: {
+  report: CouncilReport;
+  maxWidth?: number;
+}): React.ReactElement {
   const g = glyphs();
+  // Contain the card on wide terminals so it reads as the designed result view
+  // instead of stretching edge-to-edge. Round border (2) + paddingX 1 (2) = 4.
+  const cardWidth = Math.min(maxWidth ?? 80, VERDICT_CARD_MAX);
+  const innerWidth = Math.max(20, cardWidth - 4);
   const total = report.providerResults.length;
   const slowestMs = report.providerResults.reduce((max, r) => Math.max(max, r.durationMs), 0);
   const degraded = report.metadata.degraded;
@@ -260,7 +273,7 @@ export function VerdictReport({ report }: { report: CouncilReport }): React.Reac
 
   return (
     <Box flexDirection="column" marginY={1}>
-      <Box flexDirection="column" borderStyle="round" borderColor={vColor} paddingX={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor={vColor} paddingX={1} width={cardWidth}>
         <Text>
           <Text color={vColor} bold>{verdict.toUpperCase()}</Text>
           <Text color={PALETTE.dim}>
@@ -269,7 +282,7 @@ export function VerdictReport({ report }: { report: CouncilReport }): React.Reac
           </Text>
         </Text>
 
-        {showAgreement ? <AgreementBar pct={agreementPct} /> : null}
+        {showAgreement ? <AgreementBar pct={agreementPct} width={innerWidth} /> : null}
 
         {degraded ? (
           <Text color={PALETTE.degraded}>
