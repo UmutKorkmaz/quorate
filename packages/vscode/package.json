@@ -17,7 +17,7 @@
   },
   "categories": ["Linters", "SCM Providers", "Other"],
   "keywords": ["ai", "code review", "council", "pr review", "quorate"],
-  "activationEvents": [],
+  "activationEvents": ["onStartupFinished"],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
