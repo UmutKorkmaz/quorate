@@ -6,6 +6,8 @@
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": { "color": "#0b0f17", "theme": "dark" },
   "repository": {
     "type": "git",
     "url": "https://github.com/UmutKorkmaz/quorate.git",

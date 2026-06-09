@@ -83,10 +83,26 @@ export function gitRoot(cwd: string): Promise<string> {
   });
 }
 
-/** Resolve a finding's (possibly repo-root-relative) file path to one that exists. */
+/**
+ * Resolve a finding's (usually repo-root-relative) file path to one that exists.
+ * Tries the given bases, then walks UP the directory tree from the workspace
+ * folder — the git repo root is always an ancestor — so it works even when the
+ * opened folder is a sub-directory of the repo and `git` isn't on the editor PATH.
+ */
 export function resolveFindingPath(file: string, bases: string[]): string {
   if (path.isAbsolute(file)) return file;
-  for (const base of bases) {
+  const tried = new Set<string>();
+  const candidateBases = [...bases];
+  let dir = bases[bases.length - 1];
+  for (let i = 0; i < 8 && dir; i++) {
+    candidateBases.push(dir);
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  for (const base of candidateBases) {
+    if (!base || tried.has(base)) continue;
+    tried.add(base);
     const candidate = path.join(base, file);
     if (existsSync(candidate)) return candidate;
   }
