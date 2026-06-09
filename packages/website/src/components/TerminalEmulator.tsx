@@ -58,18 +58,149 @@ const PALETTE = [
   { name: "/resume", hint: "Resume a saved session", active: false }
 ] as const;
 
-const DIFF_FILES = [
-  { path: "src/auth.ts", add: 34, del: 12 },
-  { path: "src/middleware/validate.ts", add: 51, del: 8 },
-  { path: "tests/auth.test.ts", add: 28, del: 14 },
-  { path: "package.json", add: 15, del: 8 }
-] as const;
+type Verdict = "pass" | "warn" | "fail";
 
-const RUNNING = [
-  { id: "heuristic", role: "maintainer", state: "done" as const, note: "2 findings" },
-  { id: "claude", role: "security", state: "running" as const, note: "" },
-  { id: "codex", role: "qa", state: "queued" as const, note: "" }
-] as const;
+export type EmulatorFixture = Verdict;
+
+interface RunRow {
+  id: string;
+  role: string;
+  state: "done" | "running" | "queued";
+  note: string;
+}
+
+interface Finding {
+  verdict: Verdict;
+  severity: string;
+  severityColor: string;
+  location: string;
+  body: string;
+  meta?: string;
+}
+
+interface FixtureData {
+  label: string;
+  files: ReadonlyArray<{ path: string; add: number; del: number }>;
+  added: number;
+  removed: number;
+  running: ReadonlyArray<RunRow>;
+  verdict: Verdict;
+  findingCount: number;
+  agreement: number;
+  findings: ReadonlyArray<Finding>;
+}
+
+export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
+  pass: {
+    label: "Clean refactor",
+    files: [
+      { path: "src/format/date.ts", add: 22, del: 19 },
+      { path: "tests/format/date.test.ts", add: 31, del: 4 }
+    ],
+    added: 53,
+    removed: 23,
+    running: [
+      { id: "heuristic", role: "maintainer", state: "done", note: "0 findings" },
+      { id: "claude", role: "security", state: "running", note: "" },
+      { id: "codex", role: "qa", state: "queued", note: "" }
+    ],
+    verdict: "pass",
+    findingCount: 0,
+    agreement: 100,
+    findings: [
+      {
+        verdict: "pass",
+        severity: "OK",
+        severityColor: "text-quorate-pass",
+        location: "src/format/date.ts",
+        body: "Pure refactor with full coverage — every reviewer agrees the change is safe to merge.",
+        meta: "agreed by claude, codex, heuristic · confidence 0.94"
+      }
+    ]
+  },
+  warn: {
+    label: "New endpoint",
+    files: [
+      { path: "src/api/orders.ts", add: 47, del: 6 },
+      { path: "src/api/schema.ts", add: 19, del: 2 },
+      { path: "tests/api/orders.test.ts", add: 12, del: 0 }
+    ],
+    added: 78,
+    removed: 8,
+    running: [
+      { id: "heuristic", role: "maintainer", state: "done", note: "1 finding" },
+      { id: "claude", role: "security", state: "running", note: "" },
+      { id: "codex", role: "qa", state: "queued", note: "" }
+    ],
+    verdict: "warn",
+    findingCount: 1,
+    agreement: 83,
+    findings: [
+      {
+        verdict: "warn",
+        severity: "MED",
+        severityColor: "text-quorate-medium",
+        location: "src/api/orders.ts:61",
+        body: "Pagination limit is unbounded — large result sets could pressure the database under load.",
+        meta: "agreed by claude · confidence 0.71"
+      }
+    ]
+  },
+  fail: {
+    label: "Auth change",
+    files: [
+      { path: "src/auth.ts", add: 34, del: 12 },
+      { path: "src/middleware/validate.ts", add: 51, del: 8 },
+      { path: "tests/auth.test.ts", add: 28, del: 14 },
+      { path: "package.json", add: 15, del: 8 }
+    ],
+    added: 128,
+    removed: 42,
+    running: [
+      { id: "heuristic", role: "maintainer", state: "done", note: "2 findings" },
+      { id: "claude", role: "security", state: "running", note: "" },
+      { id: "codex", role: "qa", state: "queued", note: "" }
+    ],
+    verdict: "fail",
+    findingCount: 3,
+    agreement: 67,
+    findings: [
+      {
+        verdict: "fail",
+        severity: "HIGH",
+        severityColor: "text-quorate-high",
+        location: "src/auth.ts:42",
+        body: "Missing authorization check — token introspection result is trusted without verifying the audience claim.",
+        meta: "agreed by claude, codex · confidence 0.82"
+      },
+      {
+        verdict: "warn",
+        severity: "MED",
+        severityColor: "text-quorate-medium",
+        location: "tests/auth.test.ts:18",
+        body: "New test omits negative case for expired token — coverage gap on auth edge path."
+      }
+    ]
+  }
+};
+
+const VERDICT_CHIP: Record<Verdict, string> = {
+  pass: "verdict-chip verdict-chip--pass",
+  warn: "verdict-chip verdict-chip--warn",
+  fail: "verdict-chip verdict-chip--fail"
+};
+
+const VERDICT_TEXT: Record<Verdict, string> = {
+  pass: "text-quorate-pass",
+  warn: "text-quorate-warn",
+  fail: "text-quorate-fail"
+};
+
+const AGREEMENT_FILL: Record<Verdict, string> = {
+  pass: "color-mix(in srgb, var(--color-verdict-pass) 80%, transparent)",
+  warn: "color-mix(in srgb, var(--color-verdict-warn) 80%, transparent)",
+  fail: "color-mix(in srgb, var(--color-verdict-fail) 80%, transparent)"
+};
 
 function formatElapsed(seconds: number): string {
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -153,11 +284,16 @@ function PhaseRail({
 
 export function TerminalEmulator({
   onPhaseChange,
-  showPhaseRail = true
+  showPhaseRail = true,
+  fixture = "fail",
+  onFixtureChange
 }: {
   onPhaseChange?: (phase: EmulatorPhase) => void;
   showPhaseRail?: boolean;
+  fixture?: EmulatorFixture;
+  onFixtureChange?: (fixture: EmulatorFixture) => void;
 }) {
+  const data = EMULATOR_FIXTURES[fixture];
   const [phase, setPhase] = useState<EmulatorPhase>("welcome");
   const [frame, setFrame] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -180,6 +316,15 @@ export function TerminalEmulator({
     setComposer("");
     goToPhase("welcome");
   }, [goToPhase]);
+
+  const selectFixture = useCallback(
+    (next: EmulatorFixture) => {
+      if (next === fixture) return;
+      onFixtureChange?.(next);
+      replay();
+    },
+    [fixture, onFixtureChange, replay]
+  );
 
   useEffect(() => {
     onPhaseChange?.("welcome");
@@ -258,6 +403,7 @@ export function TerminalEmulator({
   }, [phase]);
 
   const activeCaption = EMULATOR_PHASES.find((p) => p.id === phase)?.caption ?? "";
+  const findingLabel = `${data.findingCount} ${data.findingCount === 1 ? "finding" : "findings"}`;
 
   return (
     <div
@@ -325,14 +471,14 @@ export function TerminalEmulator({
                 <strong className="text-quorate-pass">git working tree</strong>
               </p>
               <div className="terminal-diff-stats">
-                <span>4 files changed</span>
+                <span>{data.files.length} files changed</span>
                 <span>
-                  <span className="text-quorate-pass">+128</span>{" "}
-                  <span className="text-quorate-fail">−42</span>
+                  <span className="text-quorate-pass">+{data.added}</span>{" "}
+                  <span className="text-quorate-fail">−{data.removed}</span>
                 </span>
               </div>
               <ul className="terminal-diff-files">
-                {DIFF_FILES.map((file) => (
+                {data.files.map((file) => (
                   <li key={file.path}>
                     <span className="text-quorate-muted">{file.path}</span>
                     <span>
@@ -349,7 +495,7 @@ export function TerminalEmulator({
           {(phase === "running" || phase === "verdict") && (
             <div key={`running-${phase}`} className="terminal-running terminal-phase-content">
               <p className="terminal-running-label">Convening council on git working tree</p>
-              {RUNNING.map((row) => (
+              {data.running.map((row) => (
                 <div key={`${row.id}-${row.role}`} className="terminal-run-row">
                   <span className="terminal-run-id">
                     {row.id}
@@ -372,34 +518,57 @@ export function TerminalEmulator({
           )}
 
           {phase === "verdict" && (
-            <div key="verdict" className="terminal-verdict terminal-phase-content">
+            <div
+              key={`verdict-${fixture}`}
+              className={
+                data.verdict === "fail"
+                  ? "terminal-verdict terminal-phase-content"
+                  : "terminal-phase-content rounded-xl border border-quorate-border bg-quorate-surface/80 px-3 py-3 shadow-terminal"
+              }
+            >
               <div className="terminal-verdict-header">
-                <span className="text-quorate-fail font-bold text-base">FAIL</span>
-                <span className="text-quorate-dim">· 3 findings · agreement 67%</span>
+                <span className={VERDICT_CHIP[data.verdict]}>
+                  {data.verdict.toUpperCase()}
+                </span>
+                <span className="text-quorate-dim">
+                  · {findingLabel} · agreement {data.agreement}%
+                </span>
               </div>
               <div className="terminal-agreement-bar" aria-hidden>
-                <span className="terminal-agreement-fill" style={{ width: "67%" }} />
+                <span
+                  className="terminal-agreement-fill"
+                  style={{ width: `${data.agreement}%`, background: AGREEMENT_FILL[data.verdict] }}
+                />
               </div>
-              <div className="terminal-finding">
-                <span className="text-quorate-fail">FAIL</span>
-                <span className="text-quorate-high">HIGH</span>
-                <span className="font-mono text-white">src/auth.ts:42</span>
-              </div>
-              <p className="terminal-finding-body">
-                Missing authorization check — token introspection result is trusted without
-                verifying the audience claim.
-              </p>
-              <p className="terminal-finding-meta text-quorate-dim">
-                agreed by claude, codex · confidence 0.82
-              </p>
-              <div className="terminal-finding terminal-finding--secondary">
-                <span className="text-quorate-warn">WARN</span>
-                <span className="text-quorate-medium">MED</span>
-                <span className="font-mono text-white">tests/auth.test.ts:18</span>
-              </div>
-              <p className="terminal-finding-body terminal-finding-body--secondary">
-                New test omits negative case for expired token — coverage gap on auth edge path.
-              </p>
+              {data.findings.map((finding, index) => (
+                <div key={finding.location}>
+                  <div
+                    className={
+                      index === 0
+                        ? "terminal-finding"
+                        : "terminal-finding terminal-finding--secondary"
+                    }
+                  >
+                    <span className={VERDICT_TEXT[finding.verdict]}>
+                      {finding.verdict.toUpperCase()}
+                    </span>
+                    <span className={finding.severityColor}>{finding.severity}</span>
+                    <span className="font-mono text-white">{finding.location}</span>
+                  </div>
+                  <p
+                    className={
+                      index === 0
+                        ? "terminal-finding-body"
+                        : "terminal-finding-body terminal-finding-body--secondary"
+                    }
+                  >
+                    {finding.body}
+                  </p>
+                  {finding.meta ? (
+                    <p className="terminal-finding-meta text-quorate-dim">{finding.meta}</p>
+                  ) : null}
+                </div>
+              ))}
             </div>
           )}
 
@@ -453,6 +622,33 @@ export function TerminalEmulator({
               {phase === "welcome" ? " · heuristic only → /use available" : ""}
             </p>
           )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-quorate-border bg-quorate-elevated/30 px-4 py-2.5">
+          <span className="font-mono text-[10px] tracking-[0.18em] text-quorate-dim uppercase">
+            Try another diff
+          </span>
+          {(Object.keys(EMULATOR_FIXTURES) as EmulatorFixture[]).map((key) => {
+            const item = EMULATOR_FIXTURES[key];
+            const isActive = key === fixture;
+            return (
+              <button
+                key={key}
+                type="button"
+                className={
+                  isActive
+                    ? "inline-flex items-center gap-1.5 rounded-full border border-quorate-accent/60 bg-quorate-accent/12 px-2.5 py-0.5 font-mono text-[10px] text-quorate-accent transition cursor-pointer"
+                    : "inline-flex items-center gap-1.5 rounded-full border border-quorate-border bg-quorate-elevated/50 px-2.5 py-0.5 font-mono text-[10px] text-quorate-dim transition hover:border-quorate-accent/40 hover:text-quorate-muted cursor-pointer"
+                }
+                aria-pressed={isActive}
+                onClick={() => selectFixture(key)}
+              >
+                <span className={`text-[8px] leading-none ${VERDICT_TEXT[item.verdict]}`} aria-hidden>
+                  ●
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
         </div>
         <div className="terminal-window-footer">
           <p className="terminal-caption">{activeCaption}</p>

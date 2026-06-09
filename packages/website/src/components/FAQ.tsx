@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { Section } from "./Section";
 
 interface FAQItem {
   question: string;
@@ -76,39 +75,56 @@ export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   return (
-    <Section
-      id="faq"
-      eyebrow="FAQ"
-      title="Common questions"
-      description="Everything you need to know before convening your first council."
-    >
-      <div className="mx-auto max-w-3xl divide-y divide-quorate-border rounded-xl border border-quorate-border bg-quorate-surface/60">
-        {FAQ_ITEMS.map((item, index) => {
-          const isOpen = openIndex === index;
-          return (
-            <div key={item.question}>
-              <button
-                type="button"
-                onClick={() => setOpenIndex(isOpen ? null : index)}
-                className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-quorate-elevated/40"
-                aria-expanded={isOpen}
-              >
-                <span className="font-medium text-white">{item.question}</span>
-                <span
-                  className={`shrink-0 font-mono text-quorate-accent transition-transform ${isOpen ? "rotate-45" : ""}`}
+    <section id="faq" className="relative px-6 py-20 md:py-28">
+      <div className="mx-auto max-w-6xl">
+        <div className="reveal is-visible">
+          <div className="mb-4 flex items-center gap-3">
+            <span
+              className="h-px w-6 rounded-full"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(110,151,255,0.7), rgba(110,151,255,0.2))"
+              }}
+              aria-hidden
+            />
+            <p className="font-mono text-xs tracking-[0.2em] text-quorate-accent uppercase">
+              FAQ
+            </p>
+          </div>
+          <h2 className="display-section text-3xl text-white md:text-4xl">Common questions</h2>
+          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-quorate-muted">
+            Everything you need to know before convening your first council.
+          </p>
+        </div>
+
+        <div className="mt-12 mx-auto max-w-3xl divide-y divide-quorate-border rounded-2xl border border-quorate-border bg-quorate-surface/60 backdrop-blur">
+          {FAQ_ITEMS.map((item, index) => {
+            const isOpen = openIndex === index;
+            return (
+              <div key={item.question}>
+                <button
+                  type="button"
+                  onClick={() => setOpenIndex(isOpen ? null : index)}
+                  className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition hover:bg-quorate-elevated/40"
+                  aria-expanded={isOpen}
                 >
-                  +
-                </span>
-              </button>
-              {isOpen ? (
-                <div className="px-6 pb-5 text-sm leading-relaxed text-quorate-muted">
-                  {item.answer}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+                  <span className="font-medium text-white">{item.question}</span>
+                  <span
+                    className={`shrink-0 font-mono text-quorate-accent transition-transform ${isOpen ? "rotate-45" : ""}`}
+                  >
+                    +
+                  </span>
+                </button>
+                {isOpen ? (
+                  <div className="px-6 pb-5 text-sm leading-relaxed text-quorate-muted">
+                    {item.answer}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </Section>
+    </section>
   );
 }

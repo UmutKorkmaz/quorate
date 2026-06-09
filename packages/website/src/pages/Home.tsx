@@ -1,6 +1,7 @@
 import { Seo } from "../components/Seo";
 import { Hero } from "../components/Hero";
 import { TerminalShowcase } from "../components/TerminalShowcase";
+import { HowItWorks } from "../components/HowItWorks";
 import { WhatIsQuorate } from "../components/WhatIsQuorate";
 import { FeatureCards } from "../components/FeatureCards";
 import { ProviderStrip } from "../components/ProviderStrip";
@@ -48,6 +49,7 @@ export function Home() {
       />
       <Hero />
       <TerminalShowcase />
+      <HowItWorks />
       <WhatIsQuorate />
       <FeatureCards />
       <ProviderStrip />

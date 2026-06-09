@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { Section } from "./Section";
-import { EMULATOR_PHASES, TerminalEmulator, type EmulatorPhase } from "./TerminalEmulator";
+import {
+  EMULATOR_PHASES,
+  TerminalEmulator,
+  type EmulatorFixture,
+  type EmulatorPhase
+} from "./TerminalEmulator";
 
 const SHORTCUTS = [
   { keys: "/", action: "Open the command palette" },
@@ -15,17 +19,40 @@ const SHORTCUTS = [
 
 export function TerminalShowcase() {
   const [phase, setPhase] = useState<EmulatorPhase>("welcome");
+  const [fixture, setFixture] = useState<EmulatorFixture>("fail");
   const active = EMULATOR_PHASES.find((p) => p.id === phase);
 
   return (
-    <Section
-      id="see-it-in-action"
-      eyebrow="See it in action"
-      title="A review flow you can actually drive"
-      description="The demo mirrors the real shell experience: load a diff, choose commands, watch providers run, and land on a single verdict. Hover to pause, click a phase to jump, or replay the full session."
-    >
-      <div className="terminal-showcase-grid">
-        <TerminalEmulator onPhaseChange={setPhase} />
+    <section id="see-it-in-action" className="relative px-6 py-20 md:py-28">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-4 flex items-center gap-3">
+          <span
+            className="h-px w-6 rounded-full"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(110,151,255,0.7), rgba(110,151,255,0.2))"
+            }}
+            aria-hidden
+          />
+          <p className="font-mono text-xs tracking-[0.2em] text-quorate-accent uppercase">
+            See it in action
+          </p>
+        </div>
+        <h2 className="display-section text-3xl text-white md:text-4xl">
+          A review flow you can actually drive
+        </h2>
+        <p className="mt-4 max-w-2xl text-lg leading-relaxed text-quorate-muted">
+          The demo mirrors the real shell experience: load a diff, choose commands, watch
+          providers run, and land on a single verdict. Hover to pause, click a phase to jump,
+          swap the diff, or replay the full session.
+        </p>
+
+        <div className="mt-12 terminal-showcase-grid">
+          <TerminalEmulator
+            onPhaseChange={setPhase}
+            fixture={fixture}
+            onFixtureChange={setFixture}
+          />
 
         <aside className="terminal-showcase-aside">
           <div className="terminal-showcase-panel terminal-showcase-panel--active">
@@ -111,8 +138,9 @@ export function TerminalShowcase() {
               Manual testing guide →
             </Link>
           </p>
-        </aside>
+          </aside>
+        </div>
       </div>
-    </Section>
+    </section>
   );
 }
