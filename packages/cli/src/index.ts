@@ -7,6 +7,7 @@ import { Command } from "commander";
 import {
   createDefaultConfig,
   detectAvailableProviders,
+  fetchProviderModels,
   findConfigPath,
   isEmptyReviewDiff,
   loadConfig,
@@ -98,6 +99,41 @@ function printProviderTable(config: QuorateConfig): void {
         detectedProvider?.path ?? ""
       ].join("\t")
     );
+  }
+}
+
+/** Models for a preset name or a configured provider id (key read from apiKeyEnv). */
+async function modelsFor(
+  name: string,
+  config: QuorateConfig | undefined
+): Promise<{ models: string[]; baseUrl?: string; current?: string }> {
+  const configured = config?.providers.find((p) => p.id === name && p.type === "api");
+  const preset = PROVIDER_PRESETS[name];
+  const source = configured ?? preset;
+  if (!source) return { models: [] };
+  const apiKey = source.apiKeyEnv ? process.env[source.apiKeyEnv] : undefined;
+  const models = await fetchProviderModels(source.baseUrl, apiKey);
+  return { models, baseUrl: source.baseUrl, current: configured?.model ?? preset?.model };
+}
+
+/** Numbered TTY picker: returns the chosen model, free-typed text, or undefined. */
+async function pickModelInteractive(models: string[], current?: string): Promise<string | undefined> {
+  const { createInterface } = await import("node:readline/promises");
+  const shown = models.slice(0, 40);
+  for (const [i, model] of shown.entries()) {
+    const marker = model === current ? paint(PALETTE.accent, " (current)") : "";
+    console.log(`  ${String(i + 1).padStart(3)}. ${model}${marker}`);
+  }
+  if (models.length > shown.length) console.log(`  … and ${models.length - shown.length} more (type a name)`);
+  const rl = createInterface({ input: stdin, output: stdout });
+  try {
+    const answer = (await rl.question(`Model [1-${shown.length}, name, or Enter for ${current ?? "default"}]: `)).trim();
+    if (!answer) return current;
+    const n = Number(answer);
+    if (Number.isInteger(n) && n >= 1 && n <= shown.length) return shown[n - 1];
+    return answer;
+  } finally {
+    rl.close();
   }
 }
 
@@ -225,9 +261,22 @@ export function buildProgram(): Command {
     .option("--enabled", "Add the provider enabled (default)")
     .option("--disabled", "Add the provider disabled")
     .option("-f, --force", "Replace an existing provider with the same id")
-    .action((id: string, options) => {
+    .option("--no-pick", "Skip the interactive model picker (use the preset/--model as-is)")
+    .action(async (id: string, options) => {
       const cwd = cwdFrom(program);
-      const provider = buildProvider(id, options);
+      let provider = buildProvider(id, options);
+      // Interactive model selection: api provider, no explicit --model, on a TTY.
+      if (provider.type === "api" && !options.model && options.pick !== false && stdin.isTTY && stdout.isTTY) {
+        const apiKey = provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : undefined;
+        const models = await fetchProviderModels(provider.baseUrl, apiKey);
+        if (models.length > 0) {
+          console.log(`${models.length} models at ${provider.baseUrl ?? "the default endpoint"}:`);
+          const chosen = await pickModelInteractive(models, provider.model);
+          if (chosen) provider = { ...provider, model: chosen };
+        } else if (provider.apiKeyEnv && !apiKey) {
+          console.log(`(Set ${provider.apiKeyEnv} to list models; keeping the preset default "${provider.model}".)`);
+        }
+      }
       const configPath = findConfigPath(cwd) ?? resolve(cwd, ".quorate.yml");
       const config = existsSync(configPath)
         ? loadConfig(configPath, cwd)
@@ -278,6 +327,66 @@ export function buildProgram(): Command {
         console.log(`  ${name.padEnd(11)} ${preset.baseUrl}  ${preset.model}`);
       }
       console.log("\nAdd one with: quorate provider add <id> --preset <name> [--model <model>]");
+    });
+
+  providerCmd
+    .command("models <name>")
+    .description("List live models for a configured api provider or a preset (GET {baseUrl}/models).")
+    .option("--json", "Print the model list as JSON")
+    .action(async (name: string, options: { json?: boolean }) => {
+      const cwd = cwdFrom(program);
+      const configPath = findConfigPath(cwd);
+      const config = configPath ? loadConfig(configPath, cwd) : undefined;
+      const { models, baseUrl, current } = await modelsFor(name, config);
+      if (options.json) {
+        console.log(JSON.stringify(models));
+        return;
+      }
+      if (!baseUrl && models.length === 0) {
+        throw new Error(`"${name}" is not a configured api provider or a preset (${PROVIDER_PRESET_NAMES.join(", ")}).`);
+      }
+      if (models.length === 0) {
+        const keyEnv = config?.providers.find((p) => p.id === name)?.apiKeyEnv ?? PROVIDER_PRESETS[name]?.apiKeyEnv;
+        const hint = keyEnv && !process.env[keyEnv] ? ` (set ${keyEnv} to authenticate)` : "";
+        console.log(`No models returned from ${baseUrl}/models${hint}.`);
+        return;
+      }
+      for (const model of models) {
+        console.log(model === current ? `* ${model}` : `  ${model}`);
+      }
+      console.log(`\n${models.length} models at ${baseUrl} · switch with: quorate provider set-model <id> [model]`);
+    });
+
+  providerCmd
+    .command("set-model <id> [model]")
+    .description("Change an api provider's model — pick from the live list when no model is given.")
+    .action(async (id: string, model: string | undefined) => {
+      const cwd = cwdFrom(program);
+      const configPath = findConfigPath(cwd);
+      if (!configPath) throw new Error("No .quorate.yml found. Run `quorate init` first.");
+      const config = loadConfig(configPath, cwd);
+      const existing = config.providers.find((entry) => entry.id === id);
+      if (!existing) throw new Error(`No provider "${id}" in ${configPath}.`);
+      if (existing.type !== "api") throw new Error(`Provider "${id}" is type "${existing.type}" — set-model applies to api providers.`);
+
+      let next = model;
+      if (!next) {
+        if (!stdin.isTTY || !stdout.isTTY) throw new Error("Pass a model name when not running interactively.");
+        const { models } = await modelsFor(id, config);
+        if (models.length === 0) {
+          const hint = existing.apiKeyEnv && !process.env[existing.apiKeyEnv] ? ` Set ${existing.apiKeyEnv} to list models.` : "";
+          throw new Error(`No models returned from ${existing.baseUrl}/models.${hint}`);
+        }
+        console.log(`${models.length} models at ${existing.baseUrl}:`);
+        next = await pickModelInteractive(models, existing.model);
+      }
+      if (!next || next === existing.model) {
+        console.log(`Model unchanged (${existing.model}).`);
+        return;
+      }
+      const providers = config.providers.map((entry) => (entry.id === id ? { ...entry, model: next } : entry));
+      writeFileSync(configPath, serializeConfig({ ...config, providers }), "utf8");
+      console.log(`Provider "${id}" model: ${existing.model} → ${next}`);
     });
 
   program

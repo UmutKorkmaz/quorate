@@ -163,6 +163,7 @@ export type SessionAction =
   | { type: "setLastReport"; report: CouncilReport | undefined }
   | { type: "setRoute"; role: string; providers: string[] }
   | { type: "clearRoute"; role?: string }
+  | { type: "setProviderModel"; providerId: string; model: string }
   | { type: "recordInput"; input: string }
   | { type: "setSessionMeta"; id: string; name: string }
   | { type: "clear" };
@@ -234,6 +235,16 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       delete rest[action.role];
       return { ...state, roleOverrides: Object.keys(rest).length ? rest : undefined };
     }
+    case "setProviderModel":
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          providers: state.config.providers.map((provider) =>
+            provider.id === action.providerId ? { ...provider, model: action.model } : provider
+          )
+        }
+      };
     case "recordInput":
       return {
         ...state,

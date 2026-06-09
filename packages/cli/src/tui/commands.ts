@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import {
+  fetchProviderModels,
   isEmptyReviewDiff,
   renderMarkdownReport,
   type CouncilMode,
@@ -339,6 +340,64 @@ export const baseCommandRegistry: SlashCommand[] = [
       text(
         ctx,
         `${role} now routes to ${provs.join(", ")} this session — /route reset to undo · persist by setting roles: on those providers in .quorate.yml.`
+      );
+    }
+  },
+  {
+    name: "models",
+    summary: "List an api provider's live models, or switch its model",
+    argHint: "<provider> [model]",
+    async run(ctx, args) {
+      const [providerId, ...rest] = splitWords(args);
+      const state = ctx.getState();
+      const apiProviders = state.config.providers.filter((p) => p.type === "api");
+      if (!providerId) {
+        if (apiProviders.length === 0) {
+          text(ctx, "No api providers configured — add one with `quorate provider add <id> --preset <name>`.");
+          return;
+        }
+        text(
+          ctx,
+          ["api providers:", ...apiProviders.map((p) => `  ${p.id} — ${p.model}`), "Usage: /models <provider> [model]"].join("\n")
+        );
+        return;
+      }
+      const provider = apiProviders.find((p) => p.id === providerId);
+      if (!provider) {
+        text(ctx, `No api provider "${providerId}".${apiProviders.length ? ` Try: ${apiProviders.map((p) => p.id).join(", ")}` : ""}`);
+        return;
+      }
+      const requested = rest.join(" ").trim();
+      const apiKey = provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : undefined;
+      const models = await fetchProviderModels(provider.baseUrl, apiKey);
+      if (requested) {
+        // Session-level switch; persisting stays explicit via provider set-model.
+        if (models.length > 0 && !models.includes(requested)) {
+          text(ctx, `"${requested}" is not in the live list (${models.length} models) — switching anyway.`);
+        }
+        ctx.dispatch({ type: "setProviderModel", providerId, model: requested });
+        text(
+          ctx,
+          `${providerId} model: ${provider.model} → ${requested} (this session) — persist with \`quorate provider set-model ${providerId} ${requested}\`.`
+        );
+        return;
+      }
+      if (models.length === 0) {
+        const hint = provider.apiKeyEnv && !apiKey ? ` Set ${provider.apiKeyEnv} to authenticate.` : "";
+        text(ctx, `No models returned from ${provider.baseUrl}/models.${hint}`);
+        return;
+      }
+      const shown = models.slice(0, 30);
+      text(
+        ctx,
+        [
+          `${models.length} models at ${provider.baseUrl}:`,
+          ...shown.map((m) => (m === provider.model ? `* ${m}` : `  ${m}`)),
+          models.length > shown.length ? `… and ${models.length - shown.length} more` : "",
+          `Switch with /models ${providerId} <model>`
+        ]
+          .filter(Boolean)
+          .join("\n")
       );
     }
   },
