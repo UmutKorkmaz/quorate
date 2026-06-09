@@ -1,0 +1,69 @@
+{
+  "name": "quorate-vscode",
+  "displayName": "Quorate — AI Review Council",
+  "description": "Convene Quorate's multi-agent AI review council on your current change, right inside VS Code.",
+  "version": "0.1.0",
+  "publisher": "umutkorkmaz",
+  "private": true,
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UmutKorkmaz/quorate.git",
+    "directory": "packages/vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Linters", "SCM Providers", "Other"],
+  "keywords": ["ai", "code review", "council", "pr review", "quorate"],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "quorate.reviewChanges",
+        "title": "Review Current Changes",
+        "category": "Quorate"
+      },
+      {
+        "command": "quorate.clearFindings",
+        "title": "Clear Findings",
+        "category": "Quorate"
+      }
+    ],
+    "configuration": {
+      "title": "Quorate",
+      "properties": {
+        "quorate.cliPath": {
+          "type": "string",
+          "default": "quorate",
+          "description": "Path to the quorate CLI, or just \"quorate\" if it is on your PATH (npm i -g quorate)."
+        },
+        "quorate.baseBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "Base branch to diff the current branch against when reviewing."
+        },
+        "quorate.providers": {
+          "type": "string",
+          "default": "",
+          "description": "Comma-separated provider ids to enable for the review (blank = use .quorate.yml)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "compile": "tsc --noEmit -p tsconfig.json",
+    "watch": "node esbuild.mjs --watch",
+    "package": "node esbuild.mjs --production && vsce package --no-dependencies",
+    "vscode:prepublish": "node esbuild.mjs --production"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.27.7",
+    "typescript": "^5.9.3"
+  }
+}

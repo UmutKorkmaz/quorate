@@ -16,21 +16,11 @@ reviewers over a diff or a plan, deduplicates and ranks their findings, and retu
 (`claude`, `codex`, `qwen`, …) and any OpenAI-compatible endpoint, ships an
 interactive shell, and runs in CI as a GitHub Action.
 
-```text
-  ◷ review   ⌘ claude+codex   ⎇ git working tree   ⠹ 00:08
+<div align="center">
 
-  heuristic:maintainer                              ✔ 2 findings
-  claude:security                                      ⠹ running
-  codex:qa                                                queued
+<img src="https://raw.githubusercontent.com/UmutKorkmaz/quorate/main/packages/website/public/verdict-card.png" alt="Quorate verdict card — reviewers reach one FAIL verdict with file-and-line evidence" width="540" />
 
-  ╭─ FAIL · 3 findings · agreement 67% ──────────────────────────╮
-  │ ████████████████░░░░░░░░                                     │
-  │ FAIL HIGH  src/auth.ts:42                                    │
-  │ Missing authorization check — token introspection result is │
-  │ trusted without verifying the audience claim.               │
-  │ agreed by claude, codex · confidence 0.82                   │
-  ╰──────────────────────────────────────────────────────────────╯
-```
+</div>
 
 ## Install
 

@@ -22,21 +22,9 @@ high-risk documentation (August 2026). See [docs/LAUNCH.md](./docs/LAUNCH.md).
 ![node](https://img.shields.io/node/v/quorate.svg)
 [![license](https://img.shields.io/npm/l/quorate.svg)](./LICENSE)
 
-```text
- ╭──────────────────────────────────────────────────────────────╮
- │ › /re                                                         │
- ╰──────────────────────────────────────────────────────────────╯
-   ▸ /review     Review the loaded/current diff   [subject]
-     /rerun      Run the last request again
-     /roles      Limit council roles
-   ↑/↓ select · Tab complete · Enter run · Esc close
-
-  ⠹ reviewing · review · claude+codex · diff loaded · 00:08 · esc to interrupt
-
-   FAIL  src/auth.ts:42
-   HIGH  Missing authorization check — token introspection result is trusted
-         without verifying the audience claim.
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/UmutKorkmaz/quorate/main/packages/website/public/verdict-card.png" alt="Quorate verdict card — several reviewers reach one FAIL verdict with file-and-line evidence" width="560" />
+</p>
 
 ---
 
