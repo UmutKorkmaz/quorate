@@ -16,17 +16,17 @@ export const EMULATOR_PHASES: ReadonlyArray<{
   },
   {
     id: "palette",
-    label: "Slash palette",
+    label: "Palette",
     caption: "Type /re, press Tab, and run repeatable review workflows without leaving the shell."
   },
   {
     id: "diff",
-    label: "Diff loaded",
+    label: "Diff",
     caption: "Summarizes the working tree before reviewers spend tokens on it."
   },
   {
     id: "running",
-    label: "Council running",
+    label: "Running",
     caption: "Fans out to available providers, tracks progress, and keeps interrupt controls visible."
   },
   {

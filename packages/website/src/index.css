@@ -391,11 +391,11 @@ body {
 }
 
 .terminal-phase-rail-pills {
-  @apply flex flex-wrap items-center gap-1.5;
+  @apply flex items-stretch gap-1.5;
 }
 
 .terminal-phase-pill {
-  @apply rounded-full border border-quorate-border bg-quorate-elevated/50 px-2.5 py-0.5 font-mono text-[10px] text-quorate-dim transition-all duration-200 hover:border-quorate-accent/40 hover:text-quorate-muted cursor-pointer;
+  @apply flex-1 min-w-0 whitespace-nowrap rounded-full border border-quorate-border bg-quorate-elevated/50 px-2 py-1 text-center font-mono text-[11px] text-quorate-dim transition-colors duration-200 hover:border-quorate-accent/40 hover:text-quorate-muted cursor-pointer;
 }
 
 .terminal-phase-pill--active {
@@ -1353,7 +1353,7 @@ body {
 
 /* The signature verdict chip — the loudest object on the page. */
 .verdict-chip {
-  @apply inline-flex items-center gap-2 rounded-xl px-4 py-2 font-mono text-lg font-bold tracking-wide;
+  @apply inline-flex items-center gap-2 rounded-xl px-5 py-2.5 font-mono text-xl font-bold tracking-wide;
   animation: var(--animate-verdict-settle);
 }
 .verdict-chip--pass {

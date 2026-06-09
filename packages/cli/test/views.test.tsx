@@ -51,7 +51,7 @@ function failReport(): CouncilReport {
 }
 
 describe("VerdictReport", () => {
-  it("renders the verdict, severity, agreement meter, and runs footer", () => {
+  it("renders the reviewers, the verdict chip, severity, and the agreement meter", () => {
     const { lastFrame, unmount } = render(<VerdictReport report={failReport()} />);
     const frame = lastFrame() ?? "";
     expect(frame).toContain("FAIL");
@@ -59,7 +59,7 @@ describe("VerdictReport", () => {
     expect(frame).toContain("src/auth/introspect.ts:42");
     expect(frame).toContain("agreement"); // agreement header + meter
     expect(frame).toContain("agreed by claude, codex, qwen, droid");
-    expect(frame).toContain("runs");
+    expect(frame).toContain("claude:architect"); // reviewer row at the top
     unmount();
   });
 
@@ -161,7 +161,7 @@ describe("truncateLine", () => {
 });
 
 describe("VerdictReport degraded errors", () => {
-  it("summarizes failed runs with a dim /logs hint, not the raw per-provider error", () => {
+  it("marks a failed reviewer in its row and keeps the raw error out of the card", () => {
     const report = failReport();
     report.metadata.degraded = true;
     report.verdict = "warn";
@@ -181,17 +181,17 @@ describe("VerdictReport degraded errors", () => {
     ];
     const { lastFrame, unmount } = render(<VerdictReport report={report} />);
     const frame = lastFrame() ?? "";
-    // The cleanup: one dim summary line pointing at /logs, not the raw error.
-    expect(frame).toContain("1 provider run failed");
-    expect(frame).toContain("/logs to inspect");
-    // The old per-provider truncated error line is gone from the verdict card.
+    // The failing reviewer is marked failed in its own row…
+    expect(frame).toContain("codex:qa");
+    expect(frame).toContain("failed");
+    // …but the raw per-provider error never leaks into the verdict card.
     expect(frame).not.toContain("missing API key");
-    // The runs footer still marks the failing lane with its provider id.
-    expect(frame).toContain("codex");
+    // …and the footer points at /logs to read each agent.
+    expect(frame).toContain("/logs to read each agent");
     unmount();
   });
 
-  it("pluralizes the failed-runs summary and excludes skipped runs", () => {
+  it("marks error and interrupted reviewers as failed but skipped ones as skipped", () => {
     const report = failReport();
     report.providerResults = [
       { providerId: "claude", role: "architect", status: "error", summary: "", findings: [], durationMs: 1000, providerType: "cli", error: "boom" },
@@ -200,8 +200,9 @@ describe("VerdictReport degraded errors", () => {
     ];
     const { lastFrame, unmount } = render(<VerdictReport report={report} />);
     const frame = lastFrame() ?? "";
-    // error + interrupted count; skipped is excluded.
-    expect(frame).toContain("2 provider runs failed");
+    // error + interrupted each render as failed; skipped renders as skipped.
+    expect((frame.match(/failed/g) ?? []).length).toBe(2);
+    expect(frame).toContain("skipped");
     unmount();
   });
 });

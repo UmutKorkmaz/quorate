@@ -194,23 +194,6 @@ export function DiffCard({ label, diff }: { label: string; diff: string }): Reac
   );
 }
 
-/** The "runs" attribution footer: each provider with the roles it covered and the
- *  worst status across those roles, so a crashed provider is NOT painted green. */
-function runsFooter(
-  results: ProviderResult[]
-): Array<{ id: string; roles: string[]; status: ProviderRunStatus }> {
-  const byProvider = new Map<string, { roles: string[]; status: ProviderRunStatus }>();
-  for (const result of results) {
-    const entry = byProvider.get(result.providerId) ?? { roles: [], status: "ok" as ProviderRunStatus };
-    if (!entry.roles.includes(result.role)) entry.roles.push(result.role);
-    if (result.status !== "ok") entry.status = result.status; // surface the worst
-    byProvider.set(result.providerId, entry);
-  }
-  return [...byProvider.entries()].map(([id, value]) => ({ id, roles: value.roles, status: value.status }));
-}
-
-/** The verdict hero: the verdict banner, a degraded callout when relevant, the
- *  finding cards, and the runs footer — the design's report view. */
 /** Per-finding tier word + color, derived from severity (mock's FAIL/WARN/… prefix). */
 const FINDING_TIER: Record<string, { word: string; color: string }> = {
   critical: { word: "FAIL", color: PALETTE.fail },
@@ -273,14 +256,41 @@ export function VerdictReport({
 
   return (
     <Box flexDirection="column" marginY={1}>
-      <Box flexDirection="column" borderStyle="round" borderColor={vColor} paddingX={1} width={cardWidth}>
-        <Text>
-          <Text color={vColor} bold>{verdict.toUpperCase()}</Text>
+      <Box flexDirection="column" borderStyle="round" borderColor={PALETTE.dim} paddingX={1} width={cardWidth}>
+        {/* Reviewers — who ran, and what each one raised. */}
+        {report.providerResults.map((r, i) => {
+          const failed = r.status !== "ok" && r.status !== "skipped";
+          const count = r.findings.length;
+          const right = failed
+            ? { text: `${g.cross} failed`, color: PALETTE.fail }
+            : r.status === "skipped"
+              ? { text: `${g.separator} skipped`, color: PALETTE.dim }
+              : count > 0
+                ? { text: `${g.check} ${count} finding${count === 1 ? "" : "s"}`, color: PALETTE.pass }
+                : { text: `${g.check} done`, color: PALETTE.dim };
+          return (
+            <Box key={`${r.providerId}-${r.role}-${i}`} width={innerWidth} justifyContent="space-between">
+              <Text>
+                <Text color="white">{r.providerId}</Text>
+                <Text color={PALETTE.dim}>{`:${r.role}`}</Text>
+              </Text>
+              <Text color={right.color}>{right.text}</Text>
+            </Box>
+          );
+        })}
+
+        <Text color={PALETTE.dim}>{"─".repeat(innerWidth)}</Text>
+
+        {/* The verdict — the binding decision, as a chip. */}
+        <Box alignItems="center">
+          <Box borderStyle="round" borderColor={vColor} paddingX={1}>
+            <Text color={vColor} bold>{verdict.toUpperCase()}</Text>
+          </Box>
           <Text color={PALETTE.dim}>
-            {` ${g.separator} ${findings.length} finding${findings.length === 1 ? "" : "s"}`}
+            {`  ${findings.length} finding${findings.length === 1 ? "" : "s"}`}
             {showAgreement ? ` ${g.separator} agreement ${agreementPct}%` : ""}
           </Text>
-        </Text>
+        </Box>
 
         {showAgreement ? <AgreementBar pct={agreementPct} width={innerWidth} /> : null}
 
@@ -290,17 +300,6 @@ export function VerdictReport({
             <Text color={PALETTE.command} bold>/use available</Text>
           </Text>
         ) : null}
-
-        {(() => {
-          const failed = report.providerResults.filter(
-            (result) => result.status !== "ok" && result.status !== "skipped"
-          );
-          return failed.length > 0 ? (
-            <Text color={PALETTE.dim}>
-              {`${g.warn} ${failed.length} provider run${failed.length === 1 ? "" : "s"} failed ${g.separator} /logs to inspect`}
-            </Text>
-          ) : null;
-        })()}
 
         {findings.length === 0 && !degraded ? (
           <Text color={PALETTE.dim}>No findings.</Text>
@@ -340,21 +339,8 @@ export function VerdictReport({
       </Box>
 
       <Box marginTop={1}>
-        <Text color={PALETTE.dim}>{"runs  "}</Text>
-        {runsFooter(report.providerResults).map(({ id, roles, status }) => {
-          const ok = status === "ok";
-          const skipped = status === "skipped";
-          const idColor = ok ? PALETTE.pass : skipped ? PALETTE.dim : PALETTE.fail;
-          const mark = ok ? g.check : skipped ? g.separator : g.cross;
-          return (
-            <Text key={id}>
-              <Text color={idColor}>{id} </Text>
-              <Text color={PALETTE.dim}>{`${roles.join("+")} ${mark}  `}</Text>
-            </Text>
-          );
-        })}
         <Text color={PALETTE.dim}>
-          {`${g.separator} ${(slowestMs / 1000).toFixed(1)}s ${g.separator} /markdown <path> to export`}
+          {`${(slowestMs / 1000).toFixed(1)}s ${g.separator} /markdown <path> to export`}
           {report.providerResults.length > 0 ? ` ${g.separator} /logs to read each agent` : ""}
         </Text>
       </Box>
