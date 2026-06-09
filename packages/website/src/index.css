@@ -391,11 +391,11 @@ body {
 }
 
 .terminal-phase-rail-pills {
-  @apply flex items-stretch gap-1.5;
+  @apply grid grid-cols-5 gap-1.5;
 }
 
 .terminal-phase-pill {
-  @apply flex-1 min-w-0 whitespace-nowrap rounded-full border border-quorate-border bg-quorate-elevated/50 px-2 py-1 text-center font-mono text-[11px] text-quorate-dim transition-colors duration-200 hover:border-quorate-accent/40 hover:text-quorate-muted cursor-pointer;
+  @apply block w-full truncate rounded-full border border-quorate-border bg-quorate-elevated/50 px-2 py-1 text-center font-mono text-[11px] text-quorate-dim transition-colors duration-200 hover:border-quorate-accent/40 hover:text-quorate-muted cursor-pointer;
 }
 
 .terminal-phase-pill--active {
@@ -404,7 +404,7 @@ body {
 }
 
 .terminal-phase-paused {
-  @apply ml-auto font-mono text-[10px] tracking-wide text-quorate-amber uppercase;
+  @apply mt-1 block text-right font-mono text-[10px] tracking-wide text-quorate-amber uppercase;
 }
 
 .terminal-phase-progress {

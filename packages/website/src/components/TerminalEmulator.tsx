@@ -270,8 +270,8 @@ function PhaseRail({
             {item.label}
           </button>
         ))}
-        {paused ? <span className="terminal-phase-paused">paused</span> : null}
       </div>
+      {paused ? <span className="terminal-phase-paused">paused</span> : null}
       <div className="terminal-phase-progress" aria-hidden>
         <span
           className="terminal-phase-progress-fill"
