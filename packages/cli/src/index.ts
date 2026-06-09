@@ -83,7 +83,12 @@ function printProviderTable(config: QuorateConfig): void {
   console.log("Provider\tEnabled\tAvailable\tCommand\tPath");
   for (const provider of config.providers) {
     const detectedProvider = byId.get(provider.id);
-    const available = provider.type === "mock" ? true : detectedProvider?.available ?? false;
+    const available =
+      provider.type === "mock"
+        ? true
+        : provider.type === "api"
+          ? Boolean(provider.model)
+          : detectedProvider?.available ?? false;
     console.log(
       [
         provider.id,

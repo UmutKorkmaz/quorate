@@ -53,7 +53,7 @@ export function Hero() {
             <span className="text-quorate-fail">FAIL</span> — with file-and-line evidence.
           </p>
 
-          <div className="mt-9 flex flex-col items-center gap-4 sm:flex-row lg:items-start">
+          <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row lg:items-start lg:justify-start">
             <CopyButton text="npm install -g quorate" variant="hero" />
             <a
               href="#see-it-in-action"

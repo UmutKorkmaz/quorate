@@ -78,7 +78,13 @@ export function formatDoctorReport(state: ShellState, options: DoctorFormatOptio
     } else if (snapshot.runnable) {
       glyph = g.check;
       paletteColor = PALETTE.ok;
-      detail = `runnable${snapshot.installHint ? ` ${g.separator} ${snapshot.installHint}` : ""}`;
+      const kind = snapshot.type === "api" ? "configured api" : "runnable";
+      detail = `${kind}${snapshot.installHint ? ` ${g.separator} ${snapshot.installHint}` : ""}`;
+    } else if (snapshot.type === "api") {
+      // api providers are configured endpoints, not PATH binaries.
+      glyph = g.warn;
+      paletteColor = PALETTE.needsProfile;
+      detail = `api ${g.separator} set a model and its key env ${g.arrow} quorate provider add --preset`;
     } else if (snapshot.available) {
       glyph = g.warn;
       paletteColor = PALETTE.needsProfile;

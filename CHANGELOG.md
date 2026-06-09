@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-09
+
+### Added
+
+- **9 new API provider presets** for `quorate provider add --preset`: openai, tgi,
+  litellm, together, groq, fireworks, deepseek, mistral, gemini (15 total) — any
+  OpenAI-compatible endpoint, keys read from env vars.
+- Website provider section now tells the full story: local agent CLIs (all 17),
+  local model servers, hosted gateways, and the always-on heuristic.
+
+### Fixed
+
+- **API providers are now correctly classified as runnable.** They were treated
+  like PATH-detected CLIs, so a configured `type: api` provider showed as "not on
+  PATH" and never counted as runnable. Readiness now checks model + key env, and
+  `doctor`/`/inspect`/preflight label api providers as configured or missing-env.
+
 ## [0.5.2] - 2026-06-09
 
 ### Fixed

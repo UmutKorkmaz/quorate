@@ -31214,6 +31214,86 @@ var PROVIDER_PRESETS = {
     model: "anthropic/claude-sonnet-4.6",
     apiKeyEnv: "OPENROUTER_API_KEY",
     roles: ["architect", "security"]
+  },
+  openai: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o",
+    apiKeyEnv: "OPENAI_API_KEY",
+    roles: ["architect", "security"],
+    timeoutMs: 12e4
+  },
+  tgi: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:8080/v1",
+    model: "tgi",
+    roles: ["qa", "maintainer"],
+    timeoutMs: 18e4
+  },
+  litellm: {
+    type: "api",
+    enabled: true,
+    baseUrl: "http://localhost:4000/v1",
+    model: "gpt-4o",
+    apiKeyEnv: "LITELLM_API_KEY",
+    roles: ["qa", "maintainer"],
+    timeoutMs: 12e4
+  },
+  together: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.together.ai/v1",
+    model: "Qwen/Qwen2.5-Coder-32B-Instruct",
+    apiKeyEnv: "TOGETHER_API_KEY",
+    roles: ["qa", "maintainer", "performance"],
+    timeoutMs: 12e4
+  },
+  groq: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.groq.com/openai/v1",
+    model: "llama-3.3-70b-versatile",
+    apiKeyEnv: "GROQ_API_KEY",
+    roles: ["qa", "performance"],
+    timeoutMs: 12e4
+  },
+  fireworks: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+    model: "accounts/fireworks/models/qwen2p5-coder-32b-instruct",
+    apiKeyEnv: "FIREWORKS_API_KEY",
+    roles: ["qa", "maintainer"],
+    timeoutMs: 12e4
+  },
+  deepseek: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.deepseek.com",
+    model: "deepseek-chat",
+    apiKeyEnv: "DEEPSEEK_API_KEY",
+    roles: ["architect", "qa"],
+    timeoutMs: 12e4
+  },
+  mistral: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.mistral.ai/v1",
+    model: "codestral-latest",
+    apiKeyEnv: "MISTRAL_API_KEY",
+    roles: ["qa", "maintainer"],
+    timeoutMs: 12e4
+  },
+  gemini: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    model: "gemini-2.0-flash",
+    apiKeyEnv: "GEMINI_API_KEY",
+    roles: ["qa", "performance"],
+    timeoutMs: 12e4
   }
 };
 var PROVIDER_PRESET_NAMES = Object.keys(PROVIDER_PRESETS);

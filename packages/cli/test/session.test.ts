@@ -86,6 +86,29 @@ describe("availableProviderIds and isRunnableProvider", () => {
     expect(isRunnableProvider(codex, true)).toBe(true);
     expect(isRunnableProvider(codex, false)).toBe(false);
   });
+
+  it("treats an api provider as runnable from config (model + key env), not PATH", () => {
+    const api = {
+      id: "gw",
+      type: "api" as const,
+      enabled: true,
+      baseUrl: "https://example.test/v1",
+      model: "some-model",
+      apiKeyEnv: "QUORATE_TEST_KEY",
+      roles: ["qa"]
+    };
+    delete process.env.QUORATE_TEST_KEY;
+    // No model configured -> never runnable.
+    expect(isRunnableProvider({ ...api, model: undefined })).toBe(false);
+    // Model present but the named key env is unset -> not runnable.
+    expect(isRunnableProvider(api)).toBe(false);
+    // Key env present -> runnable regardless of PATH availability.
+    process.env.QUORATE_TEST_KEY = "secret";
+    expect(isRunnableProvider(api, false)).toBe(true);
+    delete process.env.QUORATE_TEST_KEY;
+    // An api provider that names no key env is runnable on its model alone.
+    expect(isRunnableProvider({ ...api, apiKeyEnv: undefined })).toBe(true);
+  });
 });
 
 describe("withProviderSelection", () => {

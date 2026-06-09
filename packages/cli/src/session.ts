@@ -55,6 +55,7 @@ export interface SessionState {
 
 export interface ProviderSnapshot {
   id: string;
+  type: "mock" | "cli" | "api";
   active: boolean;
   available: boolean;
   runnable: boolean;
@@ -171,6 +172,9 @@ export function statusText(state: StatusStateLike): string {
 
 function providerSpawnStatus(snapshot: ProviderSnapshot): string {
   if (snapshot.id === "heuristic") return "built-in (always available)";
+  if (snapshot.type === "api") {
+    return snapshot.runnable ? "configured api endpoint" : "api — set a model and its key env";
+  }
   if (!snapshot.available) return `not on PATH${snapshot.installHint ? ` — install ${snapshot.installHint}` : ""}`;
   if (snapshot.runnable) return `spawnable${snapshot.path ? ` (${snapshot.path})` : ""}`;
   return "needs headless profile — enable args in .quorate.yml (see .quorate.example.yml)";
@@ -413,7 +417,13 @@ export function isRunnableProvider(
   provider: QuorateConfig["providers"][number],
   available = true
 ): boolean {
-  return provider.type === "mock" || (available && (provider.args?.length ?? 0) > 0 && Boolean(provider.inputMode));
+  if (provider.type === "mock") return true;
+  // An api provider is runnable when it's configured — a model plus, if it names
+  // an apiKeyEnv, that env var being set. PATH detection does not apply to it.
+  if (provider.type === "api") {
+    return Boolean(provider.model) && (!provider.apiKeyEnv || Boolean(process.env[provider.apiKeyEnv]));
+  }
+  return available && (provider.args?.length ?? 0) > 0 && Boolean(provider.inputMode);
 }
 
 export function availableProviderIds(
@@ -460,6 +470,13 @@ export function providerRunPreflight(
     .filter((provider) => provider.enabled !== false)
     .flatMap((provider) => {
       if (provider.type === "mock") return [];
+      if (provider.type === "api") {
+        if (!provider.model) return [`${provider.id} (api) has no model configured.`];
+        if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv]) {
+          return [`${provider.id} (api) is missing its key — set ${provider.apiKeyEnv}.`];
+        }
+        return [];
+      }
       if (!available.get(provider.id)) return [`${provider.id} is not available on PATH.`];
       if (!isRunnableProvider(provider, true)) return [`${provider.id} has no runnable headless profile.`];
       return [];
@@ -475,11 +492,19 @@ export function providerSnapshots(state: ShellState): ProviderSnapshot[] {
       ? state.activeProviders.includes(provider.id)
       : provider.enabled !== false;
     const detectedProvider = detectedById.get(provider.id);
-    const available = provider.type === "mock" ? true : detectedProvider?.available ?? false;
+    // PATH detection only applies to cli providers; api "availability" is being
+    // configured (a model), and mock is always available.
+    const available =
+      provider.type === "mock"
+        ? true
+        : provider.type === "api"
+          ? Boolean(provider.model)
+          : detectedProvider?.available ?? false;
     const runnable = isRunnableProvider(provider, available);
 
     return {
       id: provider.id,
+      type: provider.type,
       active: isActive,
       available,
       runnable,
