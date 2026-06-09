@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.5.1
+      - uses: UmutKorkmaz/quorate@v0.5.2
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
 
@@ -160,7 +160,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.5.1
+- uses: UmutKorkmaz/quorate@v0.5.2
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:
