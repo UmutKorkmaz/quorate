@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
@@ -69,6 +70,27 @@ export interface SpawnResult {
 
 function workspaceCwd(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+/** The git repo root for `cwd` (diff paths are relative to it), or `cwd` itself. */
+export function gitRoot(cwd: string): Promise<string> {
+  return new Promise((resolve) => {
+    const child = spawn("git", ["rev-parse", "--show-toplevel"], { cwd, shell: false });
+    let out = "";
+    child.on("error", () => resolve(cwd));
+    child.stdout.on("data", (c: Buffer) => (out += c.toString()));
+    child.on("close", (code) => resolve(code === 0 && out.trim() ? out.trim() : cwd));
+  });
+}
+
+/** Resolve a finding's (possibly repo-root-relative) file path to one that exists. */
+export function resolveFindingPath(file: string, bases: string[]): string {
+  if (path.isAbsolute(file)) return file;
+  for (const base of bases) {
+    const candidate = path.join(base, file);
+    if (existsSync(candidate)) return candidate;
+  }
+  return path.join(bases[0] ?? "", file);
 }
 
 export function cmpVersion(a: string, b: string): number {

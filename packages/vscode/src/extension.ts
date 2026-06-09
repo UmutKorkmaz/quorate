@@ -1,9 +1,10 @@
-import * as path from "node:path";
 import * as vscode from "vscode";
 import {
   cmpVersion,
+  gitRoot,
   MIN_CLI,
   resolveCli,
+  resolveFindingPath,
   runCli,
   runJson,
   runReviewStreaming,
@@ -52,6 +53,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   let diffSource: DiffSource = context.workspaceState.get<DiffSource>("quorate.diffSource") ?? { kind: "working" };
   let enabled: Set<string> | null = null;
+  // Bases for resolving finding paths: git repo root first (diff paths are relative
+  // to it), then the workspace folder. Set when a review runs.
+  let reviewBases: string[] = [];
 
   const setContext = (key: string, value: boolean): void => void vscode.commands.executeCommand("setContext", key, value);
 
@@ -87,10 +91,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return env;
   }
 
-  function applyReport(report: CouncilReport, cwd: string): void {
+  function applyReport(report: CouncilReport, bases: string[]): void {
     results.setReport(report);
     diagnostics.clear();
-    for (const [file, diags] of findingDiagnostics(report, cwd)) diagnostics.set(vscode.Uri.file(file), diags);
+    for (const [file, diags] of findingDiagnostics(report, bases)) diagnostics.set(vscode.Uri.file(file), diags);
     const v = report.verdict;
     statusBar.text = v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS";
   }
@@ -102,6 +106,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       return;
     }
     const cwd = folder.uri.fsPath;
+    reviewBases = [await gitRoot(cwd), cwd];
     let sourceArgs: string[];
     try {
       sourceArgs = await toReviewArgs(diffSource, cwd);
@@ -135,7 +140,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           void vscode.window.showWarningMessage(`Quorate: ${msg}`);
           return;
         }
-        applyReport(outcome.report, cwd);
+        applyReport(outcome.report, reviewBases);
       }
     );
   }
@@ -250,7 +255,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("quorate.openFinding", async (file: string, line: number) => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
-      const uri = vscode.Uri.file(path.isAbsolute(file) ? file : path.join(cwd, file));
+      const bases = reviewBases.length ? reviewBases : [cwd];
+      const uri = vscode.Uri.file(resolveFindingPath(file, bases));
       const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
       const pos = new vscode.Position(Math.max(0, line - 1), 0);
       editor.selection = new vscode.Selection(pos, pos);

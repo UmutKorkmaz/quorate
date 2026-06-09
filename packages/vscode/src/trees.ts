@@ -1,5 +1,5 @@
-import * as path from "node:path";
 import * as vscode from "vscode";
+import { resolveFindingPath } from "./cli";
 import type { CouncilReport, DoctorReport, Finding, ProviderConfig, Severity } from "./cli";
 
 const SEVERITY_ICON: Record<Severity, string> = {
@@ -302,7 +302,7 @@ export class StatusTree implements vscode.TreeDataProvider<StatusNode> {
   }
 }
 
-export function findingDiagnostics(report: CouncilReport, cwd: string): Map<string, vscode.Diagnostic[]> {
+export function findingDiagnostics(report: CouncilReport, bases: string[]): Map<string, vscode.Diagnostic[]> {
   const byFile = new Map<string, vscode.Diagnostic[]>();
   const sevMap: Record<Severity, vscode.DiagnosticSeverity> = {
     critical: vscode.DiagnosticSeverity.Error,
@@ -320,7 +320,7 @@ export function findingDiagnostics(report: CouncilReport, cwd: string): Map<stri
       sevMap[f.severity]
     );
     diag.source = "quorate";
-    const target = path.isAbsolute(f.file) ? f.file : path.join(cwd, f.file);
+    const target = resolveFindingPath(f.file, bases);
     const list = byFile.get(target) ?? [];
     list.push(diag);
     byFile.set(target, list);
