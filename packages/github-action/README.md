@@ -65,7 +65,7 @@ Then pass the key through as an environment variable:
 ```
 
 Generate provider entries with `quorate provider add <id> --preset openrouter …`
-(see the [provider catalog](../../docs/providers-research.md)). Which model covers
+(run `quorate provider presets` for the full list). Which model covers
 which role is the `roles:` field per provider; tune it with `/route` locally before
 committing.
 

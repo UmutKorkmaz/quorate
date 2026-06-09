@@ -236,8 +236,8 @@ quorate provider add reviewer --type api \
 ```
 
 Presets cover **ollama · lmstudio · vllm · llamacpp · hf-router · openrouter** —
-see [`docs/providers-research.md`](./docs/providers-research.md) for the full catalog
-(ports, models, gateways, and example councils).
+run `quorate provider presets` for the full list, or see
+[`.quorate.example.yml`](./.quorate.example.yml) for ports, models, and example councils.
 
 ## Terminal & theming
 

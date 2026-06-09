@@ -12,7 +12,7 @@ export const defaultCouncils = [
 
 /**
  * Ready-to-use `type: api` provider templates for `quorate provider add --preset`.
- * Mirrors the presets documented in .quorate.example.yml and docs/providers-research.md.
+ * Mirrors the presets documented in .quorate.example.yml.
  * Each is an id-less ProviderConfig; the CLI assembles it with the chosen id and overrides.
  */
 export const PROVIDER_PRESETS: Record<string, Omit<ProviderConfig, "id">> = {
