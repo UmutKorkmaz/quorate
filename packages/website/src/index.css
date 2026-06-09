@@ -170,7 +170,7 @@ body {
 /* ── Terminal emulator (homepage) ─────────────────────────────── */
 
 .terminal-emulator {
-  @apply relative mx-auto max-w-4xl;
+  @apply relative mx-auto w-full max-w-4xl;
 }
 
 .terminal-emulator-glow {
