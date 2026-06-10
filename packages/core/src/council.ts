@@ -277,8 +277,13 @@ export async function runCouncil(
     at: new Date().toISOString()
   });
 
+  // Carry per-role guidance (from config/packs) into every provider prompt.
+  const reviewRequest: CouncilRequest = config.roleGuidance
+    ? { ...request, roleGuidance: config.roleGuidance }
+    : request;
+
   const settled = await Promise.allSettled(
-    lanes.map((lane) => runProviderWithEvents(lane.provider, lane.role, request, ctx))
+    lanes.map((lane) => runProviderWithEvents(lane.provider, lane.role, reviewRequest, ctx))
   );
 
   const providerResults: ProviderResult[] = settled.map((outcome, index) => {

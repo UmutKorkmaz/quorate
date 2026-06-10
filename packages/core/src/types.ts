@@ -50,6 +50,8 @@ export interface QuorateConfig {
   github: GithubConfig;
   /** Optional master agent that semantically merges duplicate findings. */
   merge?: { provider: string };
+  /** Per-role reviewer guidance appended to that role's prompt (packs fill this). */
+  roleGuidance?: Record<string, string>;
 }
 
 export interface DetectedProvider {
@@ -71,6 +73,8 @@ export interface CouncilRequest {
     title?: string;
     url?: string;
   };
+  /** Per-role reviewer guidance (from config/pack), injected into prompts. */
+  roleGuidance?: Record<string, string>;
 }
 
 export interface Finding {

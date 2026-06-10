@@ -5,6 +5,8 @@ export * from "./council.js";
 export * from "./heuristics.js";
 export * from "./merge.js";
 export * from "./models.js";
+export * from "./packs.js";
+export * from "./prompt.js";
 export * from "./providers.js";
 export * from "./render.js";
 export * from "./review.js";
