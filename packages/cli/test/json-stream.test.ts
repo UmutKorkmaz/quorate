@@ -118,3 +118,19 @@ describe("runCouncilJsonStream", () => {
     expect(finalReport.summary).toBe(report.summary);
   });
 });
+describe("chunk passthrough (QUORATE_JSON_CHUNKS)", () => {
+  it("drops provider/chunk by default and includes it when opted in", async () => {
+    const { councilEventToNdjsonLine } = await import("../src/json-stream.js");
+    const chunk = {
+      type: "provider/chunk",
+      providerId: "claude",
+      role: "security",
+      stream: "stdout",
+      text: "analyzing auth.ts"
+    } as never;
+    expect(councilEventToNdjsonLine(chunk)).toBeNull();
+    const line = councilEventToNdjsonLine(chunk, true);
+    expect(line).toContain('"provider/chunk"');
+    expect(line).toContain("analyzing auth.ts");
+  });
+});

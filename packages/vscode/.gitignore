@@ -1,1 +1,4 @@
 *.vsix
+
+# Quorate session/report artifacts
+.quorate/

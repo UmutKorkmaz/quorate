@@ -71,11 +71,15 @@ export interface DoctorReport {
   config: ProviderConfig[];
 }
 
-/** A streamed NDJSON progress event (provider/started, provider/done, …). */
+/** A streamed NDJSON progress event (provider/started, provider/chunk, provider/done, …). */
 export interface StreamEvent {
   type: string;
   providerId?: string;
   role?: string;
+  /** provider/chunk: which stream the text came from. */
+  stream?: "stdout" | "stderr";
+  /** provider/chunk: the raw output text. */
+  text?: string;
   result?: { status: string; findings: Finding[]; durationMs?: number; error?: string };
 }
 
@@ -223,7 +227,12 @@ export async function runReviewStreaming(
 ): Promise<ReviewOutcome> {
   const { path: cli } = await resolveCli();
   return new Promise((resolve) => {
-    const child = spawn(cli, ["review", ...reviewArgs, "--json"], { cwd: workspaceCwd(), shell: false, env });
+    const child = spawn(cli, ["review", ...reviewArgs, "--json"], {
+      cwd: workspaceCwd(),
+      shell: false,
+      // Ask the CLI to pass through provider/chunk events for live lane streams.
+      env: { ...(env ?? process.env), QUORATE_JSON_CHUNKS: "1" }
+    });
     let buffer = "";
     let stderr = "";
     let report: CouncilReport | undefined;

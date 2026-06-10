@@ -87,6 +87,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Bases for resolving finding paths: git repo root first (diff paths are relative
   // to it), then the workspace folder. Set when a review runs.
   let reviewBases: string[] = [];
+  // One OutputChannel per reviewer lane (claude:security, …) — the "get into the
+  // terminal" view. Click a lane row in Results to open its live stream.
+  const laneChannels = new Map<string, vscode.OutputChannel>();
+
+  function laneChannel(key: string): vscode.OutputChannel {
+    let channel = laneChannels.get(key);
+    if (!channel) {
+      channel = vscode.window.createOutputChannel(`Quorate · ${key}`);
+      laneChannels.set(key, channel);
+      context.subscriptions.push(channel);
+    }
+    return channel;
+  }
 
   const setContext = (key: string, value: boolean): void => void vscode.commands.executeCommand("setContext", key, value);
 
@@ -155,10 +168,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     results.beginRun();
     void vscode.commands.executeCommand("quorate.results.focus");
 
+    for (const channel of laneChannels.values()) channel.clear();
+
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: "Quorate — convening the council…", cancellable: true },
       async (_p, token) => {
-        const outcome = await runReviewStreaming(sourceArgs, (e) => results.applyEvent(e), token, env);
+        const outcome = await runReviewStreaming(
+          sourceArgs,
+          (e) => {
+            results.applyEvent(e);
+            if (!e.providerId || !e.role) return;
+            const key = `${e.providerId}:${e.role}`;
+            if (e.type === "provider/started") {
+              laneChannel(key).appendLine(`── ${key} started ─────────────────────────`);
+            } else if (e.type === "provider/chunk" && e.text) {
+              laneChannel(key).append(e.text);
+            } else if (e.type === "provider/done") {
+              const status = e.result?.status ?? "done";
+              laneChannel(key).appendLine(`\n── ${key} ${status} (${e.result?.findings.length ?? 0} findings) ──`);
+            }
+          },
+          token,
+          env
+        );
         if (token.isCancellationRequested) {
           statusBar.text = "$(law) Quorate";
           results.setReport(undefined);
@@ -326,6 +358,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const pos = new vscode.Position(Math.max(0, line - 1), 0);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+    }),
+    vscode.commands.registerCommand("quorate.openLane", (key: string) => {
+      laneChannel(key).show(true);
     }),
     vscode.commands.registerCommand("quorate.clearFindings", () => {
       diagnostics.clear();

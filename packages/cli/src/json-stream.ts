@@ -23,11 +23,11 @@ export function formatJsonStreamProgress(event: CouncilEvent): string | undefine
   }
 }
 
-/** NDJSON line for stdout. Provider chunks are omitted to keep stdout machine-parseable. */
-export function councilEventToNdjsonLine(event: CouncilEvent): string | null {
-  if (event.type === "provider/chunk" || event.type === "council/done") {
-    return null;
-  }
+/** NDJSON line for stdout. Provider chunks are omitted by default to keep stdout
+ *  lean; opt in (QUORATE_JSON_CHUNKS=1) for live per-lane streaming UIs. */
+export function councilEventToNdjsonLine(event: CouncilEvent, includeChunks = false): string | null {
+  if (event.type === "council/done") return null;
+  if (event.type === "provider/chunk" && !includeChunks) return null;
   return JSON.stringify(event);
 }
 
@@ -60,10 +60,10 @@ export function createJsonStreamSink(): JsonStreamSink & JsonStreamOutput {
   };
 }
 
-export function handleCouncilEvent(event: CouncilEvent, sink: JsonStreamSink): void {
+export function handleCouncilEvent(event: CouncilEvent, sink: JsonStreamSink, includeChunks = false): void {
   const progress = formatJsonStreamProgress(event);
   if (progress) sink.writeStderr(progress);
-  const line = councilEventToNdjsonLine(event);
+  const line = councilEventToNdjsonLine(event, includeChunks);
   if (line) sink.writeStdout(line);
 }
 
@@ -76,8 +76,10 @@ export async function runCouncilWithJsonStream(
   config: QuorateConfig,
   sink: JsonStreamSink
 ): Promise<CouncilReport> {
+  // Opt-in chunk passthrough for streaming UIs (e.g. the VS Code extension).
+  const includeChunks = ["1", "true", "yes"].includes((process.env.QUORATE_JSON_CHUNKS ?? "").toLowerCase());
   const report = await runCouncil(request, config, {
-    onEvent: (event) => handleCouncilEvent(event, sink)
+    onEvent: (event) => handleCouncilEvent(event, sink, includeChunks)
   });
   finalizeJsonStream(report, sink);
   return report;

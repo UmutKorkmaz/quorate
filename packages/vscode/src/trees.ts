@@ -204,6 +204,7 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
               ? `failed — ${lp.error.split("\n")[0].slice(0, 80)}`
               : "failed";
       if (lp.error) item.tooltip = new vscode.MarkdownString(`\`\`\`\n${lp.error}\n\`\`\``);
+      item.command = { command: "quorate.openLane", title: "Watch Agent Output", arguments: [node.key] };
       return item;
     }
     const r = this.report!;
@@ -238,6 +239,7 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
       if (node.error) {
         item.tooltip = new vscode.MarkdownString(`**${node.id}:${node.role} ${node.status}**\n\n\`\`\`\n${node.error}\n\`\`\``);
       }
+      item.command = { command: "quorate.openLane", title: "Open Agent Output", arguments: [`${node.id}:${node.role}`] };
       return item;
     }
     if (node.kind === "fileGroup") {

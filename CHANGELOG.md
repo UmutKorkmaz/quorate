@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-10
+
+### Added
+
+- **`quorate fix`** — delegate a finding to a write-mode agent (claude/codex/agy)
+  in your real terminal, snapshotted and revertible: the pre-fix state is pinned
+  before the agent runs, `--revert` restores tracked files, deletes agent-created
+  files, and re-applies your own pre-fix work — refusing when the tree changed
+  since (`--force` to override). Offers a council re-review after each fix.
+  `/fix` in the shell lists fixable findings.
+- **Live model selection.** `quorate provider models <id|preset>` lists models
+  from any OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, OpenAI,
+  OpenRouter, Groq, Together, HF router, DeepSeek, Mistral, Gemini, …);
+  `provider set-model` and `provider add` pick interactively; `/models` switches
+  a provider model in the shell.
+- **VS Code:** full sidebar app (Council / Results / Status), diff-source picker,
+  add-provider with live model picking, API keys in the OS keychain, per-reviewer
+  live output channels (click a lane to watch the agent), find-path resolution,
+  and clear failure reasons per reviewer.
+- Opt-in NDJSON chunk passthrough (`QUORATE_JSON_CHUNKS=1`) for streaming UIs.
+
+### Changed
+
+- **GitHub Action: runner-aware `auto` mode** — on GitHub-hosted runners only
+  `api` providers (+ heuristic) run, so local CLI agents never produce doomed
+  lanes in CI. Marketplace branding added.
+- One-shot `quorate review` persists `.quorate/last-report.json` (feeds `fix`).
+
+### Fixed
+
+- API providers are classified as runnable from config (model + key env), not
+  PATH; `doctor`/`/inspect` label them correctly.
+
 ## [0.6.1] - 2026-06-09
 
 ### Changed
