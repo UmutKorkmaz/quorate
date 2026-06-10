@@ -284,7 +284,53 @@ const healthcare: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech, web, healthcare };
+const mobile: QuoratePack = {
+  id: "mobile",
+  description: "Mobile (iOS / Android) app security review council",
+  councils: [
+    "insecure-storage",
+    "platform-config",
+    "network-security",
+    "crypto-secrets",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "insecure-storage":
+      "Audit every location where sensitive values — session tokens, passwords, PINs, API keys, biometric hashes — are persisted on the device. " +
+      "Flag any use of UserDefaults or NSUserDefaults for secret storage; these are unencrypted plist files readable by any process with filesystem access after a jailbreak. " +
+      "Verify that iOS Keychain items use kSecAttrAccessibleWhenUnlocked or kSecAttrAccessibleAfterFirstUnlock, never kSecAttrAccessibleAlways. " +
+      "On Android, require EncryptedSharedPreferences or Android Keystore-backed storage rather than plain SharedPreferences for secret values. " +
+      "Also flag clipboard (UIPasteboard / ClipboardManager) usage that copies sensitive values, which can be read by any background app.",
+    "platform-config":
+      "Review the AndroidManifest.xml and iOS entitlements/Info.plist for dangerous configuration flags. " +
+      "Flag every android:exported='true' on Activity, Service, BroadcastReceiver, or ContentProvider that lacks a corresponding android:permission guard — any installed app can invoke these components. " +
+      "Flag android:debuggable='true' in production manifests; it allows arbitrary code injection via adb. " +
+      "Flag iOS get-task-allow entitlement set to true, which enables debugger attachment on release builds. " +
+      "Audit WebView configurations: setJavaScriptEnabled(true) and addJavascriptInterface() open the app to XSS-driven native code execution; " +
+      "every JS↔native bridge method must be reviewed for injection risk and the allowedOrigins must be enforced.",
+    "network-security":
+      "Verify that all network traffic uses HTTPS. " +
+      "Flag android:usesCleartextTraffic='true', usesCleartextTraffic='true' in network security config, NSAllowsArbitraryLoads in ATS, " +
+      "and any http:// URL that is not localhost/127.0.0.1/10.0.2.2. " +
+      "Flag NSExceptionAllowsInsecureHTTPLoads in per-domain ATS exceptions — these silently allow plaintext traffic to named hosts. " +
+      "Audit TLS validation: empty checkServerTrusted implementations, trustAllCerts patterns, " +
+      "AllowAllHostnameVerifier usage, and URLSession delegates that call completionHandler(.useCredential) " +
+      "unconditionally all disable certificate validation and enable man-in-the-middle attacks.",
+    "crypto-secrets":
+      "Identify hardcoded credentials (API keys, secrets, tokens, access keys) embedded as string literals in Swift, Kotlin, or Objective-C source. " +
+      "These values end up in compiled binaries and can be extracted by static analysis or strings inspection. " +
+      "Secrets must be loaded from build configuration, environment variables, or a remote secret-fetching mechanism at runtime. " +
+      "Audit cryptographic randomness: arc4random (without _uniform), java.util.Random, and Math.random are not cryptographically secure and must not be used " +
+      "to generate keys, IVs, nonces, salts, OTPs, or session tokens — use SecRandomCopyBytes (iOS) or SecureRandom (Android). " +
+      "Flag weak hashing algorithms (MD5, SHA-1) applied to sensitive values.",
+    "maintainer":
+      "Assess overall code structure, test coverage, and long-term maintainability of the mobile application. " +
+      "Identify missing input validation, absent error handling, unclear security comments, dead code, and any patterns " +
+      "that will make the app's security posture hard to audit or extend."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech, web, healthcare, mobile };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

@@ -121,6 +121,9 @@ agents you enable). `quorate packs` lists them.
 | **AI / LLM apps** | `llm` | 12 | prompt injection, output→eval, raw-HTML output, tool-arg validation, PII in prompts |
 | **CI/CD + supply chain** | `ci` | 10 | pull_request_target, expression injection, unpinned actions, install scripts, pipe-to-shell |
 | **Fintech / PCI** | `fintech` | 10 | money as float, card data in logs, CVV stored, unverified webhooks, financial PII |
+| **Web / API (OWASP)** | `web` | 10 | SSRF, command injection, path traversal, XSS, mass assignment, CORS, CSRF, deserialization |
+| **Healthcare / HIPAA** | `healthcare` | 10 | PHI in logs/URLs/responses, plaintext PHI, patient-record IDOR, clinical credentials |
+| **Mobile (iOS/Android)** | `mobile` | 10 | insecure storage, cleartext/ATS, exported components, disabled TLS, debuggable builds |
 
 Every pack ships a vulnerable/clean demo corpus proving each class is detected
 with zero false positives on clean code, a docs page (`/docs/<pack>`), and a

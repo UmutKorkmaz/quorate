@@ -1,0 +1,27 @@
+diff --git a/android/app/src/main/res/xml/network_security_config.xml b/android/app/src/main/res/xml/network_security_config.xml
+--- a/android/app/src/main/res/xml/network_security_config.xml
++++ b/android/app/src/main/res/xml/network_security_config.xml
+@@ -0,0 +1,12 @@
++<?xml version="1.0" encoding="utf-8"?>
++<network-security-config>
++    <base-config cleartextTrafficPermitted="true">
++        <trust-anchors>
++            <certificates src="system"/>
++        </trust-anchors>
++    </base-config>
++    <domain-config usesCleartextTraffic="true">
++        <domain includeSubdomains="true">api.example.com</domain>
++    </domain-config>
++</network-security-config>
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -1,5 +1,8 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+     <application
++        android:usesCleartextTraffic="true"
+         android:label="@string/app_name">
++        <!-- BAD: cleartext HTTP also referenced in code -->
++        <!-- endpoint: http://api.example.com/data -->
+     </application>
+ </manifest>

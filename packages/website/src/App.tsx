@@ -21,6 +21,7 @@ import Ci from "./pages/docs/Ci";
 import Fintech from "./pages/docs/Fintech";
 import Web from "./pages/docs/Web";
 import Healthcare from "./pages/docs/Healthcare";
+import Mobile from "./pages/docs/Mobile";
 
 export function App() {
   return (
@@ -46,6 +47,7 @@ export function App() {
           <Route path="fintech" element={<Fintech />} />
           <Route path="web" element={<Web />} />
           <Route path="healthcare" element={<Healthcare />} />
+          <Route path="mobile" element={<Mobile />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

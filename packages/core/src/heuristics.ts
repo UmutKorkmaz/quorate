@@ -1420,6 +1420,166 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       });
     }
 
+    // ── Mobile (iOS / Android) checks — mobile source files only ────────────
+    // Gated to .swift / .kt / .kts / .m / .mm / .plist and AndroidManifest.xml
+    // so they never fire on existing web, fintech, healthcare, or benign fixtures.
+
+    const isMobile =
+      /\.(swift|kt|kts|m|mm|plist)$/.test(line.file ?? "") ||
+      (line.file ?? "").endsWith("AndroidManifest.xml");
+
+    if (
+      isMobile &&
+      /(UserDefaults|NSUserDefaults|SharedPreferences|getSharedPreferences)[^;\n]*(token|password|secret|apiKey|api_key|pin|credential)/i.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Secret stored in insecure local storage",
+        body:
+          "A secret (token, password, API key, PIN, or credential) is stored in UserDefaults/NSUserDefaults or SharedPreferences, " +
+          "which are unencrypted and readable after a jailbreak or root. " +
+          "Use the iOS Keychain (with kSecAttrAccessibleWhenUnlocked) or Android EncryptedSharedPreferences / Keystore instead."
+      });
+    }
+
+    if (
+      isMobile &&
+      /(apiKey|api_key|secret|password|token|accessKey)\s*[:=]\s*["'][A-Za-z0-9_\-+\/]{12,}["']/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Hardcoded secret in mobile source",
+        body:
+          "A secret value (API key, token, password, or access key) is hardcoded as a string literal in mobile source code. " +
+          "String literals are embedded in the compiled binary and can be extracted by static analysis. " +
+          "Load secrets from build configuration (BuildConfig, Info.plist keys injected at build time) or a secure remote configuration service."
+      });
+    }
+
+    if (
+      isMobile &&
+      /usesCleartextTraffic\s*=\s*["']?true|NSAllowsArbitraryLoads|http:\/\/(?!localhost|127\.0\.0\.1|10\.0\.2\.2)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Cleartext HTTP / ATS exception",
+        body:
+          "Cleartext HTTP traffic is explicitly permitted, or an ATS (App Transport Security) exception allows arbitrary HTTP loads. " +
+          "All production traffic must use HTTPS. Remove usesCleartextTraffic=true, NSAllowsArbitraryLoads, and non-loopback http:// URLs."
+      });
+    }
+
+    if (
+      isMobile &&
+      /android:exported\s*=\s*["']true["']/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Exported Android component",
+        body:
+          "An Android component (Activity, Service, Receiver, or Provider) is exported without an android:permission guard. " +
+          "Any installed application can invoke this component. " +
+          "Add android:permission with a signature-level permission, or set android:exported='false' if external access is not required."
+      });
+    }
+
+    if (
+      isMobile &&
+      /setJavaScriptEnabled\s*\(\s*true\s*\)|addJavascriptInterface\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "WebView JavaScript bridge enabled",
+        body:
+          "JavaScript is enabled on a WebView, or a Java/Kotlin object is exposed via addJavascriptInterface. " +
+          "This opens a JS↔native bridge surface: any script running in the WebView (including injected via XSS) can call native methods. " +
+          "Audit every @JavascriptInterface-annotated method; restrict the WebView to trusted origins only."
+      });
+    }
+
+    if (
+      isMobile &&
+      /trustAllCerts|allowAllHostnameVerifier|\.disableEvaluation|NSExceptionAllowsInsecureHTTPLoads|checkServerTrusted\s*\([^)]*\)\s*(throws\s+\w+\s*)?\{\s*\}/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "TLS certificate validation disabled",
+        body:
+          "TLS certificate validation is explicitly bypassed — either by an empty checkServerTrusted body, " +
+          "a trustAllCerts / AllowAllHostnameVerifier implementation, or an NSExceptionAllowsInsecureHTTPLoads ATS exception. " +
+          "This enables man-in-the-middle attacks. Restore proper certificate validation and use certificate pinning for critical endpoints."
+      });
+    }
+
+    if (
+      isMobile &&
+      /(Log\.(d|v|i|e|w)|NSLog|os_log|print)\s*\([^)]*(password|token|secret|apiKey|creditCard|ssn|otp)/i.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Sensitive data written to device logs",
+        body:
+          "A sensitive value (password, token, secret, API key, credit card, SSN, or OTP) is passed to a device logging function. " +
+          "Device logs (Logcat, os_log, NSLog) are readable by other apps with READ_LOGS permission or via adb. " +
+          "Remove sensitive values from log statements; log only non-identifying surrogate keys or event types."
+      });
+    }
+
+    if (
+      isMobile &&
+      /android:debuggable\s*=\s*["']true["']|<key>\s*get-task-allow\s*<\/key>/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Debuggable build flag enabled",
+        body:
+          "The application manifest or entitlements enable debugging in what may be a release build. " +
+          "android:debuggable='true' allows arbitrary code injection and memory inspection via adb. " +
+          "get-task-allow=true (iOS) allows debugger attachment. " +
+          "These flags must be absent or false in production builds; ensure your release build configuration strips them."
+      });
+    }
+
+    if (
+      isMobile &&
+      /(Math\.random|java\.util\.Random|\bRandom\s*\(\s*\)|arc4random\b(?!_uniform))[^;\n]*(key|token|iv|nonce|salt|otp|password)/i.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Insecure randomness for a security value",
+        body:
+          "A non-cryptographic random number generator (Math.random, java.util.Random, arc4random) is used to generate a security-sensitive value " +
+          "such as a key, token, IV, nonce, salt, OTP, or password. " +
+          "These generators are not cryptographically secure and produce predictable output. " +
+          "Use SecRandomCopyBytes (iOS/macOS) or java.security.SecureRandom (Android) for all cryptographic randomness."
+      });
+    }
+
+    if (
+      isMobile &&
+      /kSecAttrAccessibleAlways\b|kSecAttrAccessibleAlwaysThisDeviceOnly\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Weak Keychain accessibility",
+        body:
+          "A Keychain item uses kSecAttrAccessibleAlways or kSecAttrAccessibleAlwaysThisDeviceOnly, " +
+          "which keeps the item accessible even when the device is locked. " +
+          "Use kSecAttrAccessibleWhenUnlocked or kSecAttrAccessibleAfterFirstUnlock so that the item is " +
+          "protected by the device passcode and the Secure Enclave when the screen is locked."
+      });
+    }
+
   }
 
   for (const line of removedLines(request.diff ?? "")) {

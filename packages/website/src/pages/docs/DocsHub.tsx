@@ -59,6 +59,11 @@ const CARDS = [
     to: "/docs/healthcare",
     title: "Healthcare / HIPAA",
     desc: "PHI-protection council + ten deterministic heuristics covering PHI in logs, plaintext PHI, PHI in URLs, external transmission, API exposure, analytics leakage, insecure direct object references, hardcoded clinical credentials, over-broad queries, and weak encryption. Zero-setup HIPAA review."
+  },
+  {
+    to: "/docs/mobile",
+    title: "Mobile (iOS / Android)",
+    desc: "MASVS-aligned mobile security council + ten deterministic heuristics covering insecure local storage, hardcoded secrets, cleartext HTTP, exported Android components, WebView bridge exposure, disabled TLS validation, sensitive data in logs, debuggable builds, insecure randomness, and weak Keychain accessibility. Zero-setup iOS/Android review."
   }
 ] as const;
 

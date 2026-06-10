@@ -36,5 +36,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/web":
     "Quorate Web pack — OWASP-aligned web security council and ten deterministic heuristics for SSRF, command injection, path traversal, reflected XSS, open redirect, mass assignment, permissive CORS, CSRF, insecure deserialization, and weak cryptographic algorithms.",
   "/docs/healthcare":
-    "Quorate Healthcare pack — PHI-protection and HIPAA Security Rule-aligned council and ten deterministic heuristics for PHI in logs, plaintext PHI literals, PHI in URLs, external PHI transmission, API over-exposure, analytics leakage, insecure direct object references on patient records, hardcoded clinical-system credentials, over-broad PHI queries, and weak or disabled encryption for PHI."
+    "Quorate Healthcare pack — PHI-protection and HIPAA Security Rule-aligned council and ten deterministic heuristics for PHI in logs, plaintext PHI literals, PHI in URLs, external PHI transmission, API over-exposure, analytics leakage, insecure direct object references on patient records, hardcoded clinical-system credentials, over-broad PHI queries, and weak or disabled encryption for PHI.",
+  "/docs/mobile":
+    "Quorate Mobile pack — MASVS-aligned iOS/Android security council and ten deterministic heuristics for insecure local storage, hardcoded secrets in mobile source, cleartext HTTP and ATS exceptions, exported Android components, WebView JavaScript bridge exposure, disabled TLS certificate validation, sensitive data in device logs, debuggable release builds, insecure randomness for security values, and weak Keychain accessibility."
 };
