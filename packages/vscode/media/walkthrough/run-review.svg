@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="800" height="300">
+  <rect width="800" height="300" fill="#0b0f17" rx="12"/>
+  <!-- Main card -->
+  <rect x="40" y="24" width="720" height="252" rx="8" fill="#121826" stroke="#2a3348" stroke-width="1.5"/>
+  <!-- Verdict badge area -->
+  <rect x="40" y="24" width="720" height="64" rx="8" fill="#1a2234"/>
+  <rect x="40" y="76" width="720" height="12" fill="#1a2234"/>
+  <!-- Verdict WARN -->
+  <rect x="64" y="36" width="88" height="28" rx="6" fill="#fbbf24" opacity="0.15"/>
+  <text x="108" y="55" text-anchor="middle" font-family="system-ui, sans-serif" font-size="15" fill="#fbbf24" font-weight="700">WARN</text>
+  <text x="176" y="55" font-family="system-ui, sans-serif" font-size="12" fill="#7c8597">· 3 findings · 2 reviewers</text>
+  <!-- Summary -->
+  <text x="64" y="108" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8">Potential security gaps and missing test coverage detected.</text>
+  <!-- Reviewer chips -->
+  <rect x="64" y="120" width="100" height="22" rx="11" fill="#1a2234" stroke="#2a3348" stroke-width="1"/>
+  <circle cx="76" cy="131" r="4" fill="#34d399"/>
+  <text x="86" y="135" font-family="system-ui, sans-serif" font-size="10" fill="#e2e8f0">claude:security</text>
+  <rect x="174" y="120" width="108" height="22" rx="11" fill="#1a2234" stroke="#2a3348" stroke-width="1"/>
+  <circle cx="186" cy="131" r="4" fill="#34d399"/>
+  <text x="196" y="135" font-family="system-ui, sans-serif" font-size="10" fill="#e2e8f0">claude:maintainer</text>
+  <!-- File group -->
+  <text x="64" y="162" font-family="monospace" font-size="11" fill="#6e97ff">src/auth/login.ts</text>
+  <!-- Finding row 1 -->
+  <rect x="80" y="170" width="620" height="28" rx="4" fill="#1a2234"/>
+  <rect x="88" y="178" width="52" height="14" rx="3" fill="#fb7185" opacity="0.2"/>
+  <text x="114" y="189" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#fb7185" font-weight="600">CRITICAL</text>
+  <text x="148" y="189" font-family="system-ui, sans-serif" font-size="11" fill="#e2e8f0">Timing-unsafe token comparison</text>
+  <!-- Finding row 2 -->
+  <rect x="80" y="204" width="620" height="28" rx="4" fill="#1a2234"/>
+  <rect x="88" y="212" width="44" height="14" rx="3" fill="#f87171" opacity="0.2"/>
+  <text x="110" y="223" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#f87171" font-weight="600">HIGH</text>
+  <text x="140" y="223" font-family="system-ui, sans-serif" font-size="11" fill="#e2e8f0">Missing rate limiting on /api/login</text>
+  <!-- Re-run button -->
+  <rect x="601" y="250" width="110" height="16" rx="4" fill="#6e97ff" opacity="0.2"/>
+  <text x="656" y="262" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#6e97ff">Re-run review</text>
+</svg>

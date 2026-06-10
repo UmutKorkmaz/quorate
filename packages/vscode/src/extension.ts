@@ -14,6 +14,7 @@ import {
 } from "./cli";
 import { diffSourceLabel, pickDiffSource, toReviewArgs, type DiffSource } from "./diff";
 import { CouncilTree, findingDiagnostics, ResultsTree, StatusTree } from "./trees";
+import { VerdictPanel } from "./verdict-panel";
 
 interface Preset {
   name: string;
@@ -163,6 +164,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     for (const [file, diags] of findingDiagnostics(report, bases)) diagnostics.set(vscode.Uri.file(file), diags);
     const v = report.verdict;
     statusBar.text = v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS";
+    statusBar.command = "quorate.openVerdict";
+    VerdictPanel.instance.show(report, context.extensionUri);
   }
 
   async function runReviewCommand(): Promise<void> {
@@ -324,6 +327,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     diagnostics,
     statusBar,
     councilView,
+    { dispose: () => VerdictPanel.instance.dispose() },
 
     councilView.onDidChangeCheckboxState((e) => {
       const set = new Set<string>(enabled ?? council.defaultEnabledIds());
@@ -337,6 +341,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand("quorate.run", () => runReviewCommand()),
+    vscode.commands.registerCommand("quorate.openVerdict", () => {
+      if (!lastReport) {
+        void vscode.window.showInformationMessage("Quorate: no review results yet — run a review first.");
+        return;
+      }
+      VerdictPanel.instance.show(lastReport, context.extensionUri);
+    }),
     vscode.commands.registerCommand("quorate.refresh", () => reload()),
     vscode.commands.registerCommand("quorate.runDoctor", () => reload()),
     vscode.commands.registerCommand("quorate.addProvider", async () => {
