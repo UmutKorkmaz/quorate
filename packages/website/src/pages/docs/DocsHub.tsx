@@ -19,6 +19,11 @@ const CARDS = [
     to: "/docs/solana",
     title: "Solana / Anchor",
     desc: "Solana/Anchor-aware council + ten deterministic on-chain heuristics. Zero-setup sealevel security review."
+  },
+  {
+    to: "/docs/evm",
+    title: "EVM / Solidity",
+    desc: "Solidity-aware council + ten deterministic on-chain heuristics. Zero-setup smart-contract security review."
   }
 ] as const;
 

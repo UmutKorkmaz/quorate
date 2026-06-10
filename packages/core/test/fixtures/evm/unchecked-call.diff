@@ -1,0 +1,16 @@
+diff --git a/contracts/Forwarder.sol b/contracts/Forwarder.sol
+--- a/contracts/Forwarder.sol
++++ b/contracts/Forwarder.sol
+@@ -1,6 +1,12 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++contract Forwarder {
++    function forward(address target, bytes calldata data) external {
++        target.call(abi.encodePacked(data));
++    }
++
++    function notify(address target) external {
++        target.call(bytes("ping"));
++    }
++}

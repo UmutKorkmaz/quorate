@@ -1,0 +1,20 @@
+diff --git a/contracts/Vault.sol b/contracts/Vault.sol
+--- a/contracts/Vault.sol
++++ b/contracts/Vault.sol
+@@ -1,6 +1,14 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++contract Vault {
++    mapping(address => uint256) public deposits;
++
++    function deposit() external payable {
++        deposits[msg.sender] += msg.value;
++    }
++
++    function withdraw(uint256 amount) external {
++        deposits[msg.sender] -= amount;
++        (bool ok,) = msg.sender.call{value: amount}("");
++        require(ok, "transfer failed");
++    }
++}

@@ -227,6 +227,140 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
           "a secret key embedded in source is committed forever; load from env/secret manager, never inline."
       });
     }
+
+    // ── EVM / Solidity checks (added-lines, .sol files only) ──────────────
+
+    if (line.file?.endsWith(".sol") && /\btx\.origin\b/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "tx.origin used for authorization",
+        body:
+          "tx.origin is the original transaction sender and is phishable — a malicious contract can relay a call on " +
+          "behalf of the victim. Use msg.sender for authorization instead."
+      });
+    }
+
+    if (line.file?.endsWith(".sol") && /\.delegatecall\s*\(/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "delegatecall to untrusted target",
+        body:
+          "delegatecall executes external code in this contract's storage context. If the target address is " +
+          "attacker-controlled it can overwrite arbitrary storage slots or drain funds."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".sol") &&
+      /\bselfdestruct\s*\(|\bsuicide\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "selfdestruct present",
+        body:
+          "selfdestruct can permanently destroy the contract and force-send ether to any address, bypassing receive " +
+          "hooks. Its use is deprecated in EIP-6049; consider whether this path can be triggered by an attacker."
+      });
+    }
+
+    if (line.file?.endsWith(".sol") && /\bassembly\s*\{/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Inline assembly",
+        body:
+          "Inline assembly bypasses Solidity type safety and memory/storage protections. Audit every slot access, " +
+          "pointer arithmetic, and control-flow path carefully."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".sol") &&
+      /block\.(timestamp|number)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "block.timestamp/number dependence",
+        body:
+          "block.timestamp can be manipulated by miners within a ~15-second window, and block.number is predictable. " +
+          "Avoid using either as a source of randomness or for tight deadlines."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".sol") &&
+      /for\s*\([^;]*;[^;]*\.length\s*;/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unbounded loop over dynamic array",
+        body:
+          "Iterating over an unbounded dynamic array consumes O(n) gas and can exceed the block gas limit as the " +
+          "array grows, causing a permanent DoS. Cap the iteration or use pagination."
+      });
+    }
+
+    if (line.file?.endsWith(".sol") && /pragma\s+solidity\s+\^/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Floating pragma",
+        body:
+          "A caret pragma (^0.x.y) allows compilation with any compatible minor release, producing non-reproducible " +
+          "bytecode. Pin the compiler version (e.g. pragma solidity 0.8.24;) for deterministic builds."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".sol") &&
+      /\.call\s*\{\s*value\s*:/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Ether send via low-level call",
+        body:
+          "Sending ether with a low-level .call{value:...}() is a reentrancy surface. Follow " +
+          "checks-effects-interactions ordering and guard the function with nonReentrant where appropriate."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".sol") &&
+      /\.call\s*\(/.test(text) &&
+      !/=\s*[^;]*\.call\s*\(/.test(text) &&
+      !text.includes("(bool")
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unchecked low-level call return",
+        body:
+          "A low-level .call() that is not assigned to a (bool, ...) tuple silently ignores failure — the callee " +
+          "may revert while the caller continues execution. Always check the success return value."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".sol") &&
+      /\b(?!payable\s*\()[a-zA-Z_]\w*\.(transfer|transferFrom)\s*\(/.test(text) &&
+      !text.includes("require(") &&
+      !text.includes("bool")
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unchecked ERC20 transfer return",
+        body:
+          "Non-standard ERC20 tokens return false instead of reverting on failure. Wrap calls in " +
+          "SafeERC20.safeTransfer / safeTransferFrom, or explicitly check the boolean return value."
+      });
+    }
   }
 
   for (const line of removedLines(request.diff ?? "")) {

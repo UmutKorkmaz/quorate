@@ -13,6 +13,7 @@ import GithubAction from "./pages/docs/GithubAction";
 import Faq from "./pages/docs/Faq";
 import ManualTesting from "./pages/docs/ManualTesting";
 import Solana from "./pages/docs/Solana";
+import Evm from "./pages/docs/Evm";
 
 export function App() {
   return (
@@ -30,6 +31,7 @@ export function App() {
           <Route path="faq" element={<Faq />} />
           <Route path="manual-testing" element={<ManualTesting />} />
           <Route path="solana" element={<Solana />} />
+          <Route path="evm" element={<Evm />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

@@ -33,7 +33,34 @@ const solana: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana };
+const evm: QuoratePack = {
+  id: "evm",
+  description: "EVM / Solidity security review council",
+  councils: [
+    "evm-security",
+    "access-control",
+    "reentrancy",
+    "external-calls",
+    "upgrade-safety",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "evm-security":
+      "Audit every Solidity file for tx.origin authentication, delegatecall to untrusted targets, selfdestruct usage, and unsafe inline assembly. Flag any pattern that bypasses EVM safety guarantees or exposes the contract to phishing or storage-collision attacks.",
+    "access-control":
+      "Verify that all state-changing functions are protected by onlyOwner, role-based access control, or explicit initializer guards. Confirm that initializers cannot be called twice and that privilege-granting functions are not exposed to arbitrary callers.",
+    "reentrancy":
+      "Enforce checks-effects-interactions ordering on every external call. Flag any function that sends ether or calls an external contract before finalising its own state updates, and confirm that nonReentrant guards are in place where needed.",
+    "external-calls":
+      "Review all low-level .call, .delegatecall, and ERC20 transfer/transferFrom invocations. Ensure return values are always checked, gas limits are considered, and the push-payment pattern is used to avoid DoS via gas-griefing.",
+    "upgrade-safety":
+      "Inspect proxied or upgradeable contracts for storage layout collisions, missing storage gaps in base contracts, double-initializer risks, and the use of immutable variables in proxy contexts. Confirm that the upgrade path is access-controlled.",
+    "maintainer":
+      "Assess overall code structure, test coverage, compiler version pinning, and long-term maintainability. Identify dead code, unclear error messages, missing natspec, and any patterns that will make the contract hard to audit or extend."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

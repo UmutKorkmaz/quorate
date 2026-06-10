@@ -1,0 +1,14 @@
+diff --git a/contracts/MemUtils.sol b/contracts/MemUtils.sol
+--- a/contracts/MemUtils.sol
++++ b/contracts/MemUtils.sol
+@@ -1,6 +1,14 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++library MemUtils {
++    function toUint256(bytes memory data, uint256 offset) internal pure returns (uint256 result) {
++        assembly {
++            result := mload(add(add(data, 0x20), offset))
++        }
++    }
++}

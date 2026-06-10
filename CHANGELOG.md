@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check — 10 distinct vulnerability classes proven by the demo corpus, clean
   Anchor/web3.js fixtures stay finding-free. New "Quorate for Solana / Anchor"
   docs page and a ready-to-copy GitHub Action example workflow.
+- **EVM / Solidity pack.** `quorate init --pack evm` scaffolds a Solidity review
+  council; 10 deterministic .sol heuristics (tx.origin auth, delegatecall,
+  selfdestruct, inline assembly, block.timestamp dependence, unbounded loops,
+  floating pragma, ether-via-call, unchecked low-level call, unchecked ERC20
+  transfer) with a vulnerable/clean corpus — proves the pack registry
+  generalizes (no CLI changes; adding a registry entry is enough). Docs page +
+  Action example included.
 
 ## [0.7.2] - 2026-06-10
 

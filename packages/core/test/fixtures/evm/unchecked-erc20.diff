@@ -1,0 +1,21 @@
+diff --git a/contracts/Swap.sol b/contracts/Swap.sol
+--- a/contracts/Swap.sol
++++ b/contracts/Swap.sol
+@@ -1,6 +1,16 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++interface IERC20 {
++    function transferFrom(address from, address to, uint256 amount) external returns (bool);
++    function transfer(address to, uint256 amount) external returns (bool);
++}
++
++contract Swap {
++    IERC20 public token;
++
++    constructor(address tokenAddr) { token = IERC20(tokenAddr); }
++
++    function deposit(uint256 amount) external {
++        token.transferFrom(msg.sender, address(this), amount);
++    }
++}

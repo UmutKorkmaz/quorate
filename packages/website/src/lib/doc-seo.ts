@@ -20,5 +20,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/manual-testing":
     "Manual testing checklist for Quorate — website, CLI shell, keyboard shortcuts, sessions, headless commands, and edge cases.",
   "/docs/solana":
-    "Quorate Solana pack — Anchor-aware review council and ten deterministic on-chain heuristics for sealevel security."
+    "Quorate Solana pack — Anchor-aware review council and ten deterministic on-chain heuristics for sealevel security.",
+  "/docs/evm":
+    "Quorate EVM pack — Solidity-aware review council and ten deterministic on-chain heuristics for smart-contract security."
 };
