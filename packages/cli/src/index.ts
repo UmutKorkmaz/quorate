@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { stdin, stdout } from "node:process";
@@ -18,9 +18,13 @@ import {
   runCouncil,
   serializeConfig,
   shouldFailForReport,
+  type CouncilReport,
   type QuorateConfig
 } from "@quorate/core";
 import { buildProvider } from "./provider-add.js";
+import { createFixSnapshot, finalizeFix, listFixes, revertFix } from "./fix.js";
+import { buildFixPrompt, extractHunk } from "./fix-prompt.js";
+import { runWriteAgent, WRITE_AGENT_PROFILES, writeAgentProfile } from "./fix-agent.js";
 import { readDiff } from "./diff.js";
 import { buildDoctorBundle } from "./doctor-bundle.js";
 import { printDoctor } from "./doctor.js";
@@ -428,6 +432,9 @@ export function buildProgram(): Command {
       if (options.writeJson) {
         writeFileSync(resolve(cwd, options.writeJson), `${JSON.stringify(report, null, 2)}\n`, "utf8");
       }
+      // Persist for `quorate fix` (same file the TUI writes).
+      mkdirSync(resolve(cwd, ".quorate"), { recursive: true });
+      writeFileSync(resolve(cwd, ".quorate", "last-report.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
 
       if (!options.json) {
         console.log(renderMarkdownReport(report));
@@ -435,6 +442,130 @@ export function buildProgram(): Command {
 
       if (shouldFailForReport(report, config.github)) {
         process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("fix")
+    .helpGroup("Review:")
+    .description("Delegate a finding to a write-mode agent — snapshotted, watchable, revertible.")
+    .option("--list", "List fixable findings from the last report (and past fixes)")
+    .option("--finding <n>", "Finding number (1-based) from --list")
+    .option("--provider <id>", `Write-mode agent: ${WRITE_AGENT_PROFILES.map((p) => p.id).join(", ")}`)
+    .option("--report <path>", "Report JSON to fix from (default: .quorate/last-report.json)")
+    .option("--revert [fixId]", "Undo a fix — the latest one when no id is given")
+    .option("--force", "Override the tree-changed guard when reverting")
+    .option("--no-review", "Skip the re-review offer after the fix")
+    .action(async (options) => {
+      const cwd = cwdFrom(program);
+
+      if (options.revert !== undefined) {
+        const fixId = typeof options.revert === "string" ? options.revert : undefined;
+        const meta = revertFix(cwd, fixId, { force: options.force });
+        console.log(`Reverted fix ${meta.fixId} (${meta.findingTitle}) — tracked files restored, agent-created files removed.`);
+        return;
+      }
+
+      const reportPath = resolve(cwd, options.report ?? ".quorate/last-report.json");
+      if (!existsSync(reportPath)) {
+        throw new Error(`No report at ${reportPath}. Run \`quorate review\` first (or pass --report <path>).`);
+      }
+      const report = JSON.parse(readFileSync(reportPath, "utf8")) as CouncilReport;
+      const findings = report.findings.filter((finding) => finding.file);
+      if (findings.length === 0) {
+        console.log("No fixable findings (none carry a file location).");
+        return;
+      }
+
+      if (options.list || !options.finding) {
+        console.log(`Fixable findings (${findings.length}):`);
+        for (const [i, finding] of findings.entries()) {
+          const loc = `${finding.file}${finding.line ? `:${finding.line}` : ""}`;
+          console.log(`  ${String(i + 1).padStart(2)}. [${finding.severity}] ${loc} — ${finding.title}`);
+        }
+        const past = listFixes(cwd);
+        if (past.length > 0) {
+          console.log("\nPast fixes:");
+          for (const meta of past) {
+            console.log(`  ${meta.fixId}  ${meta.status.padEnd(15)} ${meta.agentId}  ${meta.findingTitle}`);
+          }
+        }
+        if (options.list) return;
+      }
+
+      if (!stdin.isTTY || !stdout.isTTY) {
+        throw new Error("quorate fix is interactive — run it in a terminal (pass --finding and --provider).");
+      }
+      const { createInterface } = await import("node:readline/promises");
+      const rl = createInterface({ input: stdin, output: stdout });
+      try {
+        // 1. Pick the finding.
+        let index = options.finding ? Number(options.finding) : NaN;
+        if (!Number.isInteger(index) || index < 1 || index > findings.length) {
+          const answer = (await rl.question(`Finding [1-${findings.length}]: `)).trim();
+          index = Number(answer);
+          if (!Number.isInteger(index) || index < 1 || index > findings.length) {
+            throw new Error(`Pick a finding between 1 and ${findings.length}.`);
+          }
+        }
+        const finding = findings[index - 1];
+
+        // 2. Pick the agent (only ones actually on PATH).
+        const detected = new Map(detectAvailableProviders().map((p) => [p.id, p.available]));
+        const usable = WRITE_AGENT_PROFILES.filter((p) => detected.get(p.id));
+        if (usable.length === 0) {
+          throw new Error(`No write-mode agent found on PATH (looked for: ${WRITE_AGENT_PROFILES.map((p) => p.id).join(", ")}).`);
+        }
+        let profile = options.provider ? writeAgentProfile(options.provider) : undefined;
+        if (options.provider && !profile) {
+          throw new Error(`Unknown write-mode agent "${options.provider}". Available: ${usable.map((p) => p.id).join(", ")}.`);
+        }
+        if (!profile) {
+          for (const [i, p] of usable.entries()) console.log(`  ${i + 1}. ${p.id} — ${p.label}`);
+          const answer = (await rl.question(`Agent [1-${usable.length}]: `)).trim();
+          profile = usable[Number(answer) - 1] ?? usable.find((p) => p.id === answer);
+          if (!profile) throw new Error("No agent picked.");
+        }
+
+        // 3. Snapshot, build the prompt, confirm, hand the terminal over.
+        const meta = createFixSnapshot(cwd, finding, profile.id);
+        const treeDiff = (() => {
+          try {
+            return readDiff({}, cwd);
+          } catch {
+            return undefined;
+          }
+        })();
+        const prompt = buildFixPrompt(finding, extractHunk(treeDiff, finding.file, finding.line));
+        writeFileSync(resolve(cwd, ".quorate", "fix", meta.fixId, "prompt.md"), `${prompt}\n`, "utf8");
+
+        console.log(`\nSnapshot ${meta.fixId} taken${meta.treeDirty ? ` (pre-fix state pinned: ${meta.stashSha?.slice(0, 7)})` : " (tree was clean)"}.`);
+        console.log(`Delegating to ${profile.id}: [${finding.severity}] ${finding.file}${finding.line ? `:${finding.line}` : ""} — ${finding.title}`);
+        const go = (await rl.question(`Hand the terminal to ${profile.id} now? [Y/n]: `)).trim().toLowerCase();
+        if (go === "n" || go === "no") {
+          console.log(`Skipped. Prompt saved at .quorate/fix/${meta.fixId}/prompt.md`);
+          return;
+        }
+        rl.pause();
+        const exitCode = runWriteAgent(profile, prompt, cwd);
+        rl.resume();
+
+        // 4. Record what changed + offer revert and re-review.
+        const { changedStat, newUntracked } = finalizeFix(cwd, meta.fixId);
+        console.log(`\n${profile.id} exited (${exitCode}).`);
+        console.log(changedStat ? `Changes:\n${changedStat}` : "No tracked changes detected.");
+        if (newUntracked.length) console.log(`New files: ${newUntracked.join(", ")}`);
+        console.log(`Revert any time with: quorate fix --revert ${meta.fixId}`);
+
+        if (options.review !== false) {
+          const again = (await rl.question("Re-review the fix with the council? [y/N]: ")).trim().toLowerCase();
+          if (again === "y" || again === "yes") {
+            const { spawnSync } = await import("node:child_process");
+            spawnSync(process.execPath, [realpathSync(process.argv[1]), "review"], { cwd, stdio: "inherit" });
+          }
+        }
+      } finally {
+        rl.close();
       }
     });
 

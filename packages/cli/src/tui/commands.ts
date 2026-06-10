@@ -344,6 +344,46 @@ export const baseCommandRegistry: SlashCommand[] = [
     }
   },
   {
+    name: "fix",
+    summary: "Delegate a finding to a write-mode agent (snapshotted + revertible)",
+    argHint: "[finding#]",
+    run(ctx, args) {
+      const report = ctx.getState().lastReport;
+      const findings = (report?.findings ?? []).filter((finding) => finding.file);
+      if (findings.length === 0) {
+        text(ctx, "No fixable findings — run /review first (findings need a file location).");
+        return;
+      }
+      const n = Number(splitWords(args)[0]);
+      if (Number.isInteger(n) && n >= 1 && n <= findings.length) {
+        const finding = findings[n - 1];
+        text(
+          ctx,
+          [
+            `#${n} [${finding.severity}] ${finding.file}${finding.line ? `:${finding.line}` : ""} — ${finding.title}`,
+            "",
+            "The fixing agent needs your real terminal (it runs interactively). Exit the shell and run:",
+            `  quorate fix --finding ${n}`,
+            "It snapshots first; undo any fix with `quorate fix --revert`."
+          ].join("\n")
+        );
+        return;
+      }
+      text(
+        ctx,
+        [
+          `Fixable findings (${findings.length}):`,
+          ...findings.map(
+            (finding, i) =>
+              `  ${i + 1}. [${finding.severity}] ${finding.file}${finding.line ? `:${finding.line}` : ""} — ${finding.title}`
+          ),
+          "",
+          "Run `quorate fix --finding <n>` in your terminal (interactive, snapshotted, revertible)."
+        ].join("\n")
+      );
+    }
+  },
+  {
     name: "models",
     summary: "List an api provider's live models, or switch its model",
     argHint: "<provider> [model]",
