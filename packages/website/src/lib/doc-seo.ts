@@ -26,5 +26,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/iac":
     "Quorate IaC pack — Terraform and Kubernetes security council and ten deterministic heuristics for infrastructure misconfiguration review.",
   "/docs/llm":
-    "Quorate LLM app pack — AI-application security council and ten deterministic heuristics for prompt injection, data leakage, tool safety, and unsafe output review."
+    "Quorate LLM app pack — AI-application security council and ten deterministic heuristics for prompt injection, data leakage, tool safety, and unsafe output review.",
+  "/docs/move":
+    "Quorate Move pack — Sui/Aptos-aware security council and ten deterministic heuristics for resource safety, capability misuse, and access-control review."
 };

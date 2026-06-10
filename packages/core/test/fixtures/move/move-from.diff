@@ -1,0 +1,19 @@
+diff --git a/sources/staking.move b/sources/staking.move
+--- a/sources/staking.move
++++ b/sources/staking.move
+@@ -1,3 +1,20 @@
++module staking::staking {
++    use aptos_framework::signer;
++
++    struct StakeRecord has key {
++        amount: u64,
++        owner: address,
++    }
++
++    public fun unstake(account: &signer, target_addr: address): StakeRecord acquires StakeRecord {
++        // target_addr is caller-supplied — ownership not verified before removal
++        let record = move_from<StakeRecord>(target_addr);
++        let _ = account;
++        record
++    }
++}

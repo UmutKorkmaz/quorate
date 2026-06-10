@@ -1,0 +1,18 @@
+diff --git a/sources/fee_calc.move b/sources/fee_calc.move
+--- a/sources/fee_calc.move
++++ b/sources/fee_calc.move
+@@ -1,3 +1,16 @@
++module fee_calc::fee_calc {
++
++    /// Computes a fee percentage truncated to u8 — silent truncation if value > 255.
++    public fun compute_fee_pct(total: u64): u8 {
++        let pct = total / 100;
++        // Narrowing cast: if pct > 255 the high bits are silently discarded
++        (pct as u8)
++    }
++
++    /// Index cast for array access — can silently truncate large indices.
++    public fun truncated_index(idx: u64): u16 {
++        (idx as u16)
++    }
++}

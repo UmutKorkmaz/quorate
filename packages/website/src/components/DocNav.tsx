@@ -13,7 +13,8 @@ export const DOC_PATHS = [
   "/docs/solana",
   "/docs/evm",
   "/docs/iac",
-  "/docs/llm"
+  "/docs/llm",
+  "/docs/move"
 ] as const;
 
 export type DocPath = (typeof DOC_PATHS)[number];
@@ -31,7 +32,8 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/solana": "Solana / Anchor",
   "/docs/evm": "EVM / Solidity",
   "/docs/iac": "Infrastructure / IaC",
-  "/docs/llm": "AI / LLM apps"
+  "/docs/llm": "AI / LLM apps",
+  "/docs/move": "Move (Sui / Aptos)"
 };
 
 const SECTIONS = [
@@ -57,7 +59,8 @@ const SECTIONS = [
       { to: "/docs/solana", label: "Solana / Anchor" },
       { to: "/docs/evm", label: "EVM / Solidity" },
       { to: "/docs/iac", label: "Infrastructure / IaC" },
-      { to: "/docs/llm", label: "AI / LLM apps" }
+      { to: "/docs/llm", label: "AI / LLM apps" },
+      { to: "/docs/move", label: "Move (Sui / Aptos)" }
     ]
   },
   {

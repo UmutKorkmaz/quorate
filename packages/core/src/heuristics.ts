@@ -649,6 +649,148 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
           "external content before including it in a model context."
       });
     }
+
+    // ── Move (Sui / Aptos) checks — .move files only ─────────────────────────
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bpublic\s+entry\s+fun\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Public entry function",
+        body:
+          "public entry functions are externally callable by any account. Verify the caller is authorized — " +
+          "assert signer::address_of(account) == expected_admin or require a capability argument."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bborrow_global_mut\s*</.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Global storage mutated without owner check",
+        body:
+          "borrow_global_mut grants write access to a resource stored at an address. " +
+          "Confirm the target address equals signer::address_of(account) before calling to prevent unauthorized mutation."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bmove_from\s*</.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Resource removed from storage",
+        body:
+          "move_from removes a resource from global storage. " +
+          "Verify ownership — confirm the target address equals signer::address_of(account) before extracting."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /transfer::(public_)?share_object\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Object shared publicly",
+        body:
+          "transfer::share_object / transfer::public_share_object makes a Sui object shared: any transaction " +
+          "can pass it as &mut. Gate every mutation path on an explicit authorization check or capability."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bstruct\s+\w+\s+has\b[^\{]*\bcopy\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Struct has copy ability",
+        body:
+          "A struct with the copy ability can be duplicated freely. Value or authority resources (tokens, capabilities) " +
+          "must not be copyable — remove copy from the ability list."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bas\s+u(8|16|32)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Integer downcast (truncation)",
+        body:
+          "Casting to a narrower integer type (u8, u16, u32) silently truncates the high bits in Move. " +
+          "Validate that the value fits in the target range before casting."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bpublic\s+fun\s+\w*(withdraw|mint|burn|transfer|admin)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unguarded privileged function",
+        body:
+          "A public function named withdraw/mint/burn/transfer/admin is callable by any module. " +
+          "Gate it with a capability parameter (e.g. AdminCap) or an explicit signer authorization assert."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bvector::borrow\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Unchecked vector index",
+        body:
+          "vector::borrow aborts at runtime if the index is out of bounds. " +
+          "Validate vector::length before borrowing to prevent transaction abort."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bstruct\s+\w+\s+has\b[^\{]*\bdrop\b[^\{]*\bkey\b|\bhas\b[^\{]*\bkey\b[^\{]*\bdrop\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Key resource has drop ability",
+        body:
+          "A struct with both key and drop abilities can be silently discarded, permanently losing any asset " +
+          "or authority it represents. Remove drop from key resources to force explicit handling."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".move") &&
+      /\bfun\s+init\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Initializer/admin entrypoint",
+        body:
+          "Module initializer or admin entrypoint detected. Ensure one-time initialization is enforced " +
+          "and that AdminCap issuance is restricted to the deployer's signer context."
+      });
+    }
   }
 
   for (const line of removedLines(request.diff ?? "")) {

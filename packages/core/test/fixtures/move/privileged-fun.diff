@@ -1,0 +1,22 @@
+diff --git a/sources/token.move b/sources/token.move
+--- a/sources/token.move
++++ b/sources/token.move
+@@ -1,3 +1,20 @@
++module token::token {
++    use aptos_framework::signer;
++    use aptos_framework::coin;
++    use aptos_framework::aptos_coin::AptosCoin;
++
++    /// No capability required — any caller can invoke mint.
++    public fun mint(account: &signer, amount: u64) {
++        // Missing AdminCap / capability check
++        let addr = signer::address_of(account);
++        let _ = (addr, amount);
++    }
++
++    /// Unguarded withdraw — any module can call this.
++    public fun withdraw(account: &signer, amount: u64) {
++        let addr = signer::address_of(account);
++        let _ = (addr, amount);
++    }
++}

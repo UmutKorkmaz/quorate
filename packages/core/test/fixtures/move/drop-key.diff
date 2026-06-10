@@ -1,0 +1,21 @@
+diff --git a/sources/escrow.move b/sources/escrow.move
+--- a/sources/escrow.move
++++ b/sources/escrow.move
+@@ -1,3 +1,18 @@
++module escrow::escrow {
++    use sui::object::UID;
+
++    /// EscrowRecord has both key (stored on-chain) and drop (silently destroyable).
++    /// Dropping the record discards the escrowed asset permanently.
++    struct EscrowRecord has key, drop {
++        id: UID,
++        amount: u64,
++        beneficiary: address,
++    }
++
++    /// LockedToken: key + drop combination on an asset struct.
++    struct LockedToken has key, store, drop {
++        id: UID,
++        value: u64,
++    }
++}

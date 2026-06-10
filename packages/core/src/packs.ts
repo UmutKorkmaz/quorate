@@ -114,7 +114,31 @@ const llm: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm };
+const move: QuoratePack = {
+  id: "move",
+  description: "Move (Sui / Aptos) smart-contract security review council",
+  councils: [
+    "move-security",
+    "capability-safety",
+    "resource-safety",
+    "access-control",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "move-security":
+      "Audit every public entry function for missing caller-authorization checks — entry functions are externally callable by any account and must explicitly verify the signer. Review shared-object exposure in Sui: objects passed as &mut through shared_object transfer are accessible to any transaction and require careful mutation guards.",
+    "capability-safety":
+      "Inspect all capability types (AdminCap, MintCap, etc.) for leakage paths — capabilities must not be transferred to untrusted accounts or stored in world-readable locations. Verify that every privileged function is gated by a capability parameter or signer check rather than relying on call-site convention.",
+    "resource-safety":
+      "Review struct ability declarations (key, store, copy, drop) for correctness: value resources representing authority or assets must not carry copy (duplicable) or drop (silently destroyable) abilities. Audit every borrow_global_mut and move_from call to confirm the caller's address equals signer::address_of(account) before accessing or removing a stored resource.",
+    "access-control":
+      "Verify that every function performing privileged operations (withdraw, mint, burn, admin actions) performs an explicit signer::address_of check or requires a capability argument. Confirm that init / one-time admin functions are protected from re-invocation and that AdminCap issuance is restricted to the deployer.",
+    "maintainer":
+      "Assess overall code structure, test coverage, module upgrade path, and long-term maintainability. Identify dead code, unclear error codes, missing unit tests for critical functions, and any patterns that will make the module hard to audit or extend."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

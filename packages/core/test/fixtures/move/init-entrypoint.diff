@@ -1,0 +1,25 @@
+diff --git a/sources/governance.move b/sources/governance.move
+--- a/sources/governance.move
++++ b/sources/governance.move
+@@ -1,3 +1,20 @@
++module governance::governance {
++    use sui::object::{Self, UID};
++    use sui::transfer;
++    use sui::tx_context::{Self, TxContext};
+
++    struct AdminCap has key, store {
++        id: UID,
++    }
+
++    struct GovernanceState has key {
++        id: UID,
++        proposal_count: u64,
++    }
+
++    fun init(ctx: &mut TxContext) {
++        // AdminCap transferred to deployer — but no guard prevents re-running if
++        // the module is published multiple times or misused in tests.
++        let cap = AdminCap { id: object::new(ctx) };
++        transfer::transfer(cap, tx_context::sender(ctx));
++    }
++}

@@ -1,0 +1,21 @@
+diff --git a/sources/leaderboard.move b/sources/leaderboard.move
+--- a/sources/leaderboard.move
++++ b/sources/leaderboard.move
+@@ -1,3 +1,18 @@
++module leaderboard::leaderboard {
++    use std::vector;
++
++    struct Board has key {
++        scores: vector<u64>,
++    }
++
++    public fun get_top(board: &Board, rank: u64): u64 {
++        // No length check before borrow — aborts if rank >= length
++        *vector::borrow(&board.scores, rank)
++    }
++
++    public fun set_score(board: &mut Board, idx: u64, score: u64) {
++        let entry = vector::borrow(&board.scores, idx);
++        let _ = (*entry, score);
++    }
++}

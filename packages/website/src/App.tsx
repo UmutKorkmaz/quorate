@@ -16,6 +16,7 @@ import Solana from "./pages/docs/Solana";
 import Evm from "./pages/docs/Evm";
 import Iac from "./pages/docs/Iac";
 import LlmApp from "./pages/docs/LlmApp";
+import Move from "./pages/docs/Move";
 
 export function App() {
   return (
@@ -36,6 +37,7 @@ export function App() {
           <Route path="evm" element={<Evm />} />
           <Route path="iac" element={<Iac />} />
           <Route path="llm" element={<LlmApp />} />
+          <Route path="move" element={<Move />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

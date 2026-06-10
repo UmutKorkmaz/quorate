@@ -34,6 +34,11 @@ const CARDS = [
     to: "/docs/llm",
     title: "AI / LLM apps",
     desc: "LLM-application security council + ten deterministic heuristics covering prompt injection, data leakage, tool safety, and unsafe output. Zero-setup AI risk review."
+  },
+  {
+    to: "/docs/move",
+    title: "Move (Sui / Aptos)",
+    desc: "Sui/Aptos-aware Move security council + ten deterministic heuristics covering resource safety, capability misuse, and access-control gaps. Zero-setup Move review."
   }
 ] as const;
 
