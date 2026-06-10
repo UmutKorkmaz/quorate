@@ -2,3 +2,4 @@
 
 # Quorate session/report artifacts
 .quorate/
+.quorate.yml
