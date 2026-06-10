@@ -22,5 +22,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/solana":
     "Quorate Solana pack — Anchor-aware review council and ten deterministic on-chain heuristics for sealevel security.",
   "/docs/evm":
-    "Quorate EVM pack — Solidity-aware review council and ten deterministic on-chain heuristics for smart-contract security."
+    "Quorate EVM pack — Solidity-aware review council and ten deterministic on-chain heuristics for smart-contract security.",
+  "/docs/iac":
+    "Quorate IaC pack — Terraform and Kubernetes security council and ten deterministic heuristics for infrastructure misconfiguration review."
 };

@@ -1,0 +1,21 @@
+diff --git a/k8s/deployment.yaml b/k8s/deployment.yaml
+--- a/k8s/deployment.yaml
++++ b/k8s/deployment.yaml
+@@ -1,3 +1,20 @@
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: frontend
++spec:
++  replicas: 3
++  selector:
++    matchLabels:
++      app: frontend
++  template:
++    metadata:
++      labels:
++        app: frontend
++    spec:
++      containers:
++        - name: frontend
++          image: nginx:latest

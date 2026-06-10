@@ -361,6 +361,150 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
           "SafeERC20.safeTransfer / safeTransferFrom, or explicitly check the boolean return value."
       });
     }
+
+    // ── IaC checks — Terraform (.tf) ─────────────────────────────────────────
+
+    if (
+      line.file?.endsWith(".tf") &&
+      /\bacl\s*=\s*"public-read(-write)?"/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Public storage ACL",
+        body:
+          "Setting acl to public-read or public-read-write makes the storage bucket accessible to anyone on the internet. " +
+          "Use private ACL and grant access through IAM policies instead."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".tf") &&
+      /cidr_blocks\s*=\s*\[?\s*"0\.0\.0\.0\/0"/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Unrestricted ingress (0.0.0.0/0)",
+        body:
+          "A CIDR block of 0.0.0.0/0 allows traffic from any IP address. Restrict ingress to known IP ranges " +
+          "or use a VPN/bastion host for administrative access."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".tf") &&
+      /(encrypted\s*=\s*false|encryption\s*=\s*"?(none|disabled)"?)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Encryption disabled",
+        body:
+          "Disabling encryption for storage or databases leaves data at rest vulnerable. " +
+          "Enable encryption with a customer-managed key (CMK) or the provider's default KMS key."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".tf") &&
+      /associate_public_ip_address\s*=\s*true/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Public IP assignment",
+        body:
+          "Assigning a public IP to an instance exposes it directly to the internet. " +
+          "Place instances in a private subnet and use a load balancer or NAT gateway for egress."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".tf") &&
+      /\b(password|secret_key|access_key|private_key|client_secret)\s*=\s*"[^"]+"/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Hardcoded secret in IaC",
+        body:
+          "A secret value is hardcoded directly in the Terraform configuration. " +
+          "Use input variables with sensitive = true, environment variables, or a secrets manager reference instead."
+      });
+    }
+
+    // ── IaC checks — Kubernetes (.yaml / .yml) ───────────────────────────────
+
+    if (
+      (line.file?.endsWith(".yaml") || line.file?.endsWith(".yml")) &&
+      /\bprivileged\s*:\s*true/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Privileged container",
+        body:
+          "A privileged container has almost all the capabilities of the host and can escape to the node. " +
+          "Remove privileged: true and grant only the specific capabilities the container needs."
+      });
+    }
+
+    if (
+      (line.file?.endsWith(".yaml") || line.file?.endsWith(".yml")) &&
+      /\b(hostNetwork|hostPID|hostIPC)\s*:\s*true/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Host namespace sharing",
+        body:
+          "Sharing the host's network, PID, or IPC namespace breaks container isolation and can allow " +
+          "a compromised container to observe or interfere with host processes. Remove the host namespace flag."
+      });
+    }
+
+    if (
+      (line.file?.endsWith(".yaml") || line.file?.endsWith(".yml")) &&
+      /\brunAsUser\s*:\s*0\b|\brunAsNonRoot\s*:\s*false/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Container runs as root",
+        body:
+          "Running a container as UID 0 (root) increases the blast radius of a container breakout. " +
+          "Set runAsNonRoot: true and specify a non-zero runAsUser in the security context."
+      });
+    }
+
+    if (
+      (line.file?.endsWith(".yaml") || line.file?.endsWith(".yml")) &&
+      /\ballowPrivilegeEscalation\s*:\s*true/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Privilege escalation allowed",
+        body:
+          "allowPrivilegeEscalation: true permits a process to gain more privileges than its parent. " +
+          "Set allowPrivilegeEscalation: false in the container security context to prevent escalation attacks."
+      });
+    }
+
+    if (
+      (line.file?.endsWith(".yaml") || line.file?.endsWith(".yml")) &&
+      /\bimage\s*:\s*\S+:latest\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Mutable image tag (:latest)",
+        body:
+          "Using the :latest tag means the image pulled at deploy time may differ from the one tested. " +
+          "Pin images to a specific digest or immutable version tag for reproducible deployments."
+      });
+    }
   }
 
   for (const line of removedLines(request.diff ?? "")) {

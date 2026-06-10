@@ -24,6 +24,11 @@ const CARDS = [
     to: "/docs/evm",
     title: "EVM / Solidity",
     desc: "Solidity-aware council + ten deterministic on-chain heuristics. Zero-setup smart-contract security review."
+  },
+  {
+    to: "/docs/iac",
+    title: "Infrastructure / IaC",
+    desc: "Terraform and Kubernetes security council + ten deterministic heuristics. Zero-setup infrastructure misconfiguration review."
   }
 ] as const;
 

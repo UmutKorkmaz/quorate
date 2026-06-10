@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transfer) with a vulnerable/clean corpus — proves the pack registry
   generalizes (no CLI changes; adding a registry entry is enough). Docs page +
   Action example included.
+- **IaC pack (Terraform + Kubernetes).** `quorate init --pack iac` scaffolds an
+  infrastructure security council; 10 deterministic heuristics — public ACL,
+  0.0.0.0/0 ingress, encryption disabled, public IP, hardcoded secret (.tf);
+  privileged container, host namespace sharing, runs-as-root, privilege
+  escalation, :latest image tag (k8s yaml) — with a vulnerable/clean corpus.
+  Docs page + Action example.
 
 ## [0.7.2] - 2026-06-10
 

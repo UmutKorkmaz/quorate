@@ -60,7 +60,34 @@ const evm: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm };
+const iac: QuoratePack = {
+  id: "iac",
+  description: "Infrastructure-as-Code (Terraform / Kubernetes) security review council",
+  councils: [
+    "iac-security",
+    "network-exposure",
+    "secrets-management",
+    "identity-access",
+    "resilience",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "iac-security":
+      "Audit all Terraform and Kubernetes manifests for general security posture. Look for insecure defaults, missing security contexts, and configurations that deviate from least-privilege principles. Verify that every resource has appropriate tags, labels, and metadata for traceability.",
+    "network-exposure":
+      "Review all network configuration for overly permissive ingress rules. Flag any use of 0.0.0.0/0 CIDR blocks in security groups, network ACLs, or firewall rules. Identify publicly accessible storage buckets (public ACLs), public IP assignments, and load balancers exposed without restriction. Ensure private subnets are used for sensitive workloads.",
+    "secrets-management":
+      "Detect plaintext secrets, passwords, access keys, and private keys hardcoded in Terraform variables, resource arguments, or Kubernetes manifests. Flag unencrypted storage volumes, databases without encryption-at-rest, and any secret stored as a plain ConfigMap instead of a Secret or external secrets manager reference.",
+    "identity-access":
+      "Scrutinise IAM roles and policies for over-broad permissions (wildcard actions or resources). In Kubernetes, flag privileged containers, containers running as root (runAsUser: 0 or runAsNonRoot: false), allowPrivilegeEscalation: true, and host namespace sharing (hostNetwork, hostPID, hostIPC). Enforce least-privilege for all service accounts and pod security contexts.",
+    "resilience":
+      "Check for missing CPU and memory resource limits on containers, which can cause noisy-neighbour DoS. Flag mutable image tags (:latest) that break reproducible deployments. Identify single-replica deployments for critical services that require high availability. Verify health probes (liveness, readiness) are configured.",
+    "maintainer":
+      "Assess overall code structure, module reuse, and long-term maintainability of the IaC. Identify duplicated resource blocks, missing output descriptions, unclear variable names, and lack of comments explaining non-obvious configuration choices. Check that modules are versioned and that the code is organised for team-scale use."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**
