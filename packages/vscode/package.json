@@ -2,7 +2,7 @@
   "name": "quorate-vscode",
   "displayName": "Quorate — AI Review Council",
   "description": "Convene Quorate's multi-agent AI review council on your current change, right inside VS Code.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",
@@ -69,7 +69,9 @@
       { "command": "quorate.runDoctor", "title": "Re-run Doctor", "category": "Quorate", "icon": "$(refresh)" },
       { "command": "quorate.openFinding", "title": "Open Finding", "category": "Quorate" },
       { "command": "quorate.clearFindings", "title": "Clear Findings", "category": "Quorate", "icon": "$(clear-all)" },
-      { "command": "quorate.setKey", "title": "Set API Key…", "category": "Quorate", "icon": "$(key)" }
+      { "command": "quorate.setKey", "title": "Set API Key…", "category": "Quorate", "icon": "$(key)" },
+      { "command": "quorate.fixFinding", "title": "Fix Finding with Agent…", "category": "Quorate", "icon": "$(wrench)" },
+      { "command": "quorate.revertFix", "title": "Revert Last Fix", "category": "Quorate", "icon": "$(discard)" }
     ],
     "menus": {
       "view/title": [
@@ -80,12 +82,14 @@
         { "command": "quorate.openConfig", "when": "view == quorate.council", "group": "1_config@2" },
         { "command": "quorate.openSettings", "when": "view == quorate.council", "group": "1_config@3" },
         { "command": "quorate.clearFindings", "when": "view == quorate.results", "group": "navigation@1" },
+        { "command": "quorate.revertFix", "when": "view == quorate.results", "group": "1_fix@1" },
         { "command": "quorate.runDoctor", "when": "view == quorate.status", "group": "navigation@1" }
       ],
       "view/item/context": [
         { "command": "quorate.setKey", "when": "view == quorate.council && viewItem == providerApi", "group": "inline@1" },
         { "command": "quorate.editRoles", "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/", "group": "inline@2" },
-        { "command": "quorate.removeProvider", "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/", "group": "inline@3" }
+        { "command": "quorate.removeProvider", "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/", "group": "inline@3" },
+        { "command": "quorate.fixFinding", "when": "view == quorate.results && viewItem == finding", "group": "inline@1" }
       ]
     },
     "configuration": {

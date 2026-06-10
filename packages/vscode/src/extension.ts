@@ -137,7 +137,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return env;
   }
 
+  let lastReport: CouncilReport | undefined;
+
+  /** Findings the CLI's `fix --finding <n>` can target, in its exact 1-based order. */
+  function fixableFindings(): CouncilReport["findings"] {
+    return (lastReport?.findings ?? []).filter((f) => f.file);
+  }
+
+  /** Open (or reuse) the Quorate Fix terminal and run the interactive fix flow. */
+  async function openFixTerminal(findingIndex?: number): Promise<void> {
+    const { path: cli } = await resolveCli();
+    const existing = vscode.window.terminals.find((t) => t.name === "Quorate Fix" && t.exitStatus === undefined);
+    const terminal = existing ?? vscode.window.createTerminal({ name: "Quorate Fix" });
+    terminal.show();
+    const quoted = cli.includes(" ") ? `"${cli}"` : cli;
+    terminal.sendText(`${quoted} fix${findingIndex ? ` --finding ${findingIndex}` : " --list"}`);
+  }
+
   function applyReport(report: CouncilReport, bases: string[]): void {
+    lastReport = report;
     results.setReport(report);
     diagnostics.clear();
     for (const [file, diags] of findingDiagnostics(report, bases)) diagnostics.set(vscode.Uri.file(file), diags);
@@ -375,6 +393,61 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("quorate.openLane", (key: string) => {
       laneChannel(key).show(true);
     }),
+
+    // Fix a finding: from the lightbulb (number), a Results row (node), or the
+    // palette (QuickPick). The agent runs interactively in the integrated
+    // terminal — snapshotted by the CLI, revertible via quorate.revertFix.
+    vscode.commands.registerCommand("quorate.fixFinding", async (arg?: number | { finding?: { file?: string } }) => {
+      if (typeof arg === "number") {
+        await openFixTerminal(arg);
+        return;
+      }
+      const fixable = fixableFindings();
+      if (arg && typeof arg === "object" && arg.finding) {
+        const index = fixable.indexOf(arg.finding as CouncilReport["findings"][number]);
+        await openFixTerminal(index >= 0 ? index + 1 : undefined);
+        return;
+      }
+      if (fixable.length === 0) {
+        await openFixTerminal(); // falls back to `quorate fix --list` in the terminal
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        fixable.map((f, i) => ({
+          label: `$(wrench) ${f.title}`,
+          description: `${f.severity} · ${f.file}${f.line ? `:${f.line}` : ""}`,
+          index: i + 1
+        })),
+        { title: "Quorate — fix which finding?" }
+      );
+      if (picked) await openFixTerminal(picked.index);
+    }),
+
+    vscode.commands.registerCommand("quorate.revertFix", async () => {
+      const confirmed = await vscode.window.showWarningMessage(
+        "Revert the last Quorate fix? Tracked files return to their pre-fix state and agent-created files are removed.",
+        { modal: true },
+        "Revert"
+      );
+      if (confirmed !== "Revert") return;
+      const { code, stdout, stderr } = await runCli(["fix", "--revert"]);
+      if (code === 0) {
+        void vscode.window.showInformationMessage(`Quorate: ${stdout.trim().split("\n").pop() ?? "fix reverted."}`);
+        return;
+      }
+      const reason = stderr.trim().split("\n").filter(Boolean).pop() ?? "unknown error";
+      if (/changed since fix/i.test(stderr)) {
+        const force = await vscode.window.showWarningMessage(`Quorate: ${reason}`, { modal: true }, "Force Revert");
+        if (force === "Force Revert") {
+          const retry = await runCli(["fix", "--revert", "--force"]);
+          void (retry.code === 0
+            ? vscode.window.showInformationMessage("Quorate: fix reverted (forced).")
+            : vscode.window.showErrorMessage(`Quorate: ${retry.stderr.trim().split("\n").pop()}`));
+        }
+        return;
+      }
+      void vscode.window.showErrorMessage(`Quorate: ${reason}`);
+    }),
     vscode.commands.registerCommand("quorate.clearFindings", () => {
       diagnostics.clear();
       results.setReport(undefined);
@@ -399,7 +472,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const term = vscode.window.createTerminal("Install Quorate");
       term.show();
       term.sendText("npm i -g quorate");
-    })
+    }),
+
+    // Lightbulb on any Quorate squiggle -> delegate the finding to an agent.
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: "file" },
+      {
+        provideCodeActions(_doc, _range, ctx) {
+          const actions: vscode.CodeAction[] = [];
+          for (const diagnostic of ctx.diagnostics) {
+            if (diagnostic.source !== "quorate" || typeof diagnostic.code !== "number") continue;
+            const action = new vscode.CodeAction("Quorate: fix with an agent…", vscode.CodeActionKind.QuickFix);
+            action.diagnostics = [diagnostic];
+            action.command = {
+              command: "quorate.fixFinding",
+              title: "Fix with an agent",
+              arguments: [diagnostic.code]
+            };
+            actions.push(action);
+          }
+          return actions;
+        }
+      },
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
+    )
   );
 
   await reload();

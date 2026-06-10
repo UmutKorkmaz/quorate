@@ -252,6 +252,7 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
     // finding
     const f = node.finding;
     const item = new vscode.TreeItem(f.title);
+    item.contextValue = f.file ? "finding" : "findingNoFile";
     item.iconPath = new vscode.ThemeIcon(SEVERITY_ICON[f.severity]);
     const agreed = f.agreedBy?.length ? ` · agreed by ${f.agreedBy.join(", ")}` : "";
     item.description = `${f.severity}${f.role ? ` · ${f.role}` : ""}${agreed}`;
@@ -362,8 +363,10 @@ export function findingDiagnostics(report: CouncilReport, bases: string[]): Map<
     low: vscode.DiagnosticSeverity.Information,
     info: vscode.DiagnosticSeverity.Hint
   };
-  for (const f of report.findings) {
-    if (!f.file) continue;
+  // The CLI's `fix --finding <n>` numbers the findings that carry a file,
+  // 1-based, in report order — mirror that exactly so the lightbulb maps back.
+  const fixable = report.findings.filter((f) => f.file);
+  for (const f of fixable) {
     const line = Math.max(0, (f.line ?? 1) - 1);
     const diag = new vscode.Diagnostic(
       new vscode.Range(line, 0, line, Number.MAX_SAFE_INTEGER),
@@ -371,7 +374,8 @@ export function findingDiagnostics(report: CouncilReport, bases: string[]): Map<
       sevMap[f.severity]
     );
     diag.source = "quorate";
-    const target = resolveFindingPath(f.file, bases);
+    diag.code = fixable.indexOf(f) + 1; // fix index for the CodeAction provider
+    const target = resolveFindingPath(f.file!, bases);
     const list = byFile.get(target) ?? [];
     list.push(diag);
     byFile.set(target, list);
