@@ -289,6 +289,7 @@ export function VerdictReport({
           <Text color={PALETTE.dim}>
             {`  ${findings.length} finding${findings.length === 1 ? "" : "s"}`}
             {showAgreement ? ` ${g.separator} agreement ${agreementPct}%` : ""}
+            {report.metadata.mergedBy ? ` ${g.separator} merged by ${report.metadata.mergedBy}` : ""}
           </Text>
         </Box>
 

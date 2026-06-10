@@ -67,6 +67,7 @@ In the shell, type `/` to open the command palette:
 /use available        enable every runnable agent for this session
 /roles <ids>          limit which roles review
 /route <role> <ids>   reassign role→provider for this session
+/merge <id|off>       pick a master agent that merges duplicate findings
 /models <id> [model]  list an api provider's live models, or switch its model
 /git [base] [head]    load a git diff
 /review [subject]     convene the council on the loaded diff
@@ -90,7 +91,7 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | Command | What it does | Key flags |
 | --- | --- | --- |
 | `quorate` / `quorate shell` | Open the interactive shell (default). | `--providers <ids>`, `--mode review\|plan`, `--continue`, `--resume [id]`, `--classic` |
-| `quorate review` | One-shot review of a diff. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--subject <text>`, `--providers <ids>`, `--json`, `--write-json <path>` |
+| `quorate review` | One-shot review of a diff. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--subject <text>`, `--providers <ids>`, `--merge <id>`, `--json`, `--write-json <path>` |
 | `quorate plan "<text>"` | Evaluate an implementation/architecture plan. | `--providers <ids>`, `--json` |
 | `quorate fix` | Delegate a finding to a write-mode agent — snapshotted, watchable, revertible. | `--list`, `--finding <n>`, `--provider <id>`, `--revert [fixId]`, `--force`, `--no-review` |
 | `quorate doctor` | Council-readiness verdict: environment + provider grid + next step. | `--json`, `--bundle`, `--bundle-file <path>` |

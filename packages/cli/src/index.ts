@@ -424,11 +424,13 @@ export function buildProgram(): Command {
     .option("--pr <number>", "Read a pull request diff with gh pr diff")
     .option("--subject <text>", "Review subject", "Local code review")
     .option("--providers <ids>", "Comma-separated provider ids to enable for this run")
+    .option("--merge <id>", "Master agent that merges duplicate findings across reviewers")
     .option("--json", "Stream NDJSON events to stdout (final line is the report JSON)")
     .option("--write-json <path>", "Write the JSON report to a file")
     .action(async (options) => {
       const cwd = cwdFrom(program);
-      const config = applyProviderFilter(configFrom(program), options.providers);
+      let config = applyProviderFilter(configFrom(program), options.providers);
+      if (options.merge) config = { ...config, merge: { provider: options.merge } };
       const diff = readDiff(options, cwd);
       if (isEmptyReviewDiff("review", diff)) {
         console.error("No changes to review. Pass --diff <file>, --base/--head, or --pr <number>.");

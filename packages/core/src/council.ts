@@ -3,6 +3,7 @@ import { runApiProvider } from "./api-provider.js";
 import { runCliProvider } from "./cli-provider.js";
 import { runHeuristicReview } from "./heuristics.js";
 import { createDefaultConfig } from "./providers.js";
+import { mergeWithMaster } from "./merge.js";
 import { areSameFinding } from "./similarity.js";
 import type {
   QuorateConfig,
@@ -295,7 +296,25 @@ export async function runCouncil(
     };
   });
 
-  const findings = sortFindings(clusterFindings(providerResults.flatMap((result) => result.findings)));
+  // Optional master-agent merge: a selected provider semantically dedupes the
+  // raw findings before the built-in clustering (which still runs after, both
+  // as a safety net and to compute agreement on anything the master missed).
+  const rawFindings = providerResults.flatMap((result) => result.findings);
+  let workingFindings = rawFindings;
+  let mergedBy: string | undefined;
+  const masterId = config.merge?.provider;
+  if (masterId && rawFindings.length > 1 && !signal?.aborted) {
+    const master = config.providers.find((provider) => provider.id === masterId);
+    if (master) {
+      const merged = await mergeWithMaster(master, rawFindings, signal);
+      if (merged) {
+        workingFindings = merged;
+        mergedBy = master.id;
+      }
+    }
+  }
+
+  const findings = sortFindings(clusterFindings(workingFindings));
   const baseVerdict = verdictFor(findings, providerResults);
 
   const realOk = providerResults.filter(
@@ -336,7 +355,8 @@ export async function runCouncil(
       providers: ranProviders,
       requestedProviders,
       ranProviders,
-      degraded
+      degraded,
+      mergedBy
     }
   };
 

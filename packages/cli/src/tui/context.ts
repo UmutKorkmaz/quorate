@@ -164,6 +164,7 @@ export type SessionAction =
   | { type: "setRoute"; role: string; providers: string[] }
   | { type: "clearRoute"; role?: string }
   | { type: "setProviderModel"; providerId: string; model: string }
+  | { type: "setMerge"; providerId: string | undefined }
   | { type: "recordInput"; input: string }
   | { type: "setSessionMeta"; id: string; name: string }
   | { type: "clear" };
@@ -243,6 +244,14 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           providers: state.config.providers.map((provider) =>
             provider.id === action.providerId ? { ...provider, model: action.model } : provider
           )
+        }
+      };
+    case "setMerge":
+      return {
+        ...state,
+        config: {
+          ...state.config,
+          merge: action.providerId ? { provider: action.providerId } : undefined
         }
       };
     case "recordInput":

@@ -48,6 +48,8 @@ export interface QuorateConfig {
   councils: string[];
   providers: ProviderConfig[];
   github: GithubConfig;
+  /** Optional master agent that semantically merges duplicate findings. */
+  merge?: { provider: string };
 }
 
 export interface DetectedProvider {
@@ -115,6 +117,8 @@ export interface CouncilReport {
     requestedProviders: string[];
     ranProviders: string[];
     degraded: boolean;
+    /** Set when a master agent successfully merged duplicate findings. */
+    mergedBy?: string;
   };
 }
 

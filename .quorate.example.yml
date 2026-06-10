@@ -212,3 +212,10 @@ github:
   commentMode: update
   failOn: high
   runnerMode: auto
+
+# Optional master agent: one provider semantically merges duplicate findings
+# across reviewers before the verdict ("console logging added" + "remove stray
+# debug logging" -> one finding). Falls back to built-in clustering on failure.
+# Pick per session with /merge <provider>, or per run with `review --merge <id>`.
+# merge:
+#   provider: claude

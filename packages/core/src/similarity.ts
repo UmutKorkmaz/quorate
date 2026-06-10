@@ -77,11 +77,28 @@ export function sameLocation(a: Finding, b: Finding, lineWindow = 3): boolean {
  * clustering is by topic and location. Requires `sameLocation` AND a title/body
  * similarity at or above `threshold`.
  */
+/**
+ * Relaxed text threshold when two findings point at the SAME file and (nearly)
+ * the same line: five reviewers phrase one stray console.log five ways, but
+ * "console logging added" and "remove stray debug logging" share only a few
+ * tokens. An exact-location match plus a little topical overlap is enough; the
+ * remaining text check still keeps two genuinely different issues on one line
+ * (e.g. a debug log AND a leaked secret) from collapsing.
+ */
+export const TIGHT_LOCATION_THRESHOLD = 0.18;
+
 export function areSameFinding(
   a: Finding,
   b: Finding,
   threshold = DEFAULT_SIMILARITY_THRESHOLD
 ): boolean {
   if (!sameLocation(a, b)) return false;
-  return titleBodySimilarity(a, b) >= threshold;
+  const tight =
+    a.file !== undefined &&
+    a.file === b.file &&
+    a.line !== undefined &&
+    b.line !== undefined &&
+    Math.abs(a.line - b.line) <= 1;
+  const effective = tight ? Math.min(threshold, TIGHT_LOCATION_THRESHOLD) : threshold;
+  return titleBodySimilarity(a, b) >= effective;
 }

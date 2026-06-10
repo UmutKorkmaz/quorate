@@ -384,6 +384,48 @@ export const baseCommandRegistry: SlashCommand[] = [
     }
   },
   {
+    name: "merge",
+    summary: "Pick a master agent that merges duplicate findings (or off)",
+    argHint: "<provider|off>",
+    run(ctx, args) {
+      const value = splitWords(args)[0];
+      const state = ctx.getState();
+      if (!value) {
+        const current = state.config.merge?.provider;
+        const candidates = state.config.providers
+          .filter((p) => p.type !== "mock")
+          .map((p) => p.id)
+          .join(", ");
+        text(
+          ctx,
+          current
+            ? `Master merge agent: ${current}. Change with /merge <provider>, disable with /merge off.`
+            : `No master merge agent — duplicates are merged by built-in clustering only.\nPick one with /merge <provider> (candidates: ${candidates || "none"}).`
+        );
+        return;
+      }
+      if (value === "off") {
+        ctx.dispatch({ type: "setMerge", providerId: undefined });
+        text(ctx, "Master merge disabled — using built-in clustering only.");
+        return;
+      }
+      const provider = state.config.providers.find((p) => p.id === value);
+      if (!provider) {
+        text(ctx, `Unknown provider: ${value}${suggestionSuffix([value], providerIdSet(ctx))}`);
+        return;
+      }
+      if (provider.type === "mock") {
+        text(ctx, "The heuristic can't merge findings — pick a cli or api provider.");
+        return;
+      }
+      ctx.dispatch({ type: "setMerge", providerId: provider.id });
+      text(
+        ctx,
+        `${provider.id} is now the master merge agent (this session) — persist with \`merge:\n  provider: ${provider.id}\` in .quorate.yml.`
+      );
+    }
+  },
+  {
     name: "models",
     summary: "List an api provider's live models, or switch its model",
     argHint: "<provider> [model]",

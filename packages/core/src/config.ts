@@ -46,7 +46,8 @@ const configSchema = z.object({
         .object({ severity: severitySchema, minAgreement: z.number().int().positive() })
         .optional()
     })
-    .default({})
+    .default({}),
+  merge: z.object({ provider: z.string().min(1) }).optional()
 });
 
 export function parseConfig(source: string): QuorateConfig {
@@ -60,7 +61,8 @@ export function parseConfig(source: string): QuorateConfig {
     github: {
       ...defaults.github,
       ...userConfig.github
-    }
+    },
+    merge: userConfig.merge
   };
 }
 

@@ -46534,7 +46534,8 @@ var configSchema = external_exports.object({
     inlineComments: external_exports.boolean().optional(),
     inlineCommentLimit: external_exports.number().int().positive().optional(),
     gate: external_exports.object({ severity: severitySchema, minAgreement: external_exports.number().int().positive() }).optional()
-  }).default({})
+  }).default({}),
+  merge: external_exports.object({ provider: external_exports.string().min(1) }).optional()
 });
 function parseConfig(source) {
   const parsed = import_yaml.default.parse(source) ?? {};
@@ -46546,7 +46547,8 @@ function parseConfig(source) {
     github: {
       ...defaults2.github,
       ...userConfig.github
-    }
+    },
+    merge: userConfig.merge
   };
 }
 
@@ -46636,6 +46638,173 @@ function runHeuristicReview(request2, role = "maintainer") {
   };
 }
 
+// ../core/src/merge.ts
+var import_node_child_process2 = require("node:child_process");
+var MERGE_TIMEOUT_MS = 12e4;
+var DEFAULT_BASE_URL2 = "http://localhost:11434/v1";
+var SEVERITY_RANK = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+  info: 0
+};
+function buildMergePrompt(findings) {
+  const list = findings.map((finding, index) => ({
+    index,
+    provider: finding.providerId,
+    role: finding.role,
+    severity: finding.severity,
+    file: finding.file,
+    line: finding.line,
+    title: finding.title,
+    body: finding.body,
+    suggestion: finding.suggestion
+  }));
+  return [
+    "You are the merge arbiter for a council of AI code reviewers.",
+    "Several reviewers reported findings; many describe the SAME underlying issue in different words.",
+    "Merge duplicates into one canonical finding each. Do NOT invent new findings, do NOT drop real distinct issues.",
+    "",
+    "Rules:",
+    '- Output a JSON array. Each item: {"sources": [<input indexes>], "title": string, "body": string, "severity"?: one of critical|high|medium|low|info, "file"?: string, "line"?: number, "suggestion"?: string}.',
+    "- Every input index MUST appear in exactly one item's sources (a partition).",
+    "- Two findings are the same issue only if they refer to the same defect \u2014 same root cause at the same place.",
+    "- Write the merged title/body as the clearest single statement of the issue (you may rephrase).",
+    "- If unsure whether two findings are the same issue, keep them separate.",
+    "- Output ONLY the JSON array (a ```json fence is fine). No prose.",
+    "",
+    "FINDINGS:",
+    JSON.stringify(list, null, 1)
+  ].join("\n");
+}
+function extractJsonArray(text) {
+  const fenced = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((match) => match[1]);
+  const candidates = [...fenced.reverse(), text];
+  for (const candidate of candidates) {
+    const start = candidate.indexOf("[");
+    const end = candidate.lastIndexOf("]");
+    if (start < 0 || end <= start) continue;
+    try {
+      return JSON.parse(candidate.slice(start, end + 1));
+    } catch {
+    }
+  }
+  return void 0;
+}
+function parseMergeResult(text, findings) {
+  const parsed = extractJsonArray(text);
+  if (!Array.isArray(parsed)) return void 0;
+  const used = /* @__PURE__ */ new Set();
+  const merged = [];
+  for (const raw of parsed) {
+    if (typeof raw !== "object" || raw === null || !Array.isArray(raw.sources)) return void 0;
+    const sources = raw.sources.filter(
+      (index) => Number.isInteger(index) && index >= 0 && index < findings.length
+    );
+    if (sources.length === 0) continue;
+    for (const index of sources) {
+      if (used.has(index)) return void 0;
+      used.add(index);
+    }
+    const members = sources.map((index) => findings[index]);
+    const base = [...members].sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])[0];
+    const severity = typeof raw.severity === "string" && raw.severity in SEVERITY_RANK ? (
+      // The master may not LOWER the worst member's severity.
+      SEVERITY_RANK[raw.severity] >= SEVERITY_RANK[base.severity] ? raw.severity : base.severity
+    ) : base.severity;
+    const agreedBy = [
+      ...new Set(members.map((member) => member.providerId).filter((id) => Boolean(id)))
+    ].sort();
+    merged.push({
+      ...base,
+      severity,
+      title: typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : base.title,
+      body: typeof raw.body === "string" && raw.body.trim() ? raw.body.trim() : base.body,
+      file: typeof raw.file === "string" && raw.file ? raw.file : base.file,
+      line: typeof raw.line === "number" ? raw.line : base.line,
+      suggestion: typeof raw.suggestion === "string" && raw.suggestion ? raw.suggestion : base.suggestion ?? members.find((member) => member.suggestion)?.suggestion,
+      agreedBy,
+      agreement: Math.max(agreedBy.length, 1)
+    });
+  }
+  for (const [index, finding] of findings.entries()) {
+    if (!used.has(index)) merged.push(finding);
+  }
+  return merged;
+}
+async function callApi(provider, prompt, signal) {
+  const url2 = `${(provider.baseUrl ?? DEFAULT_BASE_URL2).replace(/\/$/, "")}/chat/completions`;
+  const headers = { "content-type": "application/json" };
+  if (provider.apiKeyEnv) {
+    const token = process.env[provider.apiKeyEnv];
+    if (token) headers.authorization = `Bearer ${token}`;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MERGE_TIMEOUT_MS);
+  signal?.addEventListener("abort", () => controller.abort());
+  try {
+    const response = await fetch(url2, {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: provider.model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0
+      })
+    });
+    if (!response.ok) return void 0;
+    const json2 = await response.json();
+    return json2.choices?.[0]?.message?.content ?? void 0;
+  } catch {
+    return void 0;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function callCli(provider, prompt, signal) {
+  if (provider.inputMode && provider.inputMode !== "stdin") return Promise.resolve(void 0);
+  return new Promise((resolvePromise) => {
+    const child = (0, import_node_child_process2.spawn)(provider.command ?? provider.id, provider.args ?? [], { shell: false });
+    let stdout = "";
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      resolvePromise(value);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(void 0);
+    }, MERGE_TIMEOUT_MS);
+    signal?.addEventListener("abort", () => {
+      child.kill();
+      finish(void 0);
+    });
+    child.on("error", () => {
+      clearTimeout(timer);
+      finish(void 0);
+    });
+    child.stdout.on("data", (chunk) => stdout += chunk.toString());
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      finish(code === 0 ? stdout : void 0);
+    });
+    child.stdin.on("error", () => {
+    });
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
+}
+async function mergeWithMaster(provider, findings, signal) {
+  if (findings.length < 2) return void 0;
+  const prompt = buildMergePrompt(findings);
+  const output = provider.type === "api" ? await callApi(provider, prompt, signal) : provider.type === "cli" ? await callCli(provider, prompt, signal) : void 0;
+  if (!output) return void 0;
+  return parseMergeResult(output, findings);
+}
+
 // ../core/src/similarity.ts
 var DEFAULT_SIMILARITY_THRESHOLD = 0.6;
 function normalizeText(s) {
@@ -46668,9 +46837,12 @@ function sameLocation(a, b, lineWindow = 3) {
   if (a.line === void 0 || b.line === void 0) return true;
   return Math.abs(a.line - b.line) <= lineWindow;
 }
+var TIGHT_LOCATION_THRESHOLD = 0.18;
 function areSameFinding(a, b, threshold = DEFAULT_SIMILARITY_THRESHOLD) {
   if (!sameLocation(a, b)) return false;
-  return titleBodySimilarity(a, b) >= threshold;
+  const tight = a.file !== void 0 && a.file === b.file && a.line !== void 0 && b.line !== void 0 && Math.abs(a.line - b.line) <= 1;
+  const effective = tight ? Math.min(threshold, TIGHT_LOCATION_THRESHOLD) : threshold;
+  return titleBodySimilarity(a, b) >= effective;
 }
 
 // ../core/src/council.ts
@@ -46865,7 +47037,21 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       durationMs: 0
     };
   });
-  const findings = sortFindings(clusterFindings(providerResults.flatMap((result) => result.findings)));
+  const rawFindings = providerResults.flatMap((result) => result.findings);
+  let workingFindings = rawFindings;
+  let mergedBy;
+  const masterId = config2.merge?.provider;
+  if (masterId && rawFindings.length > 1 && !signal?.aborted) {
+    const master = config2.providers.find((provider) => provider.id === masterId);
+    if (master) {
+      const merged = await mergeWithMaster(master, rawFindings, signal);
+      if (merged) {
+        workingFindings = merged;
+        mergedBy = master.id;
+      }
+    }
+  }
+  const findings = sortFindings(clusterFindings(workingFindings));
   const baseVerdict = verdictFor(findings, providerResults);
   const realOk = providerResults.filter(
     (result) => (result.providerType === "cli" || result.providerType === "api") && result.status === "ok"
@@ -46895,7 +47081,8 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       providers: ranProviders,
       requestedProviders,
       ranProviders,
-      degraded
+      degraded,
+      mergedBy
     }
   };
   emit({ type: "council/done", councilRunId, report });
