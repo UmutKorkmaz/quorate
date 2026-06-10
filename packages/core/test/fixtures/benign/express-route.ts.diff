@@ -1,0 +1,74 @@
+diff --git a/src/routes/users.ts b/src/routes/users.ts
+--- a/src/routes/users.ts
++++ b/src/routes/users.ts
+@@ -0,0 +1,68 @@
++import express from "express";
++import { z } from "zod";
++import csrf from "csurf";
++import { pool } from "../db/pool.js";
++import { logger } from "../lib/logger.js";
++
++const router = express.Router();
++const csrfProtection = csrf({ cookie: true });
++
++const ALLOWED_REDIRECT_PATHS = new Set(["/dashboard", "/profile", "/home"]);
++
++const ALLOWED_ORIGINS = new Set([
++  "https://app.example.com",
++  "https://admin.example.com",
++]);
++
++const createUserSchema = z.object({
++  name: z.string().min(1).max(100),
++  email: z.string().email(),
++});
++
++// CORS — scoped allow-list, never a wildcard
++router.use((req, res, next) => {
++  const origin = req.headers.origin ?? "";
++  if (ALLOWED_ORIGINS.has(origin)) {
++    res.setHeader("Access-Control-Allow-Origin", origin);
++    res.setHeader("Vary", "Origin");
++  }
++  next();
++});
++
++// Create user — CSRF protected, input validated, parameterized query
++router.post("/users", csrfProtection, async (req, res) => {
++  const parsed = createUserSchema.safeParse(req.body);
++  if (!parsed.success) {
++    return res.status(400).json({ error: "Invalid input" });
++  }
++  const { name, email } = parsed.data;
++  const result = await pool.query(
++    "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id",
++    [name, email]
++  );
++  return res.status(201).json({ id: result.rows[0].id });
++});
++
++// Redirect — allow-listed paths only
++router.get("/login", (req, res) => {
++  const dest =
++    typeof req.query.dest === "string" && ALLOWED_REDIRECT_PATHS.has(req.query.dest)
++      ? req.query.dest
++      : "/dashboard";
++  return res.redirect(dest);
++});
++
++// Health — no dynamic content echoed
++router.get("/health", (_req, res) => {
++  return res.json({ status: "ok" });
++});
++
++// User lookup — parameterized, no raw concatenation
++router.get("/users/:id", async (req, res) => {
++  const idNum = parseInt(req.params.id, 10);
++  if (Number.isNaN(idNum)) return res.status(400).json({ error: "Bad id" });
++  const result = await pool.query("SELECT id, name, email FROM users WHERE id = $1", [idNum]);
++  if (result.rows.length === 0) return res.status(404).json({ error: "Not found" });
++  logger.info("user fetched", { id: idNum });
++  return res.json(result.rows[0]);
++});
++
++export default router;

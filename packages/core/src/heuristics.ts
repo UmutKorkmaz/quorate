@@ -510,7 +510,10 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     if (
       /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
-      /(prompt|systemPrompt|userPrompt|content)\s*[:=][^;\n]*\$\{/.test(text)
+      // Match variables unambiguously named for LLM prompts. 'content' is intentionally
+      // excluded because it is also used for React children, HTTP headers, and HTML
+      // attributes — its presence alone does not indicate an AI prompt context.
+      /(prompt|systemPrompt|userPrompt)\s*[:=][^;\n]*\$\{/.test(text)
     ) {
       findings.push({
         ...base,
@@ -524,7 +527,12 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     if (
       /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
-      /\b(eval|new Function|execSync|exec|spawn)\s*\([^)]*(completion|response|output|llmResult|aiResult|message\.content|choices)/.test(text)
+      // Require an unambiguously LLM-ish identifier in the argument list.
+      // Generic names like 'output', 'response', or 'result' are intentionally
+      // excluded: they appear in thousands of non-LLM code paths (file I/O, HTTP,
+      // build tools) and would produce high false-positive rates. Those cases are
+      // caught by the web command-injection check (which requires req./user_input).
+      /\b(eval|new Function|execSync|exec|spawn)\s*\([^)]*(completion|chatCompletion|llmResult|aiResult|message\.content|\.choices\b)/.test(text)
     ) {
       findings.push({
         ...base,
@@ -947,7 +955,12 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     if (
       /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
-      /\b(amount|price|balance|total|cost|fee|payment)\w*\s*[:=]\s*parseFloat\(|\b(amount|price|balance|total)\w*\s*:\s*(number|float|Float|double|Double)\b/.test(text)
+      // First alternative: any monetary-prefixed name assigned from parseFloat() — always a float.
+      // Second alternative: type annotation with a float type, but EXCLUDING names that already
+      // carry an explicit integer-minor-unit suffix (Cents, Pence, Satoshi, Wei, etc.) — those
+      // names self-document that the value is an integer and would generate false positives for
+      // well-written payment code that uses the unit in the variable name as a convention.
+      /\b(amount|price|balance|total|cost|fee|payment)\w*\s*[:=]\s*parseFloat\(|\b(amount|price|balance|total)(?!Cents|Pence|Satoshi|Wei|Minor|Units?|Int\b|Integer\b)\w*\s*:\s*(number|float|Float|double|Double)\b/.test(text)
     ) {
       findings.push({
         ...base,

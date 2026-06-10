@@ -1,0 +1,65 @@
+diff --git a/api/handlers.py b/api/handlers.py
+--- a/api/handlers.py
++++ b/api/handlers.py
+@@ -0,0 +1,58 @@
++"""Safe Flask handlers — no unsafe deserialization, parameterized SQL, sha256 hashing."""
++import hashlib
++import yaml
++from flask import Flask, request, jsonify
++import psycopg2
++
++app = Flask(__name__)
++
++DB_URL = "postgresql://localhost/mydb"
++
++
++def get_connection():
++    return psycopg2.connect(DB_URL)
++
++
++@app.route("/config", methods=["POST"])
++def load_config():
++    """Load config from request body using safe_load (not yaml.load)."""
++    raw = request.get_data(as_text=True)
++    # yaml.safe_load prevents arbitrary object instantiation
++    config = yaml.safe_load(raw)
++    if not isinstance(config, dict):
++        return jsonify({"error": "invalid config"}), 400
++    allowed_keys = {"debug", "log_level", "timeout"}
++    safe_config = {k: v for k, v in config.items() if k in allowed_keys}
++    return jsonify(safe_config)
++
++
++@app.route("/users", methods=["GET"])
++def list_users():
++    """Fetch users with a parameterized query — no string concatenation."""
++    page = request.args.get("page", 1, type=int)
++    per_page = min(request.args.get("per_page", 20, type=int), 100)
++    offset = (page - 1) * per_page
++    conn = get_connection()
++    try:
++        with conn.cursor() as cur:
++            cur.execute(
++                "SELECT id, name, email FROM users ORDER BY id LIMIT %s OFFSET %s",
++                (per_page, offset),
++            )
++            rows = cur.fetchall()
++        return jsonify([{"id": r[0], "name": r[1], "email": r[2]} for r in rows])
++    finally:
++        conn.close()
++
++
++@app.route("/tokens", methods=["POST"])
++def create_token():
++    """Hash a secret value with sha256 — no weak hash."""
++    body = request.get_json(force=True)
++    if not body or "value" not in body:
++        return jsonify({"error": "missing value"}), 400
++    raw_value = str(body["value"])
++    digest = hashlib.sha256(raw_value.encode()).hexdigest()
++    return jsonify({"digest": digest})
++
++
++if __name__ == "__main__":
++    # Production: use gunicorn or uwsgi, not the dev server
++    app.run(debug=False)
