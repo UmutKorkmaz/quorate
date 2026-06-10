@@ -2,7 +2,7 @@
   "name": "quorate-vscode",
   "displayName": "Quorate — AI Review Council",
   "description": "Convene Quorate's multi-agent AI review council on your current change, right inside VS Code.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",
@@ -71,16 +71,19 @@
       { "command": "quorate.clearFindings", "title": "Clear Findings", "category": "Quorate", "icon": "$(clear-all)" },
       { "command": "quorate.setKey", "title": "Set API Key…", "category": "Quorate", "icon": "$(key)" },
       { "command": "quorate.fixFinding", "title": "Fix Finding with Agent…", "category": "Quorate", "icon": "$(wrench)" },
-      { "command": "quorate.revertFix", "title": "Revert Last Fix", "category": "Quorate", "icon": "$(discard)" }
+      { "command": "quorate.revertFix", "title": "Revert Last Fix", "category": "Quorate", "icon": "$(discard)" },
+      { "command": "quorate.suppressFinding", "title": "Ignore Finding (// quorate-ignore)", "category": "Quorate", "icon": "$(eye-closed)" },
+      { "command": "quorate.setupPack", "title": "Set Up Domain Pack…", "category": "Quorate", "icon": "$(extensions)" }
     ],
     "menus": {
       "view/title": [
         { "command": "quorate.run", "when": "view == quorate.council && quorate.cliReady", "group": "navigation@1" },
         { "command": "quorate.pickDiffSource", "when": "view == quorate.council", "group": "navigation@2" },
         { "command": "quorate.refresh", "when": "view == quorate.council", "group": "navigation@3" },
-        { "command": "quorate.addProvider", "when": "view == quorate.council", "group": "1_config@1" },
-        { "command": "quorate.openConfig", "when": "view == quorate.council", "group": "1_config@2" },
-        { "command": "quorate.openSettings", "when": "view == quorate.council", "group": "1_config@3" },
+        { "command": "quorate.setupPack", "when": "view == quorate.council", "group": "1_config@1" },
+        { "command": "quorate.addProvider", "when": "view == quorate.council", "group": "1_config@2" },
+        { "command": "quorate.openConfig", "when": "view == quorate.council", "group": "1_config@3" },
+        { "command": "quorate.openSettings", "when": "view == quorate.council", "group": "1_config@4" },
         { "command": "quorate.clearFindings", "when": "view == quorate.results", "group": "navigation@1" },
         { "command": "quorate.revertFix", "when": "view == quorate.results", "group": "1_fix@1" },
         { "command": "quorate.runDoctor", "when": "view == quorate.status", "group": "navigation@1" }
