@@ -338,9 +338,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         { title: `Roles for ${provider.id}`, canPickMany: true }
       );
       if (!picked) return;
-      const args = ["provider", "add", provider.id, "--force", "--roles", picked.map((p) => p.label).join(","), "--type", provider.type];
-      if (provider.model) args.push("--model", provider.model);
-      await runCli(args);
+      const roles = picked.map((p) => p.label).join(",");
+      if (!roles) {
+        void vscode.window.showWarningMessage("Quorate: pick at least one role (a provider with no roles never runs).");
+        return;
+      }
+      // set-roles edits ONLY the roles field — never round-trips the full
+      // provider through `provider add` (which could mangle exotic cli args).
+      const { code, stderr } = await runCli(["provider", "set-roles", provider.id, roles]);
+      if (code !== 0) {
+        const reason = stderr.trim().split("\n").filter(Boolean).pop() ?? "unknown error";
+        const message = /unknown command/i.test(stderr)
+          ? "Quorate: editing roles needs quorate >= 0.7.2 — run `npm i -g quorate`."
+          : `Quorate: updating roles failed — ${reason}`;
+        void vscode.window.showErrorMessage(message);
+        return;
+      }
       await reload();
     }),
     vscode.commands.registerCommand("quorate.pickDiffSource", async () => {

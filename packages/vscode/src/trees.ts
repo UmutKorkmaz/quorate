@@ -329,7 +329,7 @@ export class StatusTree implements vscode.TreeDataProvider<StatusNode> {
       icon: available.length > 0 ? "pass" : "warning",
       tooltip: available.map((d) => d.id).join(", ")
     });
-    for (const p of doctor?.config ?? []) {
+    for (const p of doctor?.config?.providers ?? []) {
       nodes.push({
         label: p.id,
         icon: p.type === "mock" ? "law" : p.type === "api" ? "cloud" : "terminal",

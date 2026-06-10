@@ -362,6 +362,27 @@ export function buildProgram(): Command {
     });
 
   providerCmd
+    .command("set-roles <id> <roles>")
+    .description("Replace a provider's council roles (comma-separated, e.g. security,qa).")
+    .action((id: string, rolesArg: string) => {
+      const cwd = cwdFrom(program);
+      const configPath = findConfigPath(cwd);
+      if (!configPath) throw new Error("No .quorate.yml found. Run `quorate init` first.");
+      const config = loadConfig(configPath, cwd);
+      const existing = config.providers.find((entry) => entry.id === id);
+      if (!existing) throw new Error(`No provider "${id}" in ${configPath}.`);
+      const roles = rolesArg.split(",").map((role) => role.trim()).filter(Boolean);
+      const known = new Set(config.councils ?? ["architect", "security", "qa", "performance", "maintainer"]);
+      const unknown = roles.filter((role) => !known.has(role));
+      if (unknown.length > 0) {
+        throw new Error(`Unknown role${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}. Roles: ${[...known].join(", ")}.`);
+      }
+      const providers = config.providers.map((entry) => (entry.id === id ? { ...entry, roles } : entry));
+      writeFileSync(configPath, serializeConfig({ ...config, providers }), "utf8");
+      console.log(`Provider "${id}" roles: ${existing.roles?.join(", ") ?? "(default)"} → ${roles.join(", ") || "(none)"}`);
+    });
+
+  providerCmd
     .command("set-model <id> [model]")
     .description("Change an api provider's model — pick from the live list when no model is given.")
     .action(async (id: string, model: string | undefined) => {

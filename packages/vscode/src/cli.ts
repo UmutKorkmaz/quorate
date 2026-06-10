@@ -50,6 +50,8 @@ export interface ProviderConfig {
   command?: string;
   apiKeyEnv?: string;
   args?: string[];
+  baseUrl?: string;
+  inputMode?: string;
 }
 
 /** Per-provider runnability for the Council view. */
@@ -68,7 +70,8 @@ export function providerRunState(
 
 export interface DoctorReport {
   detected: Array<{ id: string; command?: string; path?: string; available: boolean; installHint?: string }>;
-  config: ProviderConfig[];
+  /** doctor --json returns the FULL config object, not a provider array. */
+  config: { providers: ProviderConfig[] };
 }
 
 /** A streamed NDJSON progress event (provider/started, provider/chunk, provider/done, …). */

@@ -1,6 +1,6 @@
 {
   "name": "quorate-workspace",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "description": "A multi-agent code review council for local CLI and GitHub PR workflows.",
   "type": "module",
