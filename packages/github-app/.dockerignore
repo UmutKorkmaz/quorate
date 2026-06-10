@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.github
+packages/*/node_modules
+packages/*/dist
+packages/cli
+packages/vscode
+packages/website
+*.md
+.DS_Store
+coverage

@@ -1,0 +1,22 @@
+name: Quorate
+description: >
+  A multi-agent code review council that runs on every pull request.
+  Quorate assembles a panel of AI reviewers, surfaces findings as inline
+  annotations, and posts a PASS / WARN / FAIL verdict Check Run — with zero
+  per-repo workflow setup required.
+url: https://github.com/quorate/quorate
+public: false
+
+hook_attributes:
+  url: https://YOUR_HOST/api/webhook
+  active: true
+
+default_permissions:
+  checks: write
+  pull_requests: write
+  contents: read
+  metadata: read
+
+default_events:
+  - pull_request
+  - check_run
