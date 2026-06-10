@@ -195,7 +195,55 @@ const fintech: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech };
+const web: QuoratePack = {
+  id: "web",
+  description: "Web & API security (OWASP) review council",
+  councils: [
+    "injection",
+    "broken-access-control",
+    "ssrf",
+    "auth-session",
+    "data-exposure",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "injection":
+      "Audit every location where untrusted input (req.query, req.params, req.body, request.args, request.GET, request.json) " +
+      "flows into shell commands, file-system paths, template engines, or deserialization sinks. " +
+      "Flag command injection (exec/spawn with user-controlled arguments), path traversal (readFile/open with unvalidated paths), " +
+      "server-side template injection, and insecure deserialization (pickle.loads, yaml.load without SafeLoader, unserialize, marshal.loads). " +
+      "Demand allow-listing, strict input validation, and sandboxed execution for any code path that touches these sinks.",
+    "broken-access-control":
+      "Identify every endpoint or resource access that lacks explicit authorization checks — IDOR patterns where an object ID from " +
+      "the request is used directly without verifying the caller owns it, missing role/permission guards on sensitive routes, " +
+      "and mass-assignment vulnerabilities where req.body is bound directly to a model (new Model(req.body), Object.assign with req.body, " +
+      ".create(req.body)). Flag permissive CORS configurations that use wildcard origins or reflect the request origin without " +
+      "an allow-list, which bypass the same-origin policy.",
+    "ssrf":
+      "Review every server-side HTTP/network request for user-controlled URL or host components. Flag any call to fetch, axios, " +
+      "requests.get/post, http.get, urllib, or similar where the URL, host, or path is constructed from req.query, req.params, " +
+      "req.body, request.args, or request.GET. Require URL allow-listing, disallow private IP ranges, and enforce scheme restrictions " +
+      "to prevent attackers from pivoting to internal services or cloud metadata endpoints. Also flag open-redirect sinks " +
+      "(res.redirect, sendRedirect) driven by user input.",
+    "auth-session":
+      "Audit session and authentication logic for CSRF protection gaps — flag csrf: false, @csrf_exempt, csrfProtection: false, " +
+      "and any state-changing endpoint that lacks a CSRF token check. Review JWT configuration for algorithm confusion " +
+      "(alg: none, weak HS256 secrets). Identify weak or broken cryptographic primitives: MD5, SHA-1, DES, ECB mode — " +
+      "require SHA-256+ and authenticated encryption modes. Verify session cookies use Secure, HttpOnly, and SameSite attributes.",
+    "data-exposure":
+      "Check every response-building path for reflected XSS: unescaped user input emitted via res.send/res.write/res.end, " +
+      "innerHTML assignment, or document.write. Flag any handler that echoes req.query/params/body content directly into " +
+      "an HTTP response without HTML encoding. Ensure sensitive data (tokens, PII, internal paths) is not included in " +
+      "API responses or error messages. Verify that Content-Type headers are set correctly and that JSON responses are " +
+      "not sniffable as HTML.",
+    "maintainer":
+      "Assess overall code structure, input validation layers, error handling, test coverage, and long-term maintainability " +
+      "of the web application. Identify missing validation middleware, absent rate limiting, unclear error messages that leak " +
+      "stack traces or internal paths, and any patterns that will make the API hard to audit or extend."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech, web };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

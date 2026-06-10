@@ -1,0 +1,19 @@
+diff --git a/src/api/checkout.ts b/src/api/checkout.ts
+--- a/src/api/checkout.ts
++++ b/src/api/checkout.ts
+@@ -0,0 +1,14 @@
++import express from "express";
++import csurf from "csurf";
++
++const router = express.Router();
++
++const csrfProtection = csurf({ cookie: true });
++
++router.post("/checkout", (req, res, next) => {
++  const csrf = false;
++  // skipping csrf check for API compatibility
++  processOrder(req.body);
++  res.json({ status: "ok" });
++});
++
++export default router;

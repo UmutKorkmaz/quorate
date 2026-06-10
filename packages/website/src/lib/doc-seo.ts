@@ -32,5 +32,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/ci":
     "Quorate CI pack — workflow-security and supply-chain council and ten deterministic heuristics for script injection, unpinned actions, hardcoded secrets, and pipe-to-shell review.",
   "/docs/fintech":
-    "Quorate Fintech pack — payment-security and PCI-compliance council and ten deterministic heuristics for card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables."
+    "Quorate Fintech pack — payment-security and PCI-compliance council and ten deterministic heuristics for card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables.",
+  "/docs/web":
+    "Quorate Web pack — OWASP-aligned web security council and ten deterministic heuristics for SSRF, command injection, path traversal, reflected XSS, open redirect, mass assignment, permissive CORS, CSRF, insecure deserialization, and weak cryptographic algorithms."
 };

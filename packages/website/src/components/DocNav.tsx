@@ -16,7 +16,8 @@ export const DOC_PATHS = [
   "/docs/llm",
   "/docs/move",
   "/docs/ci",
-  "/docs/fintech"
+  "/docs/fintech",
+  "/docs/web"
 ] as const;
 
 export type DocPath = (typeof DOC_PATHS)[number];
@@ -37,7 +38,8 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/llm": "AI / LLM apps",
   "/docs/move": "Move (Sui / Aptos)",
   "/docs/ci": "CI/CD & Supply Chain",
-  "/docs/fintech": "Fintech / PCI"
+  "/docs/fintech": "Fintech / PCI",
+  "/docs/web": "Web & API (OWASP)"
 };
 
 const SECTIONS = [
@@ -66,7 +68,8 @@ const SECTIONS = [
       { to: "/docs/llm", label: "AI / LLM apps" },
       { to: "/docs/move", label: "Move (Sui / Aptos)" },
       { to: "/docs/ci", label: "CI/CD & Supply Chain" },
-      { to: "/docs/fintech", label: "Fintech / PCI" }
+      { to: "/docs/fintech", label: "Fintech / PCI" },
+      { to: "/docs/web", label: "Web & API (OWASP)" }
     ]
   },
   {

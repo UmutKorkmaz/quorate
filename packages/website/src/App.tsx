@@ -19,6 +19,7 @@ import LlmApp from "./pages/docs/LlmApp";
 import Move from "./pages/docs/Move";
 import Ci from "./pages/docs/Ci";
 import Fintech from "./pages/docs/Fintech";
+import Web from "./pages/docs/Web";
 
 export function App() {
   return (
@@ -42,6 +43,7 @@ export function App() {
           <Route path="move" element={<Move />} />
           <Route path="ci" element={<Ci />} />
           <Route path="fintech" element={<Fintech />} />
+          <Route path="web" element={<Web />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

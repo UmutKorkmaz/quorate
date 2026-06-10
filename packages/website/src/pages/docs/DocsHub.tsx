@@ -49,6 +49,11 @@ const CARDS = [
     to: "/docs/fintech",
     title: "Fintech / PCI",
     desc: "Payment-security council + ten deterministic heuristics covering card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables. Zero-setup PCI review."
+  },
+  {
+    to: "/docs/web",
+    title: "Web & API (OWASP)",
+    desc: "OWASP-aligned web security council + ten deterministic heuristics covering SSRF, command injection, path traversal, reflected XSS, open redirect, mass assignment, permissive CORS, CSRF, insecure deserialization, and weak cryptography. Zero-setup OWASP review."
   }
 ] as const;
 
