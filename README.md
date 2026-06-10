@@ -67,9 +67,11 @@ In the shell, type `/` to open the command palette:
 /use available        enable every runnable agent for this session
 /roles <ids>          limit which roles review
 /route <role> <ids>   reassign role→provider for this session
+/models <id> [model]  list an api provider's live models, or switch its model
 /git [base] [head]    load a git diff
 /review [subject]     convene the council on the loaded diff
 /plan <text>          evaluate a plan
+/fix [n]              list fixable findings and get the delegation command
 /last · /rerun        show or re-run the last report
 /logs [id]            read each agent's full output (and why a run failed)
 /json · /markdown     export the last report
@@ -90,14 +92,37 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | `quorate` / `quorate shell` | Open the interactive shell (default). | `--providers <ids>`, `--mode review\|plan`, `--continue`, `--resume [id]`, `--classic` |
 | `quorate review` | One-shot review of a diff. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--subject <text>`, `--providers <ids>`, `--json`, `--write-json <path>` |
 | `quorate plan "<text>"` | Evaluate an implementation/architecture plan. | `--providers <ids>`, `--json` |
+| `quorate fix` | Delegate a finding to a write-mode agent — snapshotted, watchable, revertible. | `--list`, `--finding <n>`, `--provider <id>`, `--revert [fixId]`, `--force`, `--no-review` |
 | `quorate doctor` | Council-readiness verdict: environment + provider grid + next step. | `--json`, `--bundle`, `--bundle-file <path>` |
 | `quorate providers` | List configured providers and availability. | `--json` |
-| `quorate provider add <id>` | Add a provider to `.quorate.yml`. | `--preset <name>`, `--type`, `--base-url`, `--model`, `--api-key-env`, `--command`, `--args`, `--roles`, `--enabled/--disabled`, `-f` |
+| `quorate provider add <id>` | Add a provider to `.quorate.yml` — picks the model from the live list on a TTY. | `--preset <name>`, `--type`, `--base-url`, `--model`, `--api-key-env`, `--command`, `--args`, `--roles`, `--no-pick`, `-f` |
+| `quorate provider models <id\|preset>` | List an endpoint's live models (`GET {baseUrl}/models`). | `--json` |
+| `quorate provider set-model <id> [model]` | Switch an api provider's model — interactive picker when no model given. | — |
 | `quorate provider remove <id>` / `presets` | Remove a provider; list API presets. | — |
 | `quorate init` | Write a starter `.quorate.yml` (real providers disabled). | `-f, --force` |
 
 `--diff`, `--base/--head`, and `--pr` select the diff source; `--json` streams NDJSON
 events with the final report as the last line, ideal for piping into other tools.
+
+## Fix findings — and revert them
+
+The council **judges**; one agent **fixes**; the council **re-reviews the fix**.
+`quorate fix` delegates a finding to a write-mode agent (`claude`, `codex`, `agy`)
+running interactively **in your real terminal** — you watch every step, and the
+agent's own permission flow stays active (Quorate never passes bypass flags).
+
+```bash
+quorate review                 # findings persist to .quorate/last-report.json
+quorate fix --list             # numbered fixable findings (+ past fixes)
+quorate fix --finding 1        # pick agent → confirm → terminal hands over
+quorate fix --revert           # undo the last fix
+```
+
+Before the agent touches anything, the pre-fix state is pinned (`git stash
+create` — nothing in your worktree moves) plus a manifest of new files. Revert
+restores tracked files, deletes agent-created files, and **re-applies your own
+pre-fix uncommitted work** — and refuses when the tree changed since the fix
+(`--force` to override). After each fix, Quorate offers a council re-review.
 
 ## Agents & roles
 
@@ -283,7 +308,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.7.0
+      - uses: UmutKorkmaz/quorate@v0.7.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -298,7 +323,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v0.7.0
+      - uses: UmutKorkmaz/quorate@v0.7.1
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:

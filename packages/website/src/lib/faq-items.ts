@@ -25,6 +25,16 @@ export const DOC_FAQ_ITEMS = [
       "Yes. Add a provider with type: api pointing at any OpenAI-compatible endpoint (Ollama, llama.cpp, LM Studio, vLLM, or a hosted gateway). model is required; baseUrl is optional and defaults to http://localhost:11434/v1; an optional apiKeyEnv names the environment variable holding the key. See the Configuration guide."
   },
   {
+    question: "Can Quorate fix the findings it reports?",
+    answer:
+      "Yes — as a delegated, human-gated fix, never an auto-fixer. quorate fix hands one finding to a write-mode agent (claude, codex, or agy) running interactively in your real terminal, with the pre-fix state snapshotted first. quorate fix --revert undoes it: tracked files restored, agent-created files removed, your own pre-fix uncommitted work re-applied. After each fix, Quorate offers a council re-review — the council judges, one agent fixes, the council re-reviews the fix."
+  },
+  {
+    question: "How do I pick which model an api provider uses?",
+    answer:
+      "From the live list, not by typing names. quorate provider models <id|preset> lists what the endpoint actually serves (your local Ollama models, OpenRouter's public catalog, or a gateway's models once its key env is set); quorate provider set-model <id> switches with a numbered picker; provider add picks interactively on a TTY; and /models <provider> [model] does the same inside the shell."
+  },
+  {
     question: "How do I enable multiple AI reviewers?",
     answer:
       "In the shell, run /use available to enable every detected, runnable CLI for the session. To persist providers, run quorate init and edit .quorate.yml — or use quorate provider add <id> (with --preset for common endpoints) to write the entry for you."

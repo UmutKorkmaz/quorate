@@ -109,6 +109,30 @@ export default function Commands() {
 /review Validate this patch before sharing it
 /markdown .quorate/review.md
 /json .quorate/review.json`}</CodeBlock>
+
+      <h3>Fix a finding — snapshotted and revertible</h3>
+      <p>
+        <InlineCode>/fix</InlineCode> lists fixable findings; the delegation itself runs in your
+        real terminal so you watch the agent work (its own permission flow stays active):
+      </p>
+      <CodeBlock language="bash">{`quorate fix --list             # numbered findings from the last review
+quorate fix --finding 1        # pick agent (claude/codex/agy) -> confirm -> hand over
+quorate fix --revert           # undo the last fix (pre-fix state is pinned first)`}</CodeBlock>
+      <p>
+        Revert restores tracked files, deletes agent-created files, and re-applies your own
+        pre-fix uncommitted work — refusing when the tree changed since the fix
+        (<InlineCode>--force</InlineCode> to override). After each fix, Quorate offers a council
+        re-review.
+      </p>
+
+      <h3>Pick models from the live list</h3>
+      <CodeBlock language="bash">{`quorate provider models openrouter      # list an endpoint's models (GET {baseUrl}/models)
+quorate provider add local --preset ollama   # interactive model picker on a TTY
+quorate provider set-model local             # switch an existing provider's model`}</CodeBlock>
+      <p>
+        In the shell, <InlineCode>/models &lt;provider&gt;</InlineCode> lists the live models and{" "}
+        <InlineCode>/models &lt;provider&gt; &lt;model&gt;</InlineCode> switches it for the session.
+      </p>
     </article>
   );
 }

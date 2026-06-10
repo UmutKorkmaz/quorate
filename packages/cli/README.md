@@ -36,6 +36,7 @@ Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interact
 - **Many models, one verdict.** Independent perspectives, deduplicated and ranked into a single **PASS / WARN / FAIL**.
 - **Honest by default.** A heuristic-only review is reported as *degraded* — never a confident green.
 - **Watch it work.** During a review, each agent shows a live activity line; drill into one to follow its output, and `/logs` reviews any agent afterward (and shows *why* a run failed).
+- **Fix — and revert.** `quorate fix` hands a finding to a write-mode agent in your real terminal, snapshotted first; `--revert` undoes it, and the council re-reviews the fix.
 - **Safe by design.** Real agents are opt-in, spawned without a shell, with explicit headless args, byte/time caps, and a dangerous-flag denylist.
 
 ## Quick start
@@ -44,6 +45,7 @@ Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interact
 quorate                                   # open the interactive shell
 quorate doctor                            # see which AI CLIs are installed
 quorate review --base main --head HEAD    # one-shot review of the current branch
+quorate fix --list                        # then delegate a finding to an agent — revertible
 ```
 
 In the shell:
@@ -62,12 +64,10 @@ Each provider's `roles:` decides which council voice it covers (`architect`,
 `security`, `qa`, `performance`, `maintainer`). Add one without hand-editing YAML:
 
 ```bash
-quorate provider presets                              # ollama, vllm, lmstudio, hf-router, openrouter, …
-quorate provider add ollama --preset ollama --model qwen2.5-coder:7b
-quorate provider add reviewer --type api \
-  --base-url https://openrouter.ai/api/v1 \
-  --model anthropic/claude-sonnet-4.6 \
-  --api-key-env OPENROUTER_API_KEY --roles security,architect
+quorate provider presets                  # 15 presets: ollama, vllm, openrouter, groq, …
+quorate provider add local --preset ollama        # picks the model from the LIVE list
+quorate provider models openrouter                # list an endpoint's models
+quorate provider set-model local                  # switch a provider's model by picking
 ```
 
 ## GitHub Action

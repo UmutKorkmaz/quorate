@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.7.0
+      - uses: UmutKorkmaz/quorate@v0.7.1
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
 
@@ -139,6 +139,13 @@ jobs:
         installed and authenticated. The default heuristic and any <InlineCode>type: api</InlineCode> provider
         run on standard <strong>GitHub-hosted runners</strong>.
       </p>
+      <p>
+        The default <InlineCode>runner-mode: auto</InlineCode> is <strong>runner-aware</strong>: on
+        GitHub-hosted runners it keeps only <InlineCode>api</InlineCode> providers (+ the heuristic), so a
+        council that also lists local CLI agents never produces doomed &quot;command not found&quot; lanes
+        in CI. Set <InlineCode>runner-mode: cli</InlineCode> explicitly if your workflow preinstalls and
+        authenticates agent CLIs.
+      </p>
 
       <h2>Real AI review on GitHub-hosted runners</h2>
       <p>
@@ -160,7 +167,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.7.0
+- uses: UmutKorkmaz/quorate@v0.7.1
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:

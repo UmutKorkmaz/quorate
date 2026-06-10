@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-06-10
+
+### Changed
+
+- Documentation catch-up for 0.7.0 across the README, npm page, and docs site:
+  `quorate fix` (snapshot/revert + the judge-fix-re-review loop), live model
+  selection (`provider models`/`set-model`, `/models`), the runner-aware GitHub
+  Action `auto` mode, and new FAQ entries. No code changes.
+
 ## [0.7.0] - 2026-06-10
 
 ### Added
