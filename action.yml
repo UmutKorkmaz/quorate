@@ -1,6 +1,11 @@
 name: Quorate
-description: Run a multi-agent code review council on pull requests.
-author: Quorate
+description: >-
+  AI code review council for pull requests — several AI reviewers, one
+  PASS/WARN/FAIL verdict with file-and-line evidence, posted as a PR comment.
+author: Umut Korkmaz
+branding:
+  icon: users
+  color: blue
 inputs:
   config-path:
     description: >-
@@ -30,7 +35,11 @@ inputs:
     description: GitHub token used to read PR files and write comments.
     required: false
   runner-mode:
-    description: "Provider runner mode: auto, cli, or api."
+    description: >-
+      Provider runner mode: auto, cli, or api. `auto` is runner-aware — on
+      GitHub-hosted runners it keeps only `api` providers (+ the built-in
+      heuristic), since local agent CLIs can't be authenticated there. Set `cli`
+      explicitly if your workflow preinstalls and authenticates agent CLIs.
     required: false
     default: auto
   inline-comments:

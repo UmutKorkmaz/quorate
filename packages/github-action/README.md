@@ -34,6 +34,12 @@ no config, only the built-in **heuristic** runs and the result is reported as
 | **`api`** (hosted/local model) | ✅ **yes** | Point at a hosted OpenAI-compatible gateway and put the key in `secrets`. No CLI install needed — the recommended way to get real AI review in CI. |
 | `cli` (`claude`, `codex`, …) | ⚠️ no | Needs a **self-hosted runner** where those CLIs are installed and authenticated. |
 
+The default `runner-mode: auto` is **runner-aware**: on GitHub-hosted runners it
+keeps only `api` providers (+ the heuristic), so a council that also lists local
+CLI agents never produces doomed "command not found" lanes in CI. Set
+`runner-mode: cli` explicitly if your workflow preinstalls and authenticates
+agent CLIs.
+
 ### Real AI review on GitHub-hosted runners (recommended)
 
 Commit a `.quorate.yml` to your **base branch** with a `type: api` provider pointing

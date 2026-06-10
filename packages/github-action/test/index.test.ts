@@ -187,6 +187,30 @@ describe("applyOverrides", () => {
     const auto = applyOverrides(base, { runnerMode: "auto" });
     expect(auto.providers.every((p) => p.enabled)).toBe(true);
   });
+
+  it("auto is runner-aware: github-hosted runners keep api + heuristic only", () => {
+    const base = {
+      ...createDefaultConfig(),
+      providers: [
+        { id: "heuristic", type: "mock" as const, enabled: true },
+        { id: "claude", type: "cli" as const, command: "claude", args: ["--print"], enabled: true },
+        { id: "gateway", type: "api" as const, model: "gpt-4o", enabled: true }
+      ]
+    };
+
+    const hosted = applyOverrides(base, { runnerMode: "auto", runnerEnvironment: "github-hosted" });
+    expect(hosted.providers.find((p) => p.id === "heuristic")?.enabled).toBe(true);
+    expect(hosted.providers.find((p) => p.id === "claude")?.enabled).toBe(false);
+    expect(hosted.providers.find((p) => p.id === "gateway")?.enabled).toBe(true);
+
+    // Self-hosted keeps everything under auto.
+    const selfHosted = applyOverrides(base, { runnerMode: "auto", runnerEnvironment: "self-hosted" });
+    expect(selfHosted.providers.every((p) => p.enabled)).toBe(true);
+
+    // An explicit cli mode is honored even on a hosted runner (preinstalled CLIs).
+    const explicit = applyOverrides(base, { runnerMode: "cli", runnerEnvironment: "github-hosted" });
+    expect(explicit.providers.find((p) => p.id === "claude")?.enabled).toBe(true);
+  });
 });
 
 describe("resolveBaseRef", () => {

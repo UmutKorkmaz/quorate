@@ -75,6 +75,8 @@ export function applyOverrides(
     runnerMode?: string;
     inlineComments?: string;
     inlineCommentLimit?: string;
+    /** GitHub's RUNNER_ENVIRONMENT ("github-hosted" | "self-hosted"); informs `auto`. */
+    runnerEnvironment?: string;
   }
 ): QuorateConfig {
   const providers = normalizeInput(inputs.providers);
@@ -93,8 +95,16 @@ export function applyOverrides(
   // keeps only local CLI agents, `api` keeps only HTTP endpoints, `auto` keeps
   // everything. The mock heuristic is the always-on safety baseline and is never
   // filtered out, so a misconfigured mode can never produce an empty council.
-  const effectiveRunnerMode =
+  const configuredRunnerMode =
     (runnerMode as "auto" | "cli" | "api" | undefined) ?? config.github.runnerMode;
+  // `auto` is runner-aware: GitHub-hosted runners have no authenticated local
+  // agent CLIs, so cli providers can never succeed there — keep api + heuristic
+  // only. An explicit runner-mode (`cli`/`api`) is always honored, so workflows
+  // that preinstall and authenticate a CLI can opt in with runner-mode: cli.
+  const effectiveRunnerMode =
+    configuredRunnerMode === "auto" && inputs.runnerEnvironment === "github-hosted"
+      ? "api"
+      : configuredRunnerMode;
 
   return {
     ...config,
@@ -183,7 +193,8 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     failOn: input("fail-on"),
     runnerMode: input("runner-mode"),
     inlineComments: input("inline-comments"),
-    inlineCommentLimit: input("inline-comment-limit")
+    inlineCommentLimit: input("inline-comment-limit"),
+    runnerEnvironment: process.env.RUNNER_ENVIRONMENT
   });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const report = await runCouncil(

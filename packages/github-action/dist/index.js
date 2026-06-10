@@ -47202,7 +47202,8 @@ function applyOverrides(config2, inputs) {
   const inlineCommentLimit = normalizeInput(inputs.inlineCommentLimit);
   const selected = providers ? new Set(providers.split(",").map((provider) => provider.trim()).filter(Boolean)) : void 0;
   const parsedLimit = inlineCommentLimit !== void 0 ? Number(inlineCommentLimit) : void 0;
-  const effectiveRunnerMode = runnerMode ?? config2.github.runnerMode;
+  const configuredRunnerMode = runnerMode ?? config2.github.runnerMode;
+  const effectiveRunnerMode = configuredRunnerMode === "auto" && inputs.runnerEnvironment === "github-hosted" ? "api" : configuredRunnerMode;
   return {
     ...config2,
     providers: config2.providers.map((provider) => {
@@ -47262,7 +47263,8 @@ async function runAction(deps) {
     failOn: input("fail-on"),
     runnerMode: input("runner-mode"),
     inlineComments: input("inline-comments"),
-    inlineCommentLimit: input("inline-comment-limit")
+    inlineCommentLimit: input("inline-comment-limit"),
+    runnerEnvironment: process.env.RUNNER_ENVIRONMENT
   });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const report = await runCouncil(
