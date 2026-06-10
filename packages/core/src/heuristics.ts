@@ -75,6 +75,48 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
         body: "Track this marker if it represents unfinished behavior."
       });
     }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /\bUncheckedAccount\s*<|AccountInfo\s*</.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Unchecked account type",
+        body:
+          "UncheckedAccount / AccountInfo bypasses Anchor's automatic owner and discriminator checks. " +
+          "Document manual validation in a comment and verify signer, owner, and key constraints explicitly."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /\binvoke(_signed)?\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Raw CPI invocation",
+        body:
+          "Raw invoke / invoke_signed bypasses Anchor's typed CPI safety checks. " +
+          "Verify the target program id and all account constraints before calling."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /skipPreflight\s*:\s*true/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Preflight checks disabled",
+        body:
+          "skipPreflight: true skips transaction simulation, so failing transactions still pay fees and errors are masked. " +
+          "Remove this flag or restrict it to explicit debug builds."
+      });
+    }
   }
 
   if (!request.diff && request.mode === "review") {

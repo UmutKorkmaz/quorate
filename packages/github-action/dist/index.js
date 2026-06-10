@@ -31462,11 +31462,8 @@ function createDefaultConfig(detected = detectAvailableProviders()) {
   };
 }
 
-// ../core/src/types.ts
-var severities = ["critical", "high", "medium", "low", "info"];
-
-// ../core/src/cli-provider.ts
-function buildPrompt(provider, role, request2) {
+// ../core/src/prompt.ts
+function buildReviewPrompt(provider, role, request2) {
   const header = [
     `You are the ${role} member of Quorate.`,
     `Mode: ${request2.mode}`,
@@ -31477,14 +31474,24 @@ function buildPrompt(provider, role, request2) {
     "You MAY instead return a JSON array of findings in a fenced ```json block, where each item is",
     '{"severity","title","body","file?","line?","suggestion?"}.'
   ].join("\n");
+  const guidance = request2.roleGuidance?.[role];
+  const guidanceBlock = guidance && guidance.length > 0 ? `
+
+Reviewer guidance for ${role}:
+${guidance}` : "";
   const diffSection = request2.diff ? `
 
 Diff:
 ${request2.diff}` : "";
-  return `${header}
+  return `${header}${guidanceBlock}
 
 Provider: ${provider.id}${diffSection}`;
 }
+
+// ../core/src/types.ts
+var severities = ["critical", "high", "medium", "low", "info"];
+
+// ../core/src/cli-provider.ts
 async function runCommand(command, args, input, options) {
   return new Promise((resolve) => {
     const child = (0, import_node_child_process.spawn)(command, args, {
@@ -31753,7 +31760,7 @@ async function runCliProvider(provider, role, request2, hooks) {
       durationMs: Date.now() - startedAt
     };
   }
-  const prompt = buildPrompt(provider, role, request2);
+  const prompt = buildReviewPrompt(provider, role, request2);
   const timeoutMs = Math.min(provider.timeoutMs ?? 12e4, 3e5);
   const killGraceMs = provider.killGraceMs ?? 5e3;
   const inputMode = provider.inputMode ?? (provider.stdin === false ? "none" : "stdin");
@@ -31847,25 +31854,6 @@ var REVIEWER_INSTRUCTIONS = [
   "Report concrete findings in the requested format only. Do not add filler prose.",
   "Use severity values: critical, high, medium, low, info."
 ].join("\n");
-function buildPrompt2(provider, role, request2) {
-  const header = [
-    `You are the ${role} member of Quorate.`,
-    `Mode: ${request2.mode}`,
-    `Subject: ${request2.subject}`,
-    "Return concise findings as Markdown bullets. Use this finding format when possible:",
-    "- [severity] Title (path/to/file.ts:12): concrete evidence and recommendation",
-    "Use severity values: critical, high, medium, low, info.",
-    "You MAY instead return a JSON array of findings in a fenced ```json block, where each item is",
-    '{"severity","title","body","file?","line?","suggestion?"}.'
-  ].join("\n");
-  const diffSection = request2.diff ? `
-
-Diff:
-${request2.diff}` : "";
-  return `${header}
-
-Provider: ${provider.id}${diffSection}`;
-}
 function firstMeaningfulLine2(output) {
   return output.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "Provider returned output.";
 }
@@ -31897,7 +31885,7 @@ async function runApiProvider(provider, role, request2, hooks) {
   const url2 = `${baseUrl2}/chat/completions`;
   const timeoutMs = Math.min(provider.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
   const maxOutputBytes = provider.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
-  const prompt = buildPrompt2(provider, role, request2);
+  const prompt = buildReviewPrompt(provider, role, request2);
   const headers = { "content-type": "application/json" };
   if (provider.apiKeyEnv) {
     const token = process.env[provider.apiKeyEnv];
@@ -46535,7 +46523,8 @@ var configSchema = external_exports.object({
     inlineCommentLimit: external_exports.number().int().positive().optional(),
     gate: external_exports.object({ severity: severitySchema, minAgreement: external_exports.number().int().positive() }).optional()
   }).default({}),
-  merge: external_exports.object({ provider: external_exports.string().min(1) }).optional()
+  merge: external_exports.object({ provider: external_exports.string().min(1) }).optional(),
+  roleGuidance: external_exports.record(external_exports.string(), external_exports.string()).optional()
 });
 function parseConfig(source) {
   const parsed = import_yaml.default.parse(source) ?? {};
@@ -46548,7 +46537,8 @@ function parseConfig(source) {
       ...defaults2.github,
       ...userConfig.github
     },
-    merge: userConfig.merge
+    merge: userConfig.merge,
+    roleGuidance: userConfig.roleGuidance
   };
 }
 
@@ -46615,6 +46605,30 @@ function runHeuristicReview(request2, role = "maintainer") {
         severity: "info",
         title: "Follow-up marker added",
         body: "Track this marker if it represents unfinished behavior."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /\bUncheckedAccount\s*<|AccountInfo\s*</.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Unchecked account type",
+        body: "UncheckedAccount / AccountInfo bypasses Anchor's automatic owner and discriminator checks. Document manual validation in a comment and verify signer, owner, and key constraints explicitly."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /\binvoke(_signed)?\s*\(/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Raw CPI invocation",
+        body: "Raw invoke / invoke_signed bypasses Anchor's typed CPI safety checks. Verify the target program id and all account constraints before calling."
+      });
+    }
+    if (/\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") && /skipPreflight\s*:\s*true/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Preflight checks disabled",
+        body: "skipPreflight: true skips transaction simulation, so failing transactions still pay fees and errors are masked. Remove this flag or restrict it to explicit debug builds."
       });
     }
   }
@@ -47020,8 +47034,9 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
     })),
     at: (/* @__PURE__ */ new Date()).toISOString()
   });
+  const reviewRequest = config2.roleGuidance ? { ...request2, roleGuidance: config2.roleGuidance } : request2;
   const settled = await Promise.allSettled(
-    lanes.map((lane) => runProviderWithEvents(lane.provider, lane.role, request2, ctx))
+    lanes.map((lane) => runProviderWithEvents(lane.provider, lane.role, reviewRequest, ctx))
   );
   const providerResults = settled.map((outcome, index) => {
     if (outcome.status === "fulfilled") return outcome.value;
@@ -47089,6 +47104,28 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
   emit({ type: "verdict", councilRunId, report });
   return report;
 }
+
+// ../core/src/packs.ts
+var solana = {
+  id: "solana",
+  description: "Solana / Anchor security review council",
+  councils: [
+    "solana-security",
+    "anchor-accounts",
+    "transaction-safety",
+    "token-safety",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "solana-security": "Audit every instruction for missing signer/owner checks and privilege-escalation paths. Scrutinise cross-program invocations (CPI) for arbitrary program-id acceptance, unchecked return values, and re-entrancy risks.",
+    "anchor-accounts": "Review all #[account(...)] constraints, ensuring has_one, seeds, and bump are correctly specified. Flag every use of UncheckedAccount or AccountInfo that lacks a manual safety comment explaining why the constraint is safe.",
+    "transaction-safety": "Check that skipPreflight is never set to true in production paths and that blockhash freshness and commitment levels are appropriate. Verify fee-payer selection and confirm that simulation results are checked before sending.",
+    "token-safety": "Validate SPL token mint addresses, token-account ownership, and decimal precision before any arithmetic involving amounts. Confirm that Associated Token Account (ATA) derivation and ownership are verified, not assumed.",
+    "maintainer": "Assess overall code structure, test coverage, and upgrade path safety. Identify dead code, unclear error messages, missing integration tests, and any patterns that will make the program hard to audit or extend."
+  }
+};
+var PACKS = { solana };
+var PACK_IDS = Object.keys(PACKS);
 
 // ../core/src/render.ts
 var reportCommentMarker = "<!-- quorate-report -->";

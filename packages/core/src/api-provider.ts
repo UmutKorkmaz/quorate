@@ -1,4 +1,5 @@
 import { parseFindings } from "./cli-provider.js";
+import { buildReviewPrompt } from "./prompt.js";
 import type { CouncilRequest, ProviderConfig, ProviderResult } from "./types.js";
 
 const DEFAULT_BASE_URL = "http://localhost:11434/v1";
@@ -11,27 +12,6 @@ const REVIEWER_INSTRUCTIONS = [
   "Report concrete findings in the requested format only. Do not add filler prose.",
   "Use severity values: critical, high, medium, low, info."
 ].join("\n");
-
-/**
- * Builds the review prompt sent to the model. Mirrors the prompt the CLI path
- * uses (the CLI's `buildPrompt` is not exported, so it is replicated minimally
- * here without modifying cli-provider.ts).
- */
-function buildPrompt(provider: ProviderConfig, role: string, request: CouncilRequest): string {
-  const header = [
-    `You are the ${role} member of Quorate.`,
-    `Mode: ${request.mode}`,
-    `Subject: ${request.subject}`,
-    "Return concise findings as Markdown bullets. Use this finding format when possible:",
-    "- [severity] Title (path/to/file.ts:12): concrete evidence and recommendation",
-    "Use severity values: critical, high, medium, low, info.",
-    "You MAY instead return a JSON array of findings in a fenced ```json block, where each item is",
-    '{"severity","title","body","file?","line?","suggestion?"}.'
-  ].join("\n");
-
-  const diffSection = request.diff ? `\n\nDiff:\n${request.diff}` : "";
-  return `${header}\n\nProvider: ${provider.id}${diffSection}`;
-}
 
 function firstMeaningfulLine(output: string): string {
   return (
@@ -84,7 +64,7 @@ export async function runApiProvider(
   const url = `${baseUrl}/chat/completions`;
   const timeoutMs = Math.min(provider.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
   const maxOutputBytes = provider.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
-  const prompt = buildPrompt(provider, role, request);
+  const prompt = buildReviewPrompt(provider, role, request);
 
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (provider.apiKeyEnv) {

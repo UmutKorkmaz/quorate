@@ -5,12 +5,15 @@ import { resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import {
+  buildPackConfig,
   createDefaultConfig,
   detectAvailableProviders,
   fetchProviderModels,
   findConfigPath,
   isEmptyReviewDiff,
   loadConfig,
+  PACK_IDS,
+  PACKS,
   PALETTE,
   PROVIDER_PRESETS,
   PROVIDER_PRESET_NAMES,
@@ -183,6 +186,7 @@ export function buildProgram(): Command {
     .helpGroup("Setup:")
     .description("Create a starter .quorate.yml with detected provider commands disabled by default.")
     .option("-f, --force", "Overwrite an existing config file")
+    .option("--pack <id>", "Scaffold a domain pack: " + PACK_IDS.join(", "))
     .action((options) => {
       const cwd = cwdFrom(program);
       const configPath = resolve(cwd, ".quorate.yml");
@@ -190,13 +194,35 @@ export function buildProgram(): Command {
         throw new Error(`${configPath} already exists. Use --force to overwrite it.`);
       }
 
-      const config = createDefaultConfig(detectAvailableProviders());
-      writeFileSync(configPath, serializeConfig(config), "utf8");
-      console.log(`Created ${configPath}`);
+      let config: QuorateConfig;
+      if (options.pack) {
+        const pack = PACKS[options.pack as string];
+        if (!pack) {
+          throw new Error(`Unknown pack "${options.pack as string}". Available: ${PACK_IDS.join(", ")}.`);
+        }
+        config = buildPackConfig(pack, detectAvailableProviders());
+        writeFileSync(configPath, serializeConfig(config), "utf8");
+        console.log(`Created ${configPath} with the ${pack.id} pack (${pack.councils.length} councils).`);
+      } else {
+        config = createDefaultConfig(detectAvailableProviders());
+        writeFileSync(configPath, serializeConfig(config), "utf8");
+        console.log(`Created ${configPath}`);
+      }
 
       // Session/report artifacts (diffs, transcripts, findings) are written under
       // .quorate/ — keep them out of version control.
       ensureGitignored(cwd, ".quorate/");
+    });
+
+  program
+    .command("packs")
+    .helpGroup("Setup:")
+    .description("List available domain packs (councils + per-role guidance).")
+    .action(() => {
+      for (const [id, pack] of Object.entries(PACKS)) {
+        console.log(`  ${id}  ${pack.description}`);
+        console.log(`    councils: ${pack.councils.join(", ")}`);
+      }
     });
 
   program

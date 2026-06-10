@@ -1,0 +1,9 @@
+diff --git a/programs/foo/src/lib.rs b/programs/foo/src/lib.rs
+--- a/programs/foo/src/lib.rs
++++ b/programs/foo/src/lib.rs
+@@ -10,6 +10,7 @@ pub struct Initialize<'info> {
+     #[account(mut)]
+     pub payer: Signer<'info>,
+     pub system_program: Program<'info, System>,
++    pub authority: UncheckedAccount<'info>,
+ }

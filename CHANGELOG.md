@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Solana pack (slice 1).** `quorate init --pack solana` scaffolds a
+  Solana/Anchor review council (councils: solana-security, anchor-accounts,
+  transaction-safety, token-safety, maintainer) with per-role reviewer guidance;
+  `quorate packs` lists available packs.
+- **Shared reviewer prompt builder** (`buildReviewPrompt`) replaces the duplicated
+  prompt logic in the api and cli provider runners — byte-identical output when no
+  pack is active, and the single place pack `roleGuidance` is injected per role.
+- **Three deterministic Solana heuristics**: UncheckedAccount/AccountInfo (high),
+  raw CPI invoke/invoke_signed (medium), and skipPreflight: true (medium), with a
+  vulnerable/clean Anchor + web3.js diff corpus proving detection and zero false
+  positives.
+
 ## [0.7.2] - 2026-06-10
 
 ### Added

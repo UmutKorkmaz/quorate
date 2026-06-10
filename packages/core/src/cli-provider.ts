@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findExecutable } from "./providers.js";
+import { buildReviewPrompt } from "./prompt.js";
 import { severities } from "./types.js";
 import type { CouncilRequest, Finding, ProviderConfig, ProviderResult, Severity } from "./types.js";
 
@@ -14,22 +15,6 @@ interface CommandResult {
   timedOut: boolean;
   outputTruncated: boolean;
   aborted: boolean;
-}
-
-function buildPrompt(provider: ProviderConfig, role: string, request: CouncilRequest): string {
-  const header = [
-    `You are the ${role} member of Quorate.`,
-    `Mode: ${request.mode}`,
-    `Subject: ${request.subject}`,
-    "Return concise findings as Markdown bullets. Use this finding format when possible:",
-    "- [severity] Title (path/to/file.ts:12): concrete evidence and recommendation",
-    "Use severity values: critical, high, medium, low, info.",
-    "You MAY instead return a JSON array of findings in a fenced ```json block, where each item is",
-    '{"severity","title","body","file?","line?","suggestion?"}.'
-  ].join("\n");
-
-  const diffSection = request.diff ? `\n\nDiff:\n${request.diff}` : "";
-  return `${header}\n\nProvider: ${provider.id}${diffSection}`;
 }
 
 async function runCommand(
@@ -475,7 +460,7 @@ export async function runCliProvider(
     };
   }
 
-  const prompt = buildPrompt(provider, role, request);
+  const prompt = buildReviewPrompt(provider, role, request);
   const timeoutMs = Math.min(provider.timeoutMs ?? 120_000, 300_000);
   const killGraceMs = provider.killGraceMs ?? 5_000;
   const inputMode = provider.inputMode ?? (provider.stdin === false ? "none" : "stdin");
