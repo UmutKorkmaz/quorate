@@ -31,6 +31,32 @@ function addedLines(diff: string): DiffLine[] {
   return result;
 }
 
+function removedLines(diff: string): DiffLine[] {
+  const result: DiffLine[] = [];
+  let currentFile: string | undefined;
+  let newSideLine: number | undefined;
+
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      currentFile = undefined;
+      newSideLine = undefined;
+    } else if (line.startsWith("--- a/")) {
+      currentFile = line.slice("--- a/".length);
+    } else if (line.startsWith("+++ b/")) {
+      currentFile = line.slice("+++ b/".length);
+    } else if (line.startsWith("@@")) {
+      const match = /\+(\d+)/.exec(line);
+      newSideLine = match ? Number(match[1]) : undefined;
+    } else if (line.startsWith("-") && !line.startsWith("---")) {
+      result.push({ file: currentFile, line: newSideLine, text: line.slice(1) });
+    } else if (!line.startsWith("+") && newSideLine !== undefined) {
+      newSideLine += 1;
+    }
+  }
+
+  return result;
+}
+
 export function runHeuristicReview(request: CouncilRequest, role = "maintainer"): ProviderResult {
   const startedAt = Date.now();
   const findings: Finding[] = [];
@@ -115,6 +141,109 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
         body:
           "skipPreflight: true skips transaction simulation, so failing transactions still pay fees and errors are masked. " +
           "Remove this flag or restrict it to explicit debug builds."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /\.unwrap\(\)|\.expect\(|panic!\(|unreachable!\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Panic in on-chain code",
+        body:
+          "on-chain programs should return Err, not panic — a panic aborts the transaction and can be a DoS/footgun; " +
+          "use ? / require! / proper error returns."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /create_program_address\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Non-canonical PDA bump",
+        body:
+          "create_program_address accepts any bump; canonicalize with find_program_address or validate against a stored " +
+          "canonical bump (bump-seed canonicalization)."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /lamports\s*\.\s*borrow_mut\(\)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Manual account closing",
+        body:
+          "draining lamports by hand can leave a revivable/zombie account; use Anchor's close = <recipient> or zero " +
+          "the discriminator + defund atomically (closing-accounts attack)."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /(Account|Mint)::unpack\s*\(|spl_token::state::/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unvalidated token account",
+        body:
+          "unpacking SPL token Account/Mint data without checking owner == token program and the expected mint enables " +
+          "account-substitution; validate owner and mint (and decimals) before trusting amounts."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /(amount|balance|lamports|supply)\b[^;=]*[-+*]=(?!=)/.test(text) &&
+      !text.includes("checked_")
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unchecked arithmetic on funds",
+        body:
+          "balance/amount math without checked_add/checked_sub can overflow/underflow; " +
+          "use checked_* and handle None."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /fromSecretKey\s*\(|secretKey\s*[:=]\s*(\[|Uint8Array|new Uint8Array|bs58)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Hardcoded keypair material",
+        body:
+          "a secret key embedded in source is committed forever; load from env/secret manager, never inline."
+      });
+    }
+  }
+
+  for (const line of removedLines(request.diff ?? "")) {
+    const text = line.text;
+    const base = { file: line.file, line: line.line, providerId: "heuristic", role };
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /#\[account|has_one\s*=|constraint\s*=|address\s*=|seeds\s*=/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Anchor account constraint removed",
+        body:
+          "a removed #[account(...)] constraint (has_one/constraint/address/seeds/signer) drops an authorization or " +
+          "validation check — confirm this is intentional."
       });
     }
   }

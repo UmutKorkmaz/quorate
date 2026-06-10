@@ -18,5 +18,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/faq":
     "Frequently asked questions about Quorate — install, providers, degraded reviews, and the GitHub Action.",
   "/docs/manual-testing":
-    "Manual testing checklist for Quorate — website, CLI shell, keyboard shortcuts, sessions, headless commands, and edge cases."
+    "Manual testing checklist for Quorate — website, CLI shell, keyboard shortcuts, sessions, headless commands, and edge cases.",
+  "/docs/solana":
+    "Quorate Solana pack — Anchor-aware review council and ten deterministic on-chain heuristics for sealevel security."
 };

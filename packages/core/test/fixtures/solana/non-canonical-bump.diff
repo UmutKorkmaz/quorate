@@ -1,0 +1,11 @@
+diff --git a/programs/escrow/src/lib.rs b/programs/escrow/src/lib.rs
+--- a/programs/escrow/src/lib.rs
++++ b/programs/escrow/src/lib.rs
+@@ -18,6 +18,8 @@ pub mod escrow {
+     pub fn init_escrow(ctx: Context<InitEscrow>, bump: u8) -> Result<()> {
+         let seeds = &[b"escrow".as_ref(), &[bump]];
++        let pda = create_program_address(seeds, ctx.program_id)?;
++        ctx.accounts.escrow.key = pda;
+         Ok(())
+     }
+ }

@@ -14,6 +14,11 @@ const CARDS = [
     to: "/docs/manual-testing",
     title: "Manual testing",
     desc: "A release checklist for the website, shell, keyboard flow, sessions, and headless CLI."
+  },
+  {
+    to: "/docs/solana",
+    title: "Solana / Anchor",
+    desc: "Solana/Anchor-aware council + ten deterministic on-chain heuristics. Zero-setup sealevel security review."
   }
 ] as const;
 

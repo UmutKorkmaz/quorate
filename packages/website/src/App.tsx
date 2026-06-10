@@ -12,6 +12,7 @@ import Config from "./pages/docs/Config";
 import GithubAction from "./pages/docs/GithubAction";
 import Faq from "./pages/docs/Faq";
 import ManualTesting from "./pages/docs/ManualTesting";
+import Solana from "./pages/docs/Solana";
 
 export function App() {
   return (
@@ -28,6 +29,7 @@ export function App() {
           <Route path="github-action" element={<GithubAction />} />
           <Route path="faq" element={<Faq />} />
           <Route path="manual-testing" element={<ManualTesting />} />
+          <Route path="solana" element={<Solana />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

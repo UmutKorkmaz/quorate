@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   raw CPI invoke/invoke_signed (medium), and skipPreflight: true (medium), with a
   vulnerable/clean Anchor + web3.js diff corpus proving detection and zero false
   positives.
+- **Solana pack complete (10 sealevel classes).** Four more on-chain
+  Rust heuristics (panic, non-canonical PDA bump, manual account closing,
+  unvalidated token account, unchecked arithmetic) plus a diff-shaped Anchor
+  constraint-removal check (via a new removedLines pass) and a hardcoded-keypair
+  check — 10 distinct vulnerability classes proven by the demo corpus, clean
+  Anchor/web3.js fixtures stay finding-free. New "Quorate for Solana / Anchor"
+  docs page and a ready-to-copy GitHub Action example workflow.
 
 ## [0.7.2] - 2026-06-10
 
