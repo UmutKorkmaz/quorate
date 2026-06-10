@@ -17,7 +17,8 @@ export interface WriteAgentProfile {
 export const WRITE_AGENT_PROFILES: WriteAgentProfile[] = [
   { id: "claude", command: "claude", args: (prompt) => [prompt], label: "Claude Code (interactive)" },
   { id: "codex", command: "codex", args: (prompt) => [prompt], label: "Codex CLI (interactive)" },
-  { id: "agy", command: "agy", args: (prompt) => [prompt], label: "Agy (interactive)" }
+  // agy ignores a positional prompt; -i runs it interactively and keeps the session.
+  { id: "agy", command: "agy", args: (prompt) => ["-i", prompt], label: "Agy (interactive)" }
 ];
 
 export function writeAgentProfile(id: string): WriteAgentProfile | undefined {
