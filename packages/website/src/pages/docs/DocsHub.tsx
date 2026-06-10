@@ -44,6 +44,11 @@ const CARDS = [
     to: "/docs/ci",
     title: "CI/CD & Supply Chain",
     desc: "Workflow-security and supply-chain council + ten deterministic heuristics covering script injection, unpinned actions, hardcoded secrets, and pipe-to-shell patterns. Zero-setup CI review."
+  },
+  {
+    to: "/docs/fintech",
+    title: "Fintech / PCI",
+    desc: "Payment-security council + ten deterministic heuristics covering card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables. Zero-setup PCI review."
   }
 ] as const;
 

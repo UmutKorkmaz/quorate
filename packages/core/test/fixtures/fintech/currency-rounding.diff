@@ -1,0 +1,17 @@
+diff --git a/src/payment/display.ts b/src/payment/display.ts
+--- a/src/payment/display.ts
++++ b/src/payment/display.ts
+@@ -1,5 +1,14 @@
++export function formatCurrency(amount: number, currency = "USD"): string {
++  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(
++    amount.toFixed(2) as unknown as number
++  );
++}
++
++export function roundToNearestCent(total: number): number {
++  return Math.round(total * 100) / 100;
++}
++
++export function getDisplayTotal(subtotal: number, taxRate: number): string {
++  return (subtotal + Math.round(subtotal * taxRate * 100) / 100).toFixed(2);
++}

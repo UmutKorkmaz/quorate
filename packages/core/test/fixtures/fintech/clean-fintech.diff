@@ -1,0 +1,103 @@
+diff --git a/src/payment/safe-payment.ts b/src/payment/safe-payment.ts
+--- a/src/payment/safe-payment.ts
++++ b/src/payment/safe-payment.ts
+@@ -0,0 +1,96 @@
++/**
++ * Safe payment module — PCI-compliant patterns.
++ * - Money represented as integer cents (never float).
++ * - Stripe webhook verified with constructEvent.
++ * - PAN masked before logging; CVV never persisted.
++ * - Financial PII stored via encrypted fields only.
++ * - All SQL uses parameterized queries.
++ * - TLS certificate verification always enabled.
++ */
++import Stripe from "stripe";
++import https from "node:https";
++import { pool } from "../db/pool.js";
++import { encryptField } from "../crypto/aes.js";
++import { logger } from "../lib/logger.js";
++
++const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" });
++
++// ---------------------------------------------------------------------------
++// Money arithmetic — integer cents only
++// ---------------------------------------------------------------------------
++
++export function addCents(a: number, b: number): number {
++  return a + b;
++}
++
++export function subtractCents(a: number, b: number): number {
++  if (b > a) throw new Error("Insufficient funds");
++  return a - b;
++}
++
++export function centsToDisplay(cents: number, currency = "USD"): string {
++  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
++}
++
++// ---------------------------------------------------------------------------
++// Webhook handling — signature always verified
++// ---------------------------------------------------------------------------
++
++export function parseStripeWebhook(
++  rawBody: Buffer,
++  signature: string,
++  secret: string
++): Stripe.Event {
++  return stripe.webhooks.constructEvent(rawBody, signature, secret);
++}
++
++// ---------------------------------------------------------------------------
++// Card handling — PAN masked, CVV never persisted
++// ---------------------------------------------------------------------------
++
++export function maskPan(pan: string): string {
++  return `****-****-****-${pan.slice(-4)}`;
++}
++
++export async function vaultCard(data: {
++  customerId: string;
++  lastFour: string;
++  expiry: string;
++}): Promise<string> {
++  const token = await generateToken();
++  await pool.query(
++    "INSERT INTO card_tokens (token, customer_id, last_four, expiry) VALUES ($1, $2, $3, $4)",
++    [token, data.customerId, data.lastFour, data.expiry]
++  );
++  return token;
++}
++
++// ---------------------------------------------------------------------------
++// Financial PII — encrypted at rest
++// ---------------------------------------------------------------------------
++
++export async function saveCustomerBankDetails(customerId: string, routing: string, account: string): Promise<void> {
++  const encRoutingNumber = await encryptField(routing);
++  const encAccountNumber = await encryptField(account);
++  await pool.query(
++    "UPDATE customers SET routing_enc = $1, account_enc = $2 WHERE id = $3",
++    [encRoutingNumber, encAccountNumber, customerId]
++  );
++}
++
++// ---------------------------------------------------------------------------
++// Gateway client — TLS certificate verification enabled
++// ---------------------------------------------------------------------------
++
++const safeAgent = new https.Agent({ rejectUnauthorized: true });
++
++export async function chargeGateway(cents: number, token: string): Promise<{ chargeId: string }> {
++  const response = await fetch(process.env.GATEWAY_URL + "/charge", {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({ cents, token }),
++    // @ts-expect-error node fetch agent
++    agent: safeAgent,
++  });
++  if (!response.ok) throw new Error(`Gateway error: ${response.status}`);
++  const data = await response.json() as { chargeId: string };
++  logger.info("Charge completed", { chargeId: data.chargeId });
++  return data;
++}

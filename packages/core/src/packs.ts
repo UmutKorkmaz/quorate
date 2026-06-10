@@ -162,7 +162,40 @@ const ci: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci };
+const fintech: QuoratePack = {
+  id: "fintech",
+  description: "Fintech / PCI-DSS payment security review council",
+  councils: [
+    "payment-security",
+    "pci-compliance",
+    "data-protection",
+    "transaction-integrity",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "payment-security":
+      "Audit every payment webhook handler for missing signature verification (e.g. Stripe constructEvent). " +
+      "Verify idempotency keys are used on charge/refund endpoints to prevent double-charging. " +
+      "Confirm all connections to payment gateways use TLS with certificate verification enabled — never rejectUnauthorized: false.",
+    "pci-compliance":
+      "Enforce PCI-DSS card data rules: CVV/CVC must never be stored after authorization — not in databases, caches, or logs. " +
+      "Primary Account Numbers (PAN) must be masked (show only last 4 digits) before appearing in any log, error message, or API response. " +
+      "Flag any code path that persists raw card numbers or security codes.",
+    "data-protection":
+      "Identify financial PII (SSN, tax IDs, bank account numbers, routing numbers, IBANs) that is stored or transmitted in plaintext. " +
+      "Require encryption at rest for all sensitive financial fields. " +
+      "Ensure no secrets, API keys, or credentials are hardcoded in source — load from environment variables or a secret manager.",
+    "transaction-integrity":
+      "Monetary values must be represented as integer minor units (cents, pence) rather than floating-point numbers — floats cannot represent all decimal currency values exactly and lose cents over repeated arithmetic. " +
+      "Flag parseFloat(), float/double/number types on money fields, and floating-point arithmetic operators applied to currency values. " +
+      "Verify that amount validation rejects negative, zero, and out-of-range values before processing.",
+    "maintainer":
+      "Assess overall code structure, test coverage, error handling, and long-term maintainability of the payment integration. " +
+      "Identify missing idempotency handling, absent retry logic, unclear error messages from payment APIs, and any patterns that will make the financial logic hard to audit or extend."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

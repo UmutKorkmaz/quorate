@@ -30,5 +30,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/move":
     "Quorate Move pack — Sui/Aptos-aware security council and ten deterministic heuristics for resource safety, capability misuse, and access-control review.",
   "/docs/ci":
-    "Quorate CI pack — workflow-security and supply-chain council and ten deterministic heuristics for script injection, unpinned actions, hardcoded secrets, and pipe-to-shell review."
+    "Quorate CI pack — workflow-security and supply-chain council and ten deterministic heuristics for script injection, unpinned actions, hardcoded secrets, and pipe-to-shell review.",
+  "/docs/fintech":
+    "Quorate Fintech pack — payment-security and PCI-compliance council and ten deterministic heuristics for card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables."
 };

@@ -1,0 +1,18 @@
+diff --git a/src/payment/test-helpers.ts b/src/payment/test-helpers.ts
+--- a/src/payment/test-helpers.ts
++++ b/src/payment/test-helpers.ts
+@@ -1,4 +1,14 @@
++// Test helpers for payment integration tests
++export const TEST_CARDS = {
++  visa: 4111111111111111,
++  mastercard: 5500005555555559,
++  declined: 4000000000000002,
++};
++
++export function makeTestPayload(cardNum = 4111111111111111) {
++  return {
++    cardNumber: cardNum,
++    expiry: "12/26",
++    amount: 1000,
++  };
++}

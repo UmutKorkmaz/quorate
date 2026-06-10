@@ -18,6 +18,7 @@ import Iac from "./pages/docs/Iac";
 import LlmApp from "./pages/docs/LlmApp";
 import Move from "./pages/docs/Move";
 import Ci from "./pages/docs/Ci";
+import Fintech from "./pages/docs/Fintech";
 
 export function App() {
   return (
@@ -40,6 +41,7 @@ export function App() {
           <Route path="llm" element={<LlmApp />} />
           <Route path="move" element={<Move />} />
           <Route path="ci" element={<Ci />} />
+          <Route path="fintech" element={<Fintech />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

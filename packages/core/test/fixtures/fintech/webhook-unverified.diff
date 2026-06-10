@@ -1,0 +1,23 @@
+diff --git a/src/webhooks/stripe.ts b/src/webhooks/stripe.ts
+--- a/src/webhooks/stripe.ts
++++ b/src/webhooks/stripe.ts
+@@ -1,5 +1,20 @@
++import { stripe } from "../lib/stripe.js";
++import type { Request, Response } from "express";
++
++const verifSignature = false;
++
++export async function handleStripeWebhook(req: Request, res: Response): Promise<void> {
++  let event;
++
++  if (verifSignature) {
++    const sig = req.headers["stripe-signature"] as string;
++    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
++  } else {
++    // Signature verification temporarily disabled for testing
++    event = req.body;
++  }
++
++  await processStripeEvent(event);
++  res.json({ received: true });
++}

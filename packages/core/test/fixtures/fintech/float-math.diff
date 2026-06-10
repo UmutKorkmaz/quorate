@@ -1,0 +1,20 @@
+diff --git a/src/payment/invoice.ts b/src/payment/invoice.ts
+--- a/src/payment/invoice.ts
++++ b/src/payment/invoice.ts
+@@ -1,5 +1,18 @@
++import { LineItem } from "./types.js";
++
++export function buildInvoice(items: LineItem[]): { subtotal: number; tax: number; total: number } {
++  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
++  const tax = subtotal * 0.1;
++  const discountedSubtotal = subtotal - 2.50;
++  const total = discountedSubtotal + tax;
++  return { subtotal, tax, total };
++}
++
++export function splitPayment(total: number, parts: number): number[] {
++  const share = total / parts;
++  return Array.from({ length: parts }, (_, i) =>
++    i === parts - 1 ? total - share * (parts - 1) : share
++  );
++}

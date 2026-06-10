@@ -942,6 +942,148 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
           "a pre-downloaded and checksummed file instead."
       });
     }
+
+    // ── Fintech / PCI-DSS checks — backend source files only ─────────────────
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(amount|price|balance|total|cost|fee|payment)\w*\s*[:=]\s*parseFloat\(|\b(amount|price|balance|total)\w*\s*:\s*(number|float|Float|double|Double)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Monetary value stored as float",
+        body:
+          "Floating-point types cannot represent all decimal currency values exactly and lose cents over repeated arithmetic. " +
+          "Store monetary amounts as integer minor units (cents, pence) or use a decimal library — never float/double/parseFloat."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(console\.(log|info|debug|warn)|print|println|logger\.\w+)\s*\([^)]*\b(card(_?number)?|pan|cvv|cvc|cvv2|securityCode|cardNumber)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Card data in logs",
+        body:
+          "PCI-DSS prohibits logging PAN (card numbers) and CVV/CVC values under any circumstances. " +
+          "Remove card data from all log statements; mask PAN to last-4 digits before any output."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b4[0-9]{12}(?:[0-9]{3})?\b|\b5[1-5][0-9]{14}\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Card number literal in source",
+        body:
+          "A payment card number (PAN) is hardcoded in source code. " +
+          "PANs must never appear in version-controlled files — use tokenized test card numbers from your payment provider's documentation."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(cvv|cvc|cvv2|securityCode|card_?security)\b\s*[:=]/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "CVV stored/persisted",
+        body:
+          "PCI-DSS requirement 3.2 forbids storing CVV/CVC security codes after authorization. " +
+          "Remove any persistence of CVV fields — do not insert them into databases, caches, or logs."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(verif\w*Signature|signatureVerification|checkSignature)\s*[:=]\s*(false|False)|verify_?signature\s*=\s*False|skipSignature/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Webhook signature verification disabled",
+        body:
+          "Disabling webhook signature verification allows any caller to spoof payment events. " +
+          "Always verify provider signatures (e.g. Stripe webhook.constructEvent) before processing events."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(amount|price|total|balance|subtotal)\w*\s*[-+*\/]\s*[\d]*\.[\d]/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Floating-point arithmetic on money",
+        body:
+          "Applying floating-point arithmetic operators to monetary values causes rounding drift — repeated operations " +
+          "accumulate errors that result in incorrect totals. Use integer cents arithmetic or a decimal precision library."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(ssn|socialSecurity|social_security|taxId|tax_id|routingNumber|routing_number|accountNumber|account_number|iban)\b\s*[:=]\s*["'][^"']/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Financial PII in plaintext",
+        body:
+          "Financial personally-identifiable information (SSN, account numbers, routing numbers, IBAN) is assigned a plaintext literal. " +
+          "Encrypt sensitive financial PII at rest using a field-level encryption scheme; never hardcode real values in source."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /rejectUnauthorized\s*:\s*false|verify\s*=\s*False|InsecureSkipVerify\s*:\s*true|CURLOPT_SSL_VERIFYPEER\s*,\s*(0|false)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "TLS certificate verification disabled",
+        body:
+          "Disabling TLS certificate verification exposes payment API connections to man-in-the-middle attacks. " +
+          "Always verify server certificates (rejectUnauthorized: true) when communicating with payment gateways and financial APIs."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(amount|price|total|balance)\w*[^;\n]*\.toFixed\s*\(\s*2\s*\)|Math\.round\s*\([^)]*\b(amount|price|total)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Float rounding used for currency",
+        body:
+          "Using .toFixed(2) or Math.round on currency values is a symptom of float-based money handling and introduces " +
+          "rounding inconsistencies. Represent monetary values as integer minor units (cents) to avoid rounding altogether."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(query|sql|execute)\s*[(=][^;\n]*\b(amount|account|card|user|payment|balance)[^;\n]*\+/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "SQL built by string concatenation",
+        body:
+          "Building SQL queries by string concatenation with financial data is vulnerable to SQL injection attacks. " +
+          "Use parameterized queries or a query builder for all database operations involving payment or account data."
+      });
+    }
   }
 
   for (const line of removedLines(request.diff ?? "")) {
