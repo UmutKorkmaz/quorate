@@ -14,6 +14,7 @@ import {
 } from "./cli";
 import { diffSourceLabel, pickDiffSource, toReviewArgs, type DiffSource } from "./diff";
 import { CouncilTree, findingDiagnostics, ResultsTree, StatusTree } from "./trees";
+import { FindingDecorations, findingHover } from "./decorations";
 import { VerdictPanel } from "./verdict-panel";
 
 interface Preset {
@@ -74,6 +75,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const results = new ResultsTree();
   const statusTree = new StatusTree();
   const diagnostics = vscode.languages.createDiagnosticCollection("quorate");
+  const decorations = new FindingDecorations(context.extensionUri);
+  context.subscriptions.push({ dispose: () => decorations.dispose() });
+  // Re-apply gutter decorations whenever the set of visible editors changes.
+  context.subscriptions.push(
+    vscode.window.onDidChangeVisibleTextEditors((editors) => editors.forEach((e) => decorations.applyTo(e)))
+  );
 
   vscode.window.registerTreeDataProvider("quorate.results", results);
   vscode.window.registerTreeDataProvider("quorate.status", statusTree);
@@ -162,8 +169,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     results.setReport(report);
     diagnostics.clear();
     for (const [file, diags] of findingDiagnostics(report, bases)) diagnostics.set(vscode.Uri.file(file), diags);
+    decorations.setReport(report, bases);
+    decorations.refresh();
     const v = report.verdict;
-    statusBar.text = v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS";
+    const counts = report.findings.length;
+    statusBar.text =
+      (v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS") +
+      (counts ? ` · ${counts}` : "");
     statusBar.command = "quorate.openVerdict";
     VerdictPanel.instance.show(report, context.extensionUri);
   }
@@ -520,9 +532,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("quorate.clearFindings", () => {
       diagnostics.clear();
+      decorations.clear();
       results.setReport(undefined);
       statusBar.text = "$(law) Quorate";
     }),
+
+    // Rich hover on a finding line: severity, body, agreement, suggestion + Fix/Ignore.
+    vscode.languages.registerHoverProvider(
+      { scheme: "file" },
+      {
+        provideHover(document, position) {
+          return findingHover(decorations.findingsAt(document.uri.fsPath, position.line), document.uri);
+        }
+      }
+    ),
     vscode.commands.registerCommand("quorate.openConfig", async () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri;
       if (!cwd) return;
