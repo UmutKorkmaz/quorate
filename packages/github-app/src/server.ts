@@ -3,7 +3,7 @@
  *
  * Listens for webhook events from GitHub and calls reviewPullRequest for:
  * - pull_request (opened / synchronize / reopened)
- * - check_run.requested_action (identifier "rerun")
+ * - check_run.rerequested (native re-run) and requested_action (our "rerun" button)
  *
  * Authentication uses @octokit/auth-app (App JWT + installation token).
  * Webhook signature verification is handled by @octokit/webhooks.
@@ -104,16 +104,25 @@ async function handlePullRequestEvent(
   });
 }
 
+/** Whether a check_run event should re-run the council — either GitHub's native
+ *  "Re-run" button (`rerequested`) or our custom "Re-run Quorate" action button. */
+export function isCheckRerunEvent(payload: {
+  action: string;
+  requested_action?: { identifier?: string };
+}): boolean {
+  if (payload.action === "rerequested") return true;
+  return payload.action === "requested_action" && payload.requested_action?.identifier === "rerun";
+}
+
 async function handleCheckRunRequestedAction(
   event: EmitterWebhookEvent<"check_run">,
   appId: string,
   privateKey: string
 ): Promise<void> {
-  const { action, check_run: checkRun, repository, installation } = event.payload;
-  if (action !== "requested_action") return;
-  if ((event.payload as { requested_action?: { identifier?: string } }).requested_action?.identifier !== "rerun") return;
+  const { check_run: checkRun, repository, installation } = event.payload;
+  if (!isCheckRerunEvent(event.payload as { action: string; requested_action?: { identifier?: string } })) return;
   if (!installation) {
-    logger.warn("check_run.requested_action event missing installation payload — skipping");
+    logger.warn("check_run re-run event missing installation payload — skipping");
     return;
   }
 
@@ -134,7 +143,7 @@ async function handleCheckRunRequestedAction(
   const headSha = pr.head.sha;
   const baseRef = pr.base.ref;
 
-  logger.info("Re-running council via requested_action", { owner, repo, pullNumber });
+  logger.info("Re-running council (check_run re-run requested)", { owner, repo, pullNumber });
 
   const octokit = makeInstallationOctokit({
     appId,
