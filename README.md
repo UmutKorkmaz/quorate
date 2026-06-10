@@ -107,7 +107,10 @@ events with the final report as the last line, ideal for piping into other tools
 
 ## Domain packs
 
-`quorate init --pack <id>` scaffolds a domain-aware council — ecosystem-specific
+`quorate init --auto` detects your repo's stack (Rust/Solidity/Move/Terraform/
+workflows/Swift/Kotlin + framework deps) and scaffolds the matching pack(s);
+`quorate init --pack <id>` (or a comma-separated `<id,id>`) picks them explicitly.
+Each scaffolds a domain-aware council — ecosystem-specific
 councils + per-role reviewer guidance — and turns on **deterministic, diff-based
 heuristics** for that domain (always-on, zero setup, layered under whatever real
 agents you enable). `quorate packs` lists them.

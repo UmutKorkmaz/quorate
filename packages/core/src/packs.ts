@@ -1,5 +1,5 @@
 /** Ecosystem pack registry (solana first) — councils + per-role guidance. */
-import type { DetectedProvider, QuorateConfig } from "./types.js";
+import type { DetectedProvider, ProviderConfig, QuorateConfig } from "./types.js";
 import { createDefaultConfig } from "./providers.js";
 
 export interface QuoratePack {
@@ -333,48 +333,215 @@ const mobile: QuoratePack = {
 export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech, web, healthcare, mobile };
 export const PACK_IDS = Object.keys(PACKS);
 
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
 /**
- * Build a QuorateConfig seeded from a pack.
+ * Distribute `distributedCouncils` across real (non-mock) providers, 2 per
+ * provider round-robin.  Providers past the last chunk wrap-around so no
+ * provider ever ends up with an empty roles array.
+ */
+function assignCouncilsToProviders(
+  distributedCouncils: string[],
+  realProviders: ProviderConfig[],
+  mockProviders: ProviderConfig[]
+): ProviderConfig[] {
+  const updatedReal = realProviders.map((provider, index) => {
+    const chunkStart = index * 2;
+    const roles = distributedCouncils.slice(chunkStart, chunkStart + 2);
+    const finalRoles =
+      roles.length > 0 ? roles : [distributedCouncils[index % distributedCouncils.length]];
+    return { ...provider, roles: finalRoles };
+  });
+
+  const updatedMock = mockProviders.map((provider) => ({
+    ...provider,
+    roles: ["maintainer"]
+  }));
+
+  return [...updatedMock, ...updatedReal];
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a QuorateConfig from a list of packs (multi-pack merge).
  *
- * - Starts from createDefaultConfig(detected) so all provider meta-data
- *   (command, args, inputMode, timeoutMs, …) comes from the existing logic.
- * - Overrides councils and roleGuidance with pack values.
- * - Re-assigns pack councils (minus "maintainer") to real providers round-robin,
- *   2 roles per provider.  The heuristic/mock provider always gets ["maintainer"].
+ * Councils:
+ *   - De-duplicated UNION of all packs' councils.
+ *   - "maintainer" appears exactly once and is moved to the END.
+ *
+ * roleGuidance:
+ *   - Merged object of all packs' roleGuidance. First-pack wins on collision.
+ *
+ * Providers:
+ *   - Round-robin all non-maintainer union councils across real providers,
+ *     2 per provider.  Mock/heuristic providers always get ["maintainer"].
+ *
+ * When called with a single pack the result is equivalent to buildPackConfig.
+ * Pure + immutable.
+ */
+export function buildMultiPackConfig(
+  packs: QuoratePack[],
+  detected: DetectedProvider[]
+): QuorateConfig {
+  // 1. Union of all councils, deduped, maintainer moved to end exactly once.
+  const seenCouncils = new Set<string>();
+  const unionCouncils: string[] = [];
+
+  for (const pack of packs) {
+    for (const council of pack.councils) {
+      if (council !== "maintainer" && !seenCouncils.has(council)) {
+        seenCouncils.add(council);
+        unionCouncils.push(council);
+      }
+    }
+  }
+  // Append "maintainer" exactly once at the end.
+  const councils = [...unionCouncils, "maintainer"];
+
+  // 2. Merge roleGuidance — first pack wins on key collision.
+  const roleGuidance: Record<string, string> = {};
+  for (const pack of packs) {
+    for (const [key, value] of Object.entries(pack.roleGuidance)) {
+      if (!(key in roleGuidance)) {
+        roleGuidance[key] = value;
+      }
+    }
+  }
+
+  // 3. Distribute non-maintainer union councils across real providers.
+  const base = createDefaultConfig(detected);
+  const mockProviders = base.providers.filter((p) => p.type === "mock");
+  const realProviders = base.providers.filter((p) => p.type !== "mock");
+
+  const providers = assignCouncilsToProviders(unionCouncils, realProviders, mockProviders);
+
+  return {
+    ...base,
+    councils,
+    roleGuidance,
+    providers
+  };
+}
+
+/**
+ * Build a QuorateConfig seeded from a single pack.
+ * Delegates to buildMultiPackConfig for consistency.
  */
 export function buildPackConfig(
   pack: QuoratePack,
   detected: DetectedProvider[]
 ): QuorateConfig {
-  const base = createDefaultConfig(detected);
+  return buildMultiPackConfig([pack], detected);
+}
 
-  // Councils that should be distributed among real (non-mock) providers.
-  const distributedCouncils = pack.councils.filter((c) => c !== "maintainer");
+// ---------------------------------------------------------------------------
+// Pack detection
+// ---------------------------------------------------------------------------
 
-  // Split providers into mock (heuristic) and real.
-  const mockProviders = base.providers.filter((p) => p.type === "mock");
-  const realProviders = base.providers.filter((p) => p.type !== "mock");
+/**
+ * Infer which domain packs apply to a repo from lightweight signals.
+ *
+ * @param signals.files        Repo-relative file paths (from e.g. `git ls-files`).
+ * @param signals.dependencies Optional list of package names (from package.json keys).
+ * @returns Matched pack ids in PACK_IDS order, deduped.
+ */
+export function detectPacks(signals: {
+  files: string[];
+  dependencies?: string[];
+}): string[] {
+  const { files, dependencies = [] } = signals;
 
-  // Assign pack councils to real providers round-robin, 2 per provider.
-  const updatedRealProviders = realProviders.map((provider, index) => {
-    const chunkStart = index * 2;
-    const roles = distributedCouncils.slice(chunkStart, chunkStart + 2);
-    // If we've run out of distributed councils give the provider at least one
-    // from the pack so the array is never empty.
-    const finalRoles = roles.length > 0 ? roles : [distributedCouncils[index % distributedCouncils.length]];
-    return { ...provider, roles: finalRoles };
-  });
+  const matched = new Set<string>();
 
-  // Mock providers always carry "maintainer".
-  const updatedMockProviders = mockProviders.map((provider) => ({
-    ...provider,
-    roles: ["maintainer"]
-  }));
+  // Normalise to lowercase for case-insensitive comparison.
+  const lowerFiles = files.map((f) => f.toLowerCase());
 
-  return {
-    ...base,
-    councils: pack.councils,
-    roleGuidance: pack.roleGuidance,
-    providers: [...updatedMockProviders, ...updatedRealProviders]
-  };
+  // ── Solana: any *.rs file present (Anchor.toml / Cargo.toml strengthen the
+  //   signal but are not required — *.rs alone is sufficient for v1).
+  if (lowerFiles.some((f) => f.endsWith(".rs"))) {
+    matched.add("solana");
+  }
+
+  // ── EVM: any *.sol file.
+  if (lowerFiles.some((f) => f.endsWith(".sol"))) {
+    matched.add("evm");
+  }
+
+  // ── Move: any *.move file OR Move.toml present.
+  if (
+    lowerFiles.some((f) => f.endsWith(".move")) ||
+    lowerFiles.some((f) => f.endsWith("move.toml"))
+  ) {
+    matched.add("move");
+  }
+
+  // ── IaC: *.tf / *.tfvars OR k8s/kubernetes/deploy YAML.
+  if (
+    lowerFiles.some((f) => f.endsWith(".tf") || f.endsWith(".tfvars")) ||
+    lowerFiles.some(
+      (f) =>
+        (f.endsWith(".yaml") || f.endsWith(".yml")) &&
+        (f.includes("k8s") || f.includes("kubernetes") || f.includes("deploy"))
+    )
+  ) {
+    matched.add("iac");
+  }
+
+  // ── CI: any path under .github/workflows/ OR a Dockerfile (any case).
+  if (
+    lowerFiles.some((f) => f.includes(".github/workflows/")) ||
+    lowerFiles.some((f) => {
+      const basename = f.split("/").at(-1) ?? f;
+      return basename === "dockerfile" || basename.startsWith("dockerfile.");
+    })
+  ) {
+    matched.add("ci");
+  }
+
+  // ── Mobile: *.swift / *.kt / *.kts / AndroidManifest.xml / *.plist.
+  if (
+    lowerFiles.some(
+      (f) =>
+        f.endsWith(".swift") ||
+        f.endsWith(".kt") ||
+        f.endsWith(".kts") ||
+        f.endsWith("androidmanifest.xml") ||
+        f.endsWith(".plist")
+    )
+  ) {
+    matched.add("mobile");
+  }
+
+  // ── Dependency-based signals (package names, case-insensitive).
+  if (dependencies.length > 0) {
+    const lowerDeps = dependencies.map((d) => d.toLowerCase());
+
+    const llmPattern = /openai|@anthropic-ai\/sdk|^ai$|langchain|llamaindex/;
+    if (lowerDeps.some((d) => llmPattern.test(d))) {
+      matched.add("llm");
+    }
+
+    const webPattern = /^express$|^fastify$|^koa$|^next$|^@nestjs|^flask$|^django$|^fastapi$/;
+    if (lowerDeps.some((d) => webPattern.test(d))) {
+      matched.add("web");
+    }
+
+    const fintechPattern = /^stripe$|^braintree$|^@stripe|^plaid$|^square$/;
+    if (lowerDeps.some((d) => fintechPattern.test(d))) {
+      matched.add("fintech");
+    }
+
+    const healthcarePattern = /^fhir$|^hl7$|^@medplum|^cerner$|^epic$/;
+    if (lowerDeps.some((d) => healthcarePattern.test(d))) {
+      matched.add("healthcare");
+    }
+  }
+
+  // Return matched ids in stable PACK_IDS order.
+  return PACK_IDS.filter((id) => matched.has(id));
 }
