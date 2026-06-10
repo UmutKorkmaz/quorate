@@ -82,6 +82,7 @@ committing.
 | `github-token` | — | Token to read PR files and write comments. |
 | `config-path` | `.quorate.yml` | Config file, read from the **base** branch. |
 | `providers` | — | Comma-separated provider ids to enable for this run. |
+| `pack` | — | Domain pack(s) to layer on: a list (e.g. `solana,web`) or `auto` to detect from the PR's changed files. |
 | `fail-on` | `high` | Minimum severity that fails the check (`critical`…`info`, or `never`). |
 | `post-comment` | `true` | Post/update the Quorate summary comment. |
 | `inline-comments` | `false` | Post findings as inline review comments on changed lines. |

@@ -2,6 +2,9 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import {
   createDefaultConfig,
+  detectPacks,
+  PACKS,
+  PACK_IDS,
   parseConfig,
   renderMarkdownReport,
   runCouncil,
@@ -65,6 +68,55 @@ export function parseBoolean(value: string | undefined, fallback: boolean): bool
 export function resolveBaseRef(context: ActionContext): string {
   const base = context.payload.pull_request?.base;
   return base?.sha ?? base?.ref ?? context.payload.repository?.default_branch ?? "main";
+}
+
+/** Changed file paths from a unified diff (the `+++ b/<path>` headers). */
+export function changedFilesFromDiff(diff: string): string[] {
+  const files: string[] = [];
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("+++ b/")) files.push(line.slice("+++ b/".length).trim());
+  }
+  return files;
+}
+
+/**
+ * Layer one or more domain packs onto the resolved config: union the pack
+ * councils into `config.councils` and merge their `roleGuidance` (existing
+ * config guidance wins). Providers and github settings are untouched — packs
+ * shape WHAT the council reviews for, not which providers run. `packInput` is a
+ * comma-separated list of pack ids, or "auto" to detect from the changed files.
+ */
+export function applyPacks(config: QuorateConfig, packInput: string | undefined, changedFiles: string[]): QuorateConfig {
+  const raw = (packInput ?? "").trim();
+  if (!raw) return config;
+
+  const ids =
+    raw.toLowerCase() === "auto"
+      ? detectPacks({ files: changedFiles })
+      : raw.split(",").map((id) => id.trim()).filter(Boolean);
+
+  const packs = ids.map((id) => {
+    const pack = PACKS[id];
+    if (!pack) throw new Error(`Unknown pack "${id}". Available: ${PACK_IDS.join(", ")}.`);
+    return pack;
+  });
+  if (packs.length === 0) return config;
+
+  const councils = [...config.councils];
+  for (const council of packs.flatMap((p) => p.councils)) {
+    if (!councils.includes(council)) councils.push(council);
+  }
+  const roleGuidance: Record<string, string> = {};
+  for (const pack of packs) {
+    for (const [role, text] of Object.entries(pack.roleGuidance)) {
+      if (!(role in roleGuidance)) roleGuidance[role] = text;
+    }
+  }
+  return {
+    ...config,
+    councils,
+    roleGuidance: { ...roleGuidance, ...config.roleGuidance }
+  };
 }
 
 export function applyOverrides(
@@ -188,7 +240,7 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   const baseRef = resolveBaseRef(deps.context);
   const configPath = input("config-path");
   const candidates = configPath ? [configPath] : [".quorate.yml", ".quorate.yaml", "quorate.config.yml"];
-  const config = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }), {
+  const baseConfig = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }), {
     providers: input("providers"),
     failOn: input("fail-on"),
     runnerMode: input("runner-mode"),
@@ -197,6 +249,8 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     runnerEnvironment: process.env.RUNNER_ENVIRONMENT
   });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
+  // Layer domain pack(s) — explicit list or "auto" detected from the PR's files.
+  const config = applyPacks(baseConfig, input("pack"), changedFilesFromDiff(diff));
   const report = await runCouncil(
     {
       mode: "review",
