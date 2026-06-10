@@ -1,6 +1,6 @@
 import type { CouncilRequest, Finding, ProviderResult } from "./types.js";
 
-interface DiffLine {
+export interface DiffLine {
   file?: string;
   line?: number;
   text: string;
@@ -55,6 +55,45 @@ function removedLines(diff: string): DiffLine[] {
   }
 
   return result;
+}
+
+/** Inline suppression marker: `quorate-ignore`, `quorate-ignore-line`,
+ *  `quorate-disable-line`, optionally followed by keyword(s) to scope it. */
+const SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
+
+/**
+ * Drops findings on a line that carries an inline `quorate-ignore` marker —
+ * either trailing on the same added line or on the added line directly above.
+ * A bare marker mutes every finding on the line; `quorate-ignore <keyword>`
+ * mutes only findings whose title contains one of the listed keywords. This is
+ * the false-positive escape hatch every heuristic tool needs.
+ */
+export function applyInlineSuppressions(findings: Finding[], lines: DiffLine[]): Finding[] {
+  const textByLoc = new Map<string, string>();
+  for (const candidate of lines) {
+    if (candidate.file && candidate.line !== undefined) {
+      textByLoc.set(`${candidate.file}:${candidate.line}`, candidate.text);
+    }
+  }
+  const scopeMatches = (marker: RegExpExecArray, title: string): boolean => {
+    const scope = marker[1]?.trim().toLowerCase();
+    if (!scope) return true;
+    const keywords = scope.split(/[\s,]+/).filter(Boolean);
+    const lowerTitle = title.toLowerCase();
+    return keywords.some((keyword) => lowerTitle.includes(keyword));
+  };
+  return findings.filter((finding) => {
+    if (!finding.file || finding.line === undefined) return true;
+    const sources = [
+      textByLoc.get(`${finding.file}:${finding.line}`) ?? "",
+      textByLoc.get(`${finding.file}:${finding.line - 1}`) ?? ""
+    ];
+    for (const source of sources) {
+      const marker = SUPPRESS_RE.exec(source);
+      if (marker && scopeMatches(marker, finding.title)) return false;
+    }
+    return true;
+  });
 }
 
 export function runHeuristicReview(request: CouncilRequest, role = "maintainer"): ProviderResult {
@@ -1611,16 +1650,18 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
     });
   }
 
+  const visible = applyInlineSuppressions(findings, lines);
+
   return {
     providerId: "heuristic",
     role,
     providerType: "mock",
     status: "ok",
     summary:
-      findings.length > 0
-        ? `Heuristic review found ${findings.length} issue${findings.length === 1 ? "" : "s"}.`
+      visible.length > 0
+        ? `Heuristic review found ${visible.length} issue${visible.length === 1 ? "" : "s"}.`
         : "Heuristic review found no obvious issues.",
-    findings,
+    findings: visible,
     durationMs: Date.now() - startedAt
   };
 }
