@@ -17,6 +17,7 @@ import Evm from "./pages/docs/Evm";
 import Iac from "./pages/docs/Iac";
 import LlmApp from "./pages/docs/LlmApp";
 import Move from "./pages/docs/Move";
+import Ci from "./pages/docs/Ci";
 
 export function App() {
   return (
@@ -38,6 +39,7 @@ export function App() {
           <Route path="iac" element={<Iac />} />
           <Route path="llm" element={<LlmApp />} />
           <Route path="move" element={<Move />} />
+          <Route path="ci" element={<Ci />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

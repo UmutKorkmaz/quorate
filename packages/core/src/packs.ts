@@ -138,7 +138,31 @@ const move: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move };
+const ci: QuoratePack = {
+  id: "ci",
+  description: "CI/CD and supply-chain security review council",
+  councils: [
+    "workflow-security",
+    "dependency-integrity",
+    "secrets-exposure",
+    "build-provenance",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "workflow-security":
+      "Audit every GitHub Actions workflow for dangerous trigger configurations. Flag pull_request_target usage that checks out or executes PR head code — this runs untrusted contributor code with repo secrets. Identify expression-injection sinks where github.event.* fields (title, body, message, ref, label, email) are interpolated directly into run: steps via ${{ }} — these must be passed via env vars instead. Review permissions blocks for over-broad grants (write-all, or per-scope write where not needed). Flag self-hosted runners that may execute code from untrusted public pull requests without adequate isolation.",
+    "dependency-integrity":
+      "Review all uses: action references for mutable pointers — tags (v1, v2.3) and branch names (main, master, latest) are mutable and can be hijacked; every action must be pinned to a full 40-character commit SHA. Audit Dockerfile FROM instructions for :latest tags and remote ADD <url> patterns. Flag package.json changes that introduce install scripts (preinstall, postinstall, install) — these execute arbitrary code on every npm install and are a primary supply-chain attack surface.",
+    "secrets-exposure":
+      "Identify hardcoded registry and authentication tokens — _authToken in .npmrc, NODE_AUTH_TOKEN assignments, and raw npm_ tokens embedded in source. Flag jobs triggered by pull_request or pull_request_target that have access to secrets.* — untrusted PR code can exfiltrate these. Review workflow expressions that might echo or log secret values. Ensure OIDC token issuance (id-token: write) is scoped only to jobs that genuinely require it.",
+    "build-provenance":
+      "Verify that every third-party action is pinned to a commit SHA rather than a mutable tag to guarantee reproducible builds. Audit artifact upload/download steps for missing integrity checks. Flag any step that fetches and immediately executes a remote script (curl | sh, wget | bash) without verifying a checksum or signature — this provides no guarantee the fetched code has not been tampered with. Confirm that release workflows generate and attach SLSA provenance attestations where the project's threat model warrants it.",
+    "maintainer":
+      "Assess the overall security posture and maintainability of the CI/CD pipeline. Identify redundant workflow jobs, missing timeout-minutes settings (which can cause runaway billable minutes), absent concurrency groups, and poorly documented pipeline steps. Check that branch protection rules are consistent with the workflow triggers in use."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

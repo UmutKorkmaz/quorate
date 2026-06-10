@@ -39,6 +39,11 @@ const CARDS = [
     to: "/docs/move",
     title: "Move (Sui / Aptos)",
     desc: "Sui/Aptos-aware Move security council + ten deterministic heuristics covering resource safety, capability misuse, and access-control gaps. Zero-setup Move review."
+  },
+  {
+    to: "/docs/ci",
+    title: "CI/CD & Supply Chain",
+    desc: "Workflow-security and supply-chain council + ten deterministic heuristics covering script injection, unpinned actions, hardcoded secrets, and pipe-to-shell patterns. Zero-setup CI review."
   }
 ] as const;
 

@@ -791,6 +791,157 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
           "and that AdminCap issuance is restricted to the deployer's signer context."
       });
     }
+
+    // ── CI / supply-chain checks ──────────────────────────────────────────────
+
+    if (
+      line.file?.includes(".github/workflows/") &&
+      /pull_request_target/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "pull_request_target trigger",
+        body:
+          "pull_request_target runs in the context of the base repo with access to secrets, even when triggered by a " +
+          "fork PR. Checking out or executing the PR head here creates an RCE/secret-exfiltration risk. " +
+          "Avoid checking out PR head code or executing PR-supplied scripts in pull_request_target workflows."
+      });
+    }
+
+    if (
+      line.file?.includes(".github/workflows/") &&
+      /\$\{\{\s*github\.event\.(issue|pull_request|comment|review|head_commit|commits)[.\w]*\.(title|body|message|ref|name|email|label)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Untrusted input in workflow expression",
+        body:
+          "Interpolating github.event.* fields (title, body, message, ref, label, email) directly into a run: step " +
+          "via ${{ }} is a script-injection sink — an attacker can embed shell metacharacters in a PR title or " +
+          "issue body. Pass the value via an intermediate env: variable instead."
+      });
+    }
+
+    if (
+      line.file?.includes(".github/workflows/") &&
+      /uses:\s*[\w.\-]+\/[\w.\-]+@(v?\d+(\.\d+)*|main|master|latest)\s*$/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Action not pinned to a commit SHA",
+        body:
+          "Action references using tags (v1, v2.3) or branch names (main, master, latest) are mutable — the " +
+          "upstream repository can push a different commit to that ref at any time. Pin every action to a full " +
+          "40-character commit SHA for reproducible, tamper-resistant builds."
+      });
+    }
+
+    if (
+      line.file?.includes(".github/workflows/") &&
+      /permissions:\s*write-all|^\s*(contents|packages|id-token|actions|deployments):\s*write\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Over-broad workflow permissions",
+        body:
+          "Granting write-all or broad per-scope write permissions violates least-privilege. " +
+          "Declare only the specific permissions each job requires; default all others to read or none."
+      });
+    }
+
+    if (
+      line.file?.includes(".github/workflows/") &&
+      /runs-on:\s*\[?\s*["']?self-hosted/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Self-hosted runner",
+        body:
+          "Self-hosted runners persist between runs and can retain secrets, build artifacts, or malicious code " +
+          "injected by a previous job. Untrusted PRs executing on a self-hosted runner can compromise the host. " +
+          "Isolate self-hosted runners, restrict them to trusted branches, or use ephemeral runners."
+      });
+    }
+
+    if (
+      line.file?.includes(".github/workflows/") &&
+      /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Checks out untrusted PR head",
+        body:
+          "Checking out github.event.pull_request.head.sha or .ref in a pull_request_target workflow executes " +
+          "attacker-controlled code with repository secrets in scope — this is effectively RCE. " +
+          "Only check out the base ref in pull_request_target, or move the privileged step to a separate workflow."
+      });
+    }
+
+    if (
+      line.file?.endsWith("package.json") &&
+      /"(pre|post)?install"\s*:/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Install script added",
+        body:
+          "preinstall, install, and postinstall lifecycle scripts run arbitrary commands on every npm install — " +
+          "they are a primary supply-chain attack surface. Audit the script carefully; consider using " +
+          "--ignore-scripts in CI and documenting why the script is necessary."
+      });
+    }
+
+    if (
+      /_authToken\s*=|npm_[A-Za-z0-9]{30,}|NODE_AUTH_TOKEN\s*:\s*["']?[A-Za-z0-9]{10,}/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Hardcoded registry/auth token",
+        body:
+          "A registry authentication token is hardcoded in source. Tokens committed to version control can be " +
+          "exfiltrated from the repository history. Store tokens in CI secrets and reference them via " +
+          "environment variables (e.g. NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }})."
+      });
+    }
+
+    if (
+      /(curl|wget)\s+[^|\n]*\|\s*(sudo\s+)?(ba)?sh\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Pipe-to-shell of a remote script",
+        body:
+          "Fetching a script with curl or wget and immediately piping it to sh/bash provides no integrity " +
+          "guarantee — a compromised CDN or MITM can serve malicious code. Download the script first, " +
+          "verify its checksum or signature, then execute it."
+      });
+    }
+
+    if (
+      (line.file?.endsWith("Dockerfile") || line.file?.includes("Dockerfile")) &&
+      /^\s*FROM\s+\S+:latest\b|^\s*ADD\s+https?:\/\//.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unpinned base image or remote ADD",
+        body:
+          "Using :latest as a base image tag means each build may pull a different image layer, breaking " +
+          "reproducibility and potentially introducing regressions or malicious updates. " +
+          "Pin FROM by digest (e.g. FROM ubuntu@sha256:<hash>). " +
+          "Additionally, ADD <url> fetches remote content without integrity verification — use COPY with " +
+          "a pre-downloaded and checksummed file instead."
+      });
+    }
   }
 
   for (const line of removedLines(request.diff ?? "")) {

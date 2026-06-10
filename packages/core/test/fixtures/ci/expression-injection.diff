@@ -1,0 +1,22 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1,3 +1,22 @@
++name: Issue Triage
++
++on:
++  issues:
++    types: [opened]
++
++permissions:
++  issues: write
++
++jobs:
++  triage:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Categorise issue
++        run: |
++          echo "Issue title: ${{ github.event.issue.title }}"
++          echo "Processing issue body: ${{ github.event.issue.body }}"
++          gh issue edit ${{ github.event.issue.number }} --add-label "triage"
