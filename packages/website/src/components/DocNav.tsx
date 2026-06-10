@@ -17,7 +17,8 @@ export const DOC_PATHS = [
   "/docs/move",
   "/docs/ci",
   "/docs/fintech",
-  "/docs/web"
+  "/docs/web",
+  "/docs/healthcare"
 ] as const;
 
 export type DocPath = (typeof DOC_PATHS)[number];
@@ -39,7 +40,8 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/move": "Move (Sui / Aptos)",
   "/docs/ci": "CI/CD & Supply Chain",
   "/docs/fintech": "Fintech / PCI",
-  "/docs/web": "Web & API (OWASP)"
+  "/docs/web": "Web & API (OWASP)",
+  "/docs/healthcare": "Healthcare / HIPAA"
 };
 
 const SECTIONS = [
@@ -69,7 +71,8 @@ const SECTIONS = [
       { to: "/docs/move", label: "Move (Sui / Aptos)" },
       { to: "/docs/ci", label: "CI/CD & Supply Chain" },
       { to: "/docs/fintech", label: "Fintech / PCI" },
-      { to: "/docs/web", label: "Web & API (OWASP)" }
+      { to: "/docs/web", label: "Web & API (OWASP)" },
+      { to: "/docs/healthcare", label: "Healthcare / HIPAA" }
     ]
   },
   {

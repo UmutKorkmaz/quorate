@@ -1,0 +1,28 @@
+diff --git a/src/ehr/notifications.ts b/src/ehr/notifications.ts
+--- a/src/ehr/notifications.ts
++++ b/src/ehr/notifications.ts
+@@ -0,0 +1,24 @@
++import sgMail from "@sendgrid/mail";
++import axios from "axios";
++import { PatientRecord } from "./types.js";
++
++export async function sendDischargeSummary(record: PatientRecord): Promise<void> {
++  await sendEmail(record.providerEmail, `Diagnosis: ${record.diagnosis}, MRN: ${record.mrn}, patient: ${record.patientId}`);
++}
++
++export async function notifyInsurer(record: PatientRecord): Promise<void> {
++  await axios.post("https://insurer.example.com/claims", { ssn: record.ssn, diagnosis: record.diagnosis });
++}
++
++export async function forwardToReferral(record: PatientRecord): Promise<void> {
++  await axios.post("https://referral.example.com/api", { patient: record.name, medicalRecord: record.id });
++}
++
++async function sendEmail(to: string, body: string): Promise<void> {
++  await sgMail.send({
++    to,
++    from: "noreply@clinic.example.com",
++    subject: "Patient Notification",
++    text: body,
++  });
++}

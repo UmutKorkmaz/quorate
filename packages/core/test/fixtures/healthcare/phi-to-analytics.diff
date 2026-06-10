@@ -1,0 +1,20 @@
+diff --git a/src/ehr/tracking.ts b/src/ehr/tracking.ts
+--- a/src/ehr/tracking.ts
++++ b/src/ehr/tracking.ts
+@@ -0,0 +1,18 @@
++import mixpanel from "mixpanel";
++import { PatientRecord } from "./types.js";
++
++const tracker = mixpanel.init(process.env.MIXPANEL_TOKEN!);
++
++export function trackPatientVisit(record: PatientRecord): void {
++  analytics.track("patient_visit", {
++    patient: record.patientId,
++    diagnosis: record.diagnosis,
++    mrn: record.mrn,
++  });
++}
++
++export function sendToSegment(record: PatientRecord): void {
++  segment.track("record_viewed", { ssn: record.ssn, medicalRecord: record.medicalRecordId });
++}

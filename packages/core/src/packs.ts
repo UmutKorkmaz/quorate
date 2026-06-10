@@ -243,7 +243,48 @@ const web: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech, web };
+const healthcare: QuoratePack = {
+  id: "healthcare",
+  description: "Healthcare / HIPAA (PHI) security review council",
+  councils: [
+    "phi-protection",
+    "access-audit",
+    "data-encryption",
+    "clinical-safety",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "phi-protection":
+      "Audit every code path for PHI leaking outside of secure, authorized channels. " +
+      "PHI (patient names, SSNs, MRNs, diagnoses, medications, dates of birth, ICD-10 codes, prescriptions, medical records) " +
+      "must never appear in logs, console output, URLs, query strings, analytics events, or unencrypted API responses. " +
+      "Enforce minimum-necessary access — queries must retrieve only the specific fields required for the current use-case.",
+    "access-audit":
+      "Verify that every access to patient records is explicitly authorized before the record is returned. " +
+      "Flag any code path where a patient record is fetched using an ID from req.params, req.query, or req.body without " +
+      "a prior ownership/authorization check — these are IDOR (Insecure Direct Object Reference) vulnerabilities. " +
+      "Confirm that PHI access is logged to an audit trail with the accessor identity, timestamp, and record ID.",
+    "data-encryption":
+      "Ensure PHI is encrypted at rest using strong, approved algorithms (AES-256-GCM or equivalent). " +
+      "Verify that PHI in transit is protected by TLS with certificate verification enabled. " +
+      "Flag weak or disabled encryption: MD5 or SHA-1 used on PHI fields, encrypt flags set to false or 'none', " +
+      "and any plaintext storage of identifiers like SSN, MRN, date of birth, or diagnosis codes. " +
+      "Confirm that encryption keys are managed through a dedicated key management service (KMS), not hardcoded.",
+    "clinical-safety":
+      "Ensure PHI is never exposed in error messages, exception traces, or API error responses. " +
+      "Validate all clinical inputs — ICD-10 codes, medication dosages, MRN formats — against strict schemas " +
+      "before processing to prevent garbage data entering clinical workflows. " +
+      "Flag any hardcoded credentials for clinical systems (FHIR servers, Epic, Cerner) — these must be loaded " +
+      "from environment variables or a secret manager. Confirm that debug endpoints and health-check routes " +
+      "do not reveal PHI or internal patient data.",
+    "maintainer":
+      "Assess overall code structure, test coverage, error handling, and long-term maintainability of the " +
+      "healthcare integration. Identify missing input-validation layers, absent audit-logging for PHI access, " +
+      "unclear error messages, and any patterns that will make the HIPAA compliance posture hard to audit or extend."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech, web, healthcare };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

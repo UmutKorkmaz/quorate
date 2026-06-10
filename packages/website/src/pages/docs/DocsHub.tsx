@@ -54,6 +54,11 @@ const CARDS = [
     to: "/docs/web",
     title: "Web & API (OWASP)",
     desc: "OWASP-aligned web security council + ten deterministic heuristics covering SSRF, command injection, path traversal, reflected XSS, open redirect, mass assignment, permissive CORS, CSRF, insecure deserialization, and weak cryptography. Zero-setup OWASP review."
+  },
+  {
+    to: "/docs/healthcare",
+    title: "Healthcare / HIPAA",
+    desc: "PHI-protection council + ten deterministic heuristics covering PHI in logs, plaintext PHI, PHI in URLs, external transmission, API exposure, analytics leakage, insecure direct object references, hardcoded clinical credentials, over-broad queries, and weak encryption. Zero-setup HIPAA review."
   }
 ] as const;
 

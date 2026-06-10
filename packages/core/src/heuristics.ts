@@ -1251,6 +1251,175 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
           "Replace with SHA-256+ for hashing and AES-GCM or ChaCha20-Poly1305 for encryption."
       });
     }
+
+    // ── Healthcare / HIPAA checks — backend source files only ────────────────
+    // All 10 checks are gated to backend source extensions AND keyed on
+    // PHI-specific identifiers so they do NOT fire on generic business logic.
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(console\.(log|info|debug|warn)|print|println|logger\.\w+)\s*\([^)]*\b(ssn|mrn|patient|diagnosis|medicalRecord|healthRecord|dob|dateOfBirth|prescription|icd10)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "PHI written to logs",
+        body:
+          "Protected Health Information (PHI) — patient identifiers, diagnoses, MRNs, SSNs, dates of birth, " +
+          "prescriptions, or ICD-10 codes — is being written to a log or console output. " +
+          "HIPAA prohibits PHI in logs unless the logging destination is itself a HIPAA-compliant, access-controlled audit trail. " +
+          "Remove PHI from log statements; log only non-identifying surrogate keys or audit-trail references."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(ssn|mrn|diagnosis|medication|medicalRecord|patientName|dob|icd10|prescription)\b\s*[:=]\s*["'][^"']/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "PHI stored in plaintext literal",
+        body:
+          "A PHI field (SSN, MRN, diagnosis, medication, medical record, patient name, date of birth, ICD-10 code, " +
+          "or prescription) is assigned a plaintext string literal. " +
+          "PHI must never be hardcoded in source — it must be encrypted at rest using a field-level encryption scheme " +
+          "and never appear as a literal value in version-controlled code."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(req\.query\.\w*(ssn|mrn|patient|dob)|[?&](ssn|mrn|patient|dob)=)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "PHI in URL/query string",
+        body:
+          "PHI identifiers (SSN, MRN, patient ID, or date of birth) are present in a URL query string. " +
+          "Query strings are logged by web servers, proxies, CDNs, and browser history — transmitting PHI in URLs " +
+          "is a HIPAA risk. Pass PHI in an encrypted request body (POST) or via headers; never in the URL."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(sendEmail|sendgrid|twilio)\s*\([^)]*\b(diagnosis|ssn|mrn|patient|medicalRecord|prescription)\b|axios\.(post|put|patch)\s*\([^)]*\b(diagnosis|ssn|mrn|patient|medicalRecord|prescription)\b|fetch\s*\([^)]*\b(diagnosis|ssn|mrn|patient|medicalRecord|prescription)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "PHI sent to an external service",
+        body:
+          "PHI (diagnosis, SSN, MRN, patient identifier, medical record, or prescription) is being passed to an " +
+          "external service call — email, SMS, or HTTP API. " +
+          "Sending PHI to a third-party service without a Business Associate Agreement (BAA) and appropriate " +
+          "data-handling controls violates HIPAA. Verify the receiving service is a covered entity or has a BAA, " +
+          "and transmit only the minimum-necessary PHI."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(res\.(json|send)\s*\(|jsonify\s*\(|return\s+\{)[^;\n]*\b(ssn|mrn|diagnosis|medicalRecord|patientName)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "PHI exposed in API response",
+        body:
+          "PHI (SSN, MRN, diagnosis, medical record, or patient name) is present in an API response. " +
+          "API responses may be cached, logged by API gateways, or intercepted in transit. " +
+          "Return only the minimum-necessary PHI fields required by the consumer; mask or omit sensitive identifiers " +
+          "and ensure the response is encrypted in transit (TLS)."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(analytics|mixpanel|segment|amplitude|gtag|track)\s*[.(][^)]*\b(patient|diagnosis|ssn|mrn|medicalRecord)\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "PHI sent to analytics/telemetry",
+        body:
+          "PHI (patient identifier, diagnosis, SSN, MRN, or medical record) is being sent to an analytics or " +
+          "telemetry service. Analytics platforms are not HIPAA-covered entities and do not provide BAAs for " +
+          "standard tiers. Sending PHI to analytics is a HIPAA violation. Strip all PHI before sending events; " +
+          "use only anonymized or pseudonymized identifiers in analytics payloads."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(getPatient|findPatient|patientRecord|medicalRecord)\w*\s*\([^)]*req\.(params|query|body)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Patient record fetched by user-supplied id (verify authorization)",
+        body:
+          "A patient record or medical record is being fetched using an ID from the HTTP request (params, query, or body) " +
+          "without a visible authorization check. This is an IDOR (Insecure Direct Object Reference) vulnerability — " +
+          "any authenticated user could access any patient's record by guessing or enumerating IDs. " +
+          "Verify that the authenticated user is authorized to access the requested patient's record before fetching it."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /\b(fhir|hl7|epic|cerner)[A-Za-z]*(Token|ApiKey|Api_Key|Password|Secret|Credential|Key)\s*[:=]\s*["'][^"']/i.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Hardcoded clinical-system credential",
+        body:
+          "A credential (token, API key, password, or secret) for a clinical system (FHIR server, HL7 interface, " +
+          "Epic, or Cerner) is hardcoded in source code. " +
+          "Credentials committed to version control can be exfiltrated from repository history. " +
+          "Load all clinical-system credentials from environment variables or a dedicated secret manager at runtime."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      /(SELECT\s+\*[^;]*\b(patient|medical_?record|phi)\b|\.(findAll|find)\s*\(\s*\)[^;]*\b(patient|medicalRecord)\b)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "Over-broad PHI query (minimum-necessary)",
+        body:
+          "A query fetches all columns (SELECT *) or all records (.findAll() / .find()) from a patient, medical record, " +
+          "or PHI table without a WHERE clause or field selection. " +
+          "HIPAA's minimum-necessary standard requires that only the PHI fields required for the specific use-case " +
+          "are accessed. Narrow the query to the specific fields and records needed."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs|py|java|rb|go)$/.test(line.file ?? "") &&
+      (
+        /(createHash\s*\(\s*["'](md5|sha1)["']|encrypt\w*\s*[:=]\s*(false|False|none))[^;\n]*\b(ssn|mrn|patient|phi|medicalRecord)\b/.test(text) ||
+        /\b(ssn|mrn|patient|phi|medicalRecord)\b[^;\n]*(createHash\s*\(\s*["'](md5|sha1)["']|md5|sha1|encrypt\w*\s*[:=]\s*(false|False))/.test(text)
+      )
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Weak/disabled encryption for PHI",
+        body:
+          "PHI (SSN, MRN, patient identifier, or medical record) is being protected with a weak or disabled " +
+          "cryptographic scheme — MD5 or SHA-1 hashing, or encryption explicitly set to false or 'none'. " +
+          "MD5 and SHA-1 are collision-vulnerable and must not be used for PHI protection. " +
+          "Use AES-256-GCM or ChaCha20-Poly1305 for encryption, and SHA-256+ for hashing. " +
+          "PHI must be encrypted both at rest and in transit under HIPAA Security Rule requirements."
+      });
+    }
+
   }
 
   for (const line of removedLines(request.diff ?? "")) {
