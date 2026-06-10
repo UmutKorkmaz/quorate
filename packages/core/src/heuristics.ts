@@ -505,6 +505,150 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
           "Pin images to a specific digest or immutable version tag for reproducible deployments."
       });
     }
+
+    // ── LLM / AI-app checks — JS/TS files only ───────────────────────────────
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /(prompt|systemPrompt|userPrompt|content)\s*[:=][^;\n]*\$\{/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Untrusted input interpolated into prompt",
+        body:
+          "Template-literal interpolation inside a prompt or content field may allow attacker-controlled text to " +
+          "override system instructions. Validate, escape, or wrap user-supplied values before inserting them into any prompt."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /\b(eval|new Function|execSync|exec|spawn)\s*\([^)]*(completion|response|output|llmResult|aiResult|message\.content|choices)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "critical",
+        title: "Model output passed to code execution",
+        body:
+          "Passing LLM-generated text directly to eval, new Function, exec, execSync, or spawn is a remote-code-execution " +
+          "risk — prompt injection can cause the model to emit malicious payloads. Parse and validate model output with a " +
+          "strict schema before using it in any execution context."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /dangerouslySetInnerHTML\s*[:=]\s*\{+\s*__html\s*:[^}]*(completion|response|output|message|content|aiResult)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Model output rendered as unsanitized HTML",
+        body:
+          "Rendering model output via dangerouslySetInnerHTML without prior sanitisation enables XSS — prompt injection " +
+          "can cause the model to emit HTML/script payloads. Run the output through a vetted sanitiser (e.g. DOMPurify) first."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /JSON\.parse\s*\([^)]*(tool_calls?|function_call|\.arguments)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Unvalidated tool-call arguments",
+        body:
+          "JSON.parse on tool-call or function-call arguments without schema validation means the model can supply " +
+          "unexpected field types or values. Validate the parsed object against a strict schema (e.g. Zod) before use."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /(apiKey|api_key)\s*[:=]\s*["'](sk-|sk-ant-|AIza)[^"']+["']/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Hardcoded LLM API key",
+        body:
+          "An LLM provider API key is hardcoded in source. Keys committed to version control are easily exfiltrated and " +
+          "incur unbounded charges. Load the key from an environment variable or secret manager at runtime."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /console\.(log|info|debug)\s*\([^)]*(prompt|messages|completion|response\.choices|message\.content)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "low",
+        title: "LLM prompt/response logged",
+        body:
+          "Logging full prompts or completions can leak PII, secrets embedded in context, or proprietary content to " +
+          "log-aggregation systems. Redact sensitive fields or use structured logging with explicit allow-lists."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /(safe_?mode|moderation|safetySettings|content_filter)\s*[:=]\s*(false|["']none["']|["']?BLOCK_NONE["']?|off)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Model safety/moderation disabled",
+        body:
+          "Disabling safety filters or moderation removes the model's built-in guardrails against harmful output. " +
+          "Keep safety settings enabled in production; document and gate any deliberate overrides."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /(prompt|content|messages)\s*[:=][^;\n]*(process\.env|apiKey|password|\bsecret\b|\bssn\b|creditCard)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Secret or PII included in prompt",
+        body:
+          "Including secrets, API keys, or personal data in a prompt sends them to a third-party model provider and " +
+          "may log them in the provider's infrastructure. Redact or omit sensitive values before constructing the prompt."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /if\s*\([^)]*(completion|response|aiResult|llmResult|model)\b[^)]*(===|==|\.includes\()\s*["'](yes|allow|admin|true|grant)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Authorization decision based on model output",
+        body:
+          "Granting access or permissions based on a string comparison with model output is unsafe — prompt injection can " +
+          "cause the model to reply with the expected token. Perform authorization checks in trusted code, not by parsing model responses."
+      });
+    }
+
+    if (
+      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      /(prompt|content|messages)\s*[:=][^;\n]*(fetch\(|axios|\.get\(|scrape|\.innerHTML|document\.)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Untrusted external content fed into prompt",
+        body:
+          "Inserting content fetched from external URLs, web-scraped HTML, or untrusted DOM nodes directly into a prompt " +
+          "is a prompt-injection vector — the remote content can contain hidden instructions. Sanitise or summarise " +
+          "external content before including it in a model context."
+      });
+    }
   }
 
   for (const line of removedLines(request.diff ?? "")) {

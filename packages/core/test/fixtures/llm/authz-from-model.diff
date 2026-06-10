@@ -1,0 +1,22 @@
+diff --git a/src/auth/gatekeeper.ts b/src/auth/gatekeeper.ts
+--- a/src/auth/gatekeeper.ts
++++ b/src/auth/gatekeeper.ts
+@@ -1,3 +1,18 @@
++import OpenAI from "openai";
++
++const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
++
++export async function canAccessAdmin(userId: string): Promise<boolean> {
++  const res = await client.chat.completions.create({
++    model: "gpt-4o",
++    messages: [
++      { role: "system", content: "Reply with 'yes' if the user is an admin, otherwise 'no'." },
++      { role: "user", content: `User ID: ${userId}` }
++    ]
++  });
++  const completion = res.choices[0].message.content?.trim().toLowerCase() ?? "";
++  if (completion === "yes") {
++    return true;
++  }
++  return false;
++}

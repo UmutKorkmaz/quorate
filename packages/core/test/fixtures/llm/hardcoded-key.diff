@@ -1,0 +1,17 @@
+diff --git a/src/lib/openai.ts b/src/lib/openai.ts
+--- a/src/lib/openai.ts
++++ b/src/lib/openai.ts
+@@ -1,3 +1,10 @@
++import OpenAI from "openai";
++
++const apiKey = "sk-proj-abc123supersecretkey9876543210xyzXYZ";
++
++export const openaiClient = new OpenAI({ apiKey });
++
++export async function complete(prompt: string): Promise<string> {
++  const res = await openaiClient.chat.completions.create({
++    model: "gpt-4o",
++    messages: [{ role: "user", content: prompt }]
++  });
++  return res.choices[0].message.content ?? "";
++}

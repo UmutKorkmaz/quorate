@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   privileged container, host namespace sharing, runs-as-root, privilege
   escalation, :latest image tag (k8s yaml) — with a vulnerable/clean corpus.
   Docs page + Action example.
+- **AI / LLM-app pack.** `quorate init --pack llm` scaffolds an LLM-application
+  security council; 10 deterministic heuristics — untrusted input interpolated
+  into prompts, model output to eval/exec (critical), model output as raw HTML,
+  unvalidated tool-call arguments, hardcoded LLM key, prompt/response logging,
+  moderation disabled, secret/PII in prompt, authz decided by model output,
+  external content fed into prompt — with a vulnerable/clean corpus. Docs page +
+  Action example. (4 packs, 41 vulnerability classes total.)
 
 ## [0.7.2] - 2026-06-10
 

@@ -87,7 +87,34 @@ const iac: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac };
+const llm: QuoratePack = {
+  id: "llm",
+  description: "AI / LLM application security review council",
+  councils: [
+    "prompt-injection",
+    "data-privacy",
+    "tool-safety",
+    "output-safety",
+    "model-governance",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "prompt-injection":
+      "Audit every location where untrusted content — user input, fetched web pages, database records, third-party API responses — is concatenated into a prompt or system message. Flag any pattern that allows attacker-controlled content to override the system prompt, inject new instructions, or hijack the model's persona. Pay close attention to template literals and string interpolation that embed raw input without sanitisation or escaping.",
+    "data-privacy":
+      "Identify secrets, API keys, personally-identifiable information (PII), and other sensitive data that are included in prompts or logged alongside prompt/response pairs. Flag hardcoded LLM API keys (OpenAI sk-, Anthropic sk-ant-, Google AIza*). Verify that prompt and response logging is intentional, scoped, and complies with data-retention obligations. Ensure sensitive fields are redacted before being forwarded to a model.",
+    "tool-safety":
+      "Review every location where model-generated content — tool-call arguments, function-call JSON, completion text — is passed to code execution paths such as eval, new Function, exec, execSync, or spawn. Verify that tool-call arguments are schema-validated before use, that the model cannot self-invoke dangerous tools, and that any shell or filesystem operations gated on model output are independently authorised.",
+    "output-safety":
+      "Audit rendering paths that take model output and emit it as HTML or inject it into the DOM. Flag dangerouslySetInnerHTML, innerHTML assignment, or document.write calls that use completion text without prior sanitisation. Identify authorization or access-control decisions (if/switch/ternary) that are resolved by comparing model output strings, which can be manipulated by prompt injection.",
+    "model-governance":
+      "Check that moderation, safety filters, and content-policy settings are enabled and not overridden to 'none', false, or BLOCK_NONE. Flag model swaps, provider changes, or version pins that lack accompanying evaluation results. Confirm that rate limits, retry logic, and fallback behaviour are in place and that model configuration is managed through code review rather than ad-hoc changes.",
+    "maintainer":
+      "Assess overall code structure, test coverage, observability, and long-term maintainability of the LLM integration. Identify missing input-validation layers, absent unit tests for prompt-construction logic, unclear error messages from model calls, and any patterns that will make the AI feature hard to audit, debug, or extend."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm };
 export const PACK_IDS = Object.keys(PACKS);
 
 /**

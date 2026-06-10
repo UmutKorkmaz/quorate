@@ -24,5 +24,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/evm":
     "Quorate EVM pack — Solidity-aware review council and ten deterministic on-chain heuristics for smart-contract security.",
   "/docs/iac":
-    "Quorate IaC pack — Terraform and Kubernetes security council and ten deterministic heuristics for infrastructure misconfiguration review."
+    "Quorate IaC pack — Terraform and Kubernetes security council and ten deterministic heuristics for infrastructure misconfiguration review.",
+  "/docs/llm":
+    "Quorate LLM app pack — AI-application security council and ten deterministic heuristics for prompt injection, data leakage, tool safety, and unsafe output review."
 };

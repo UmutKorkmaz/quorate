@@ -15,6 +15,7 @@ import ManualTesting from "./pages/docs/ManualTesting";
 import Solana from "./pages/docs/Solana";
 import Evm from "./pages/docs/Evm";
 import Iac from "./pages/docs/Iac";
+import LlmApp from "./pages/docs/LlmApp";
 
 export function App() {
   return (
@@ -34,6 +35,7 @@ export function App() {
           <Route path="solana" element={<Solana />} />
           <Route path="evm" element={<Evm />} />
           <Route path="iac" element={<Iac />} />
+          <Route path="llm" element={<LlmApp />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

@@ -29,6 +29,11 @@ const CARDS = [
     to: "/docs/iac",
     title: "Infrastructure / IaC",
     desc: "Terraform and Kubernetes security council + ten deterministic heuristics. Zero-setup infrastructure misconfiguration review."
+  },
+  {
+    to: "/docs/llm",
+    title: "AI / LLM apps",
+    desc: "LLM-application security council + ten deterministic heuristics covering prompt injection, data leakage, tool safety, and unsafe output. Zero-setup AI risk review."
   }
 ] as const;
 
