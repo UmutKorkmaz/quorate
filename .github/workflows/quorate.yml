@@ -15,6 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./
+        env:
+          # Bearer token for the GLM-5.1 `api` provider in .quorate.yml. On
+          # GitHub-hosted runners runner-mode `auto` resolves to `api`, so GLM
+          # is the real reviewer here; the heuristic remains the safety baseline.
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           post-comment: "true"
