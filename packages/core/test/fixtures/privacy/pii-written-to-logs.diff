@@ -1,0 +1,6 @@
+diff --git a/src/auth/signup.ts b/src/auth/signup.ts
+--- a/src/auth/signup.ts
++++ b/src/auth/signup.ts
+@@ -1,1 +1,2 @@
+ // context
++logger.info(`new signup ${user.email} from ${ipAddress}`)

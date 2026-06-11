@@ -15,7 +15,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./
+        env:
+          # Bearer token for the GLM-5.1 `api` provider in .quorate.yml. On
+          # GitHub-hosted runners runner-mode `auto` resolves to `api`, so GLM
+          # is the real reviewer here; the heuristic remains the safety baseline.
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           post-comment: "true"
-          fail-on: high
+          inline-comments: "true"
+          # This repo dogfoods Quorate on its own diffs. Because Quorate's test
+          # corpus is intentionally full of real vulnerabilities, a blocking
+          # gate would red-X every fixture-adding PR. Keep the self-review
+          # informational here (comment + inline annotations); consumers still
+          # get the blocking `fail-on: high` default from action.yml.
+          fail-on: never

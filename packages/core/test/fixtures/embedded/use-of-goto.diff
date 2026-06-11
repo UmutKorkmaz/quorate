@@ -1,0 +1,6 @@
+diff --git a/src/init.c b/src/init.c
+--- a/src/init.c
++++ b/src/init.c
+@@ -1,1 +1,2 @@
+ // context
++if (status != OK) { goto cleanup; }

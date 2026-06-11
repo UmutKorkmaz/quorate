@@ -1,4 +1,5 @@
 import type { CouncilRequest, Finding, ProviderResult } from "./types.js";
+import { PACK_HEURISTIC_RULES } from "./pack-heuristics.js";
 
 export interface DiffLine {
   file?: string;
@@ -104,6 +105,12 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
   for (const line of lines) {
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
+
+    for (const rule of PACK_HEURISTIC_RULES) {
+      if ((rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+        findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
+      }
+    }
 
     if (/\b(describe|it|test)\.only\s*\(/.test(text)) {
       findings.push({

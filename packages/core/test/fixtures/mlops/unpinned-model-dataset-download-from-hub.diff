@@ -1,0 +1,6 @@
+diff --git a/src/models/build.py b/src/models/build.py
+--- a/src/models/build.py
++++ b/src/models/build.py
+@@ -1,1 +1,2 @@
+ // context
++model = AutoModel.from_pretrained("bert-base-uncased")

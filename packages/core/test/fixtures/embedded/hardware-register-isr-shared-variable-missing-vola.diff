@@ -1,0 +1,6 @@
+diff --git a/src/gpio.c b/src/gpio.c
+--- a/src/gpio.c
++++ b/src/gpio.c
+@@ -1,1 +1,2 @@
+ // context
++uint32_t *gpio_odr = (uint32_t *)0x40020014;

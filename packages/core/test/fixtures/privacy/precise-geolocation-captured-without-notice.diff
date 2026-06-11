@@ -1,0 +1,6 @@
+diff --git a/src/features/map.ts b/src/features/map.ts
+--- a/src/features/map.ts
++++ b/src/features/map.ts
+@@ -1,1 +1,2 @@
+ // context
++navigator.geolocation.getCurrentPosition(pos => sendCoords(pos.coords))

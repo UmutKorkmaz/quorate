@@ -1,0 +1,6 @@
+diff --git a/src/jobs/export.ts b/src/jobs/export.ts
+--- a/src/jobs/export.ts
++++ b/src/jobs/export.ts
+@@ -1,1 +1,2 @@
+ // context
++const rows = await db.query('SELECT * FROM users');

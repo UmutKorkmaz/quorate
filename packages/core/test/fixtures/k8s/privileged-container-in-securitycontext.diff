@@ -1,0 +1,6 @@
+diff --git a/deploy/app-deployment.yaml b/deploy/app-deployment.yaml
+--- a/deploy/app-deployment.yaml
++++ b/deploy/app-deployment.yaml
+@@ -1,1 +1,2 @@
+ // context
++        privileged: true

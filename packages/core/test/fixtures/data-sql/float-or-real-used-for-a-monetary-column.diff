@@ -1,0 +1,6 @@
+diff --git a/ddl/payments.sql b/ddl/payments.sql
+--- a/ddl/payments.sql
++++ b/ddl/payments.sql
+@@ -1,1 +1,2 @@
+ // context
++  total_amount FLOAT NOT NULL,

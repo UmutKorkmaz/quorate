@@ -1,0 +1,6 @@
+diff --git a/deploy/net-tool.yaml b/deploy/net-tool.yaml
+--- a/deploy/net-tool.yaml
++++ b/deploy/net-tool.yaml
+@@ -1,1 +1,2 @@
+ // context
++            - SYS_ADMIN

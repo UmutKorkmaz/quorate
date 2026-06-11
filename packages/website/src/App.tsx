@@ -23,6 +23,14 @@ import Fintech from "./pages/docs/Fintech";
 import Web from "./pages/docs/Web";
 import Healthcare from "./pages/docs/Healthcare";
 import Mobile from "./pages/docs/Mobile";
+import Accessibility from "./pages/docs/Accessibility";
+import DataSql from "./pages/docs/DataSql";
+import Kubernetes from "./pages/docs/Kubernetes";
+import Privacy from "./pages/docs/Privacy";
+import Mlops from "./pages/docs/Mlops";
+import Embedded from "./pages/docs/Embedded";
+import Performance from "./pages/docs/Performance";
+import Graphql from "./pages/docs/Graphql";
 
 export function App() {
   return (
@@ -50,6 +58,14 @@ export function App() {
           <Route path="web" element={<Web />} />
           <Route path="healthcare" element={<Healthcare />} />
           <Route path="mobile" element={<Mobile />} />
+          <Route path="accessibility" element={<Accessibility />} />
+          <Route path="data-sql" element={<DataSql />} />
+          <Route path="k8s" element={<Kubernetes />} />
+          <Route path="privacy" element={<Privacy />} />
+          <Route path="mlops" element={<Mlops />} />
+          <Route path="embedded" element={<Embedded />} />
+          <Route path="performance" element={<Performance />} />
+          <Route path="graphql" element={<Graphql />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

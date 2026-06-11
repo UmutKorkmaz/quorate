@@ -1,0 +1,6 @@
+diff --git a/pipelines/notify.py b/pipelines/notify.py
+--- a/pipelines/notify.py
++++ b/pipelines/notify.py
+@@ -1,1 +1,2 @@
+ // context
++    logger.info(f"Sending receipt to {row.email} for card {row.card_number}")
