@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-06-11
 
 ### Added
 
@@ -47,6 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moderation disabled, secret/PII in prompt, authz decided by model output,
   external content fed into prompt — with a vulnerable/clean corpus. Docs page +
   Action example. (4 packs, 41 vulnerability classes total.)
+
+- **GitHub App.** A hosted webhook service (`@quorate/github-app`) that reviews
+  every PR with the council and renders results via GitHub's native Check Runs +
+  inline annotations, with pack auto-detection, a native + custom re-run button, a
+  one-click App manifest, Docker/Render/Fly deploy, and a setup landing page.
+- **VS Code extension (0.6).** Domain-pack setup, a `// quorate-ignore` suppression
+  quick-fix, a designed Webview verdict panel, a getting-started walkthrough, and
+  native gutter decorations + rich finding hovers.
+- **CLI.** Hermetic TUI test (suite fully green), polished `quorate packs` output
+  with class counts + a `--json` flag.
 
 ## [0.7.2] - 2026-06-10
 
