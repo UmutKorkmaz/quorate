@@ -14,6 +14,8 @@ import {
 } from "./cli";
 import { diffSourceLabel, pickDiffSource, toReviewArgs, type DiffSource } from "./diff";
 import { CouncilTree, findingDiagnostics, ResultsTree, StatusTree } from "./trees";
+import { FindingDecorations, findingHover } from "./decorations";
+import { VerdictPanel } from "./verdict-panel";
 
 interface Preset {
   name: string;
@@ -65,12 +67,20 @@ async function fetchModels(baseUrl: string, apiKey?: string): Promise<string[]> 
 }
 const ROLES = ["architect", "security", "qa", "performance", "maintainer"];
 const secretKey = (env: string): string => `quorate.key.${env}`;
+/** Domain pack ids (mirrors @quorate/core PACK_IDS) for the setup picker. */
+const PACK_IDS = ["solana", "evm", "move", "iac", "llm", "ci", "fintech", "web", "healthcare", "mobile"];
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const council = new CouncilTree();
   const results = new ResultsTree();
   const statusTree = new StatusTree();
   const diagnostics = vscode.languages.createDiagnosticCollection("quorate");
+  const decorations = new FindingDecorations(context.extensionUri);
+  context.subscriptions.push({ dispose: () => decorations.dispose() });
+  // Re-apply gutter decorations whenever the set of visible editors changes.
+  context.subscriptions.push(
+    vscode.window.onDidChangeVisibleTextEditors((editors) => editors.forEach((e) => decorations.applyTo(e)))
+  );
 
   vscode.window.registerTreeDataProvider("quorate.results", results);
   vscode.window.registerTreeDataProvider("quorate.status", statusTree);
@@ -159,8 +169,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     results.setReport(report);
     diagnostics.clear();
     for (const [file, diags] of findingDiagnostics(report, bases)) diagnostics.set(vscode.Uri.file(file), diags);
+    decorations.setReport(report, bases);
+    decorations.refresh();
     const v = report.verdict;
-    statusBar.text = v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS";
+    const counts = report.findings.length;
+    statusBar.text =
+      (v === "fail" ? "$(error) Quorate FAIL" : v === "warn" ? "$(warning) Quorate WARN" : "$(check) Quorate PASS") +
+      (counts ? ` · ${counts}` : "");
+    statusBar.command = "quorate.openVerdict";
+    VerdictPanel.instance.show(report, context.extensionUri);
   }
 
   async function runReviewCommand(): Promise<void> {
@@ -322,6 +339,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     diagnostics,
     statusBar,
     councilView,
+    { dispose: () => VerdictPanel.instance.dispose() },
 
     councilView.onDidChangeCheckboxState((e) => {
       const set = new Set<string>(enabled ?? council.defaultEnabledIds());
@@ -335,6 +353,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand("quorate.run", () => runReviewCommand()),
+    vscode.commands.registerCommand("quorate.openVerdict", () => {
+      if (!lastReport) {
+        void vscode.window.showInformationMessage("Quorate: no review results yet — run a review first.");
+        return;
+      }
+      VerdictPanel.instance.show(lastReport, context.extensionUri);
+    }),
     vscode.commands.registerCommand("quorate.refresh", () => reload()),
     vscode.commands.registerCommand("quorate.runDoctor", () => reload()),
     vscode.commands.registerCommand("quorate.addProvider", async () => {
@@ -394,6 +419,63 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       laneChannel(key).show(true);
     }),
 
+    // Insert an inline `// quorate-ignore` on a finding's line (the suppression
+    // escape hatch the CLI honors). Uses the line's existing comment leader.
+    vscode.commands.registerCommand("quorate.suppressFinding", async (uriStr: string, line: number) => {
+      const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(uriStr));
+      const editor = await vscode.window.showTextDocument(doc);
+      const text = doc.lineAt(line).text;
+      if (/quorate-(ignore|disable)/.test(text)) return; // already suppressed
+      const leader = /\.(py|rb|sh|yml|yaml|tf)$/.test(doc.fileName) ? "#" : "//";
+      await editor.edit((b) => b.insert(new vscode.Position(line, doc.lineAt(line).text.length), `  ${leader} quorate-ignore`));
+      const diags = diagnostics.get(doc.uri)?.filter((d) => d.range.start.line !== line) ?? [];
+      diagnostics.set(doc.uri, diags);
+    }),
+
+    // Scaffold a domain pack: auto-detect the repo's stack, or pick packs.
+    vscode.commands.registerCommand("quorate.setupPack", async () => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      if (!folder) {
+        void vscode.window.showErrorMessage("Quorate: open a folder first.");
+        return;
+      }
+      const AUTO = "$(wand) Auto-detect from this repo";
+      const items: vscode.QuickPickItem[] = [
+        { label: AUTO, detail: "quorate init --auto — scaffold the packs matching your files" },
+        { label: "", kind: vscode.QuickPickItemKind.Separator },
+        ...PACK_IDS.map((id) => ({ label: id, description: "domain pack" }))
+      ];
+      const picked = await vscode.window.showQuickPick(items, {
+        title: "Quorate — set up a domain pack",
+        canPickMany: false,
+        placeHolder: "Auto-detect, or pick a pack (re-run to add more)"
+      });
+      if (!picked) return;
+      const configUri = vscode.Uri.joinPath(folder.uri, ".quorate.yml");
+      let configExists = true;
+      try {
+        await vscode.workspace.fs.stat(configUri);
+      } catch {
+        configExists = false;
+      }
+      if (configExists) {
+        const ok = await vscode.window.showWarningMessage(
+          "Quorate: this overwrites the existing .quorate.yml. Continue?",
+          { modal: true },
+          "Overwrite"
+        );
+        if (ok !== "Overwrite") return;
+      }
+      const args = picked.label === AUTO ? ["init", "--auto", "--force"] : ["init", "--pack", picked.label, "--force"];
+      const { code, stdout, stderr } = await runCli(args);
+      if (code !== 0) {
+        void vscode.window.showErrorMessage(`Quorate: ${stderr.trim().split("\n").pop() ?? "pack setup failed"}`);
+        return;
+      }
+      await reload();
+      void vscode.window.showInformationMessage(`Quorate: ${stdout.trim().split("\n").pop() ?? "pack scaffolded."}`);
+    }),
+
     // Fix a finding: from the lightbulb (number), a Results row (node), or the
     // palette (QuickPick). The agent runs interactively in the integrated
     // terminal — snapshotted by the CLI, revertible via quorate.revertFix.
@@ -450,9 +532,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand("quorate.clearFindings", () => {
       diagnostics.clear();
+      decorations.clear();
       results.setReport(undefined);
       statusBar.text = "$(law) Quorate";
     }),
+
+    // Rich hover on a finding line: severity, body, agreement, suggestion + Fix/Ignore.
+    vscode.languages.registerHoverProvider(
+      { scheme: "file" },
+      {
+        provideHover(document, position) {
+          return findingHover(decorations.findingsAt(document.uri.fsPath, position.line), document.uri);
+        }
+      }
+    ),
     vscode.commands.registerCommand("quorate.openConfig", async () => {
       const cwd = vscode.workspace.workspaceFolders?.[0]?.uri;
       if (!cwd) return;
@@ -478,18 +571,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.languages.registerCodeActionsProvider(
       { scheme: "file" },
       {
-        provideCodeActions(_doc, _range, ctx) {
+        provideCodeActions(doc, _range, ctx) {
           const actions: vscode.CodeAction[] = [];
           for (const diagnostic of ctx.diagnostics) {
-            if (diagnostic.source !== "quorate" || typeof diagnostic.code !== "number") continue;
-            const action = new vscode.CodeAction("Quorate: fix with an agent…", vscode.CodeActionKind.QuickFix);
-            action.diagnostics = [diagnostic];
-            action.command = {
-              command: "quorate.fixFinding",
-              title: "Fix with an agent",
-              arguments: [diagnostic.code]
+            if (diagnostic.source !== "quorate") continue;
+            if (typeof diagnostic.code === "number") {
+              const fix = new vscode.CodeAction("Quorate: fix with an agent…", vscode.CodeActionKind.QuickFix);
+              fix.diagnostics = [diagnostic];
+              fix.command = { command: "quorate.fixFinding", title: "Fix with an agent", arguments: [diagnostic.code] };
+              actions.push(fix);
+            }
+            // Suppress: append an inline `// quorate-ignore` to the finding's line.
+            const suppress = new vscode.CodeAction(
+              "Quorate: ignore this finding (// quorate-ignore)",
+              vscode.CodeActionKind.QuickFix
+            );
+            suppress.diagnostics = [diagnostic];
+            suppress.command = {
+              command: "quorate.suppressFinding",
+              title: "Ignore this finding",
+              arguments: [doc.uri.toString(), diagnostic.range.start.line]
             };
-            actions.push(action);
+            actions.push(suppress);
           }
           return actions;
         }
