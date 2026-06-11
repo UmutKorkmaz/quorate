@@ -658,7 +658,13 @@ export function buildProgram(): Command {
       }
 
       if (!stdin.isTTY || !stdout.isTTY) {
-        throw new Error("quorate fix is interactive — run it in a terminal (pass --finding and --provider).");
+        throw new Error(
+          "quorate fix needs a real interactive terminal — it hands the session to a coding agent " +
+            "(claude, codex, …) to apply the change, so it can't run headlessly (CI, pipes, or a non-interactive tool). " +
+            "Run it directly in your terminal. In VS Code, use the “Fix with agent” action (lightbulb, finding hover, " +
+            "or the Quorate results tree) — it opens a terminal and runs this for you. " +
+            "To only preview targets non-interactively, use `quorate fix --list`."
+        );
       }
       const { createInterface } = await import("node:readline/promises");
       const rl = createInterface({ input: stdin, output: stdout });
