@@ -208,6 +208,18 @@ providers:
   #   apiKeyEnv: OPENROUTER_API_KEY
   #   roles: [architect, security]
 
+  # Z.ai (GLM) — hosted, OpenAI-compatible. `quorate provider add glm --preset zai`.
+  # The same pattern fits any hosted model: point baseUrl at the gateway, set the
+  # model id, and name the env var that holds the key.
+  # - id: glm
+  #   type: api
+  #   enabled: true
+  #   baseUrl: https://api.z.ai/api/coding/paas/v4
+  #   model: glm-5.1
+  #   apiKeyEnv: ZAI_API_KEY
+  #   roles: [architect, security, performance]
+  #   timeoutMs: 180000
+
 github:
   commentMode: update
   failOn: high

@@ -175,8 +175,37 @@ providers:
     runner-mode: api`}</CodeBlock>
       <p>
         Generate provider entries with <InlineCode>quorate provider add &lt;id&gt; --preset openrouter</InlineCode>;
-        the <InlineCode>roles:</InlineCode> field assigns each model to council roles. See{" "}
-        <Link to="/docs/providers">Providers</Link> and <Link to="/docs/config">Configuration</Link>.
+        the <InlineCode>roles:</InlineCode> field assigns each model to council roles. Any hosted
+        gateway works the same way — swap the <InlineCode>baseUrl</InlineCode>,{" "}
+        <InlineCode>model</InlineCode>, and key env var. See the{" "}
+        <Link to="/docs/config">gateway reference table</Link> for the common ones.
+      </p>
+      <p>
+        This repository dogfoods that path: its self-review runs <strong>Z.ai&apos;s GLM-5.1</strong>{" "}
+        on GitHub-hosted runners, with the heuristic as the always-on baseline. The provider in the
+        base-branch <InlineCode>.quorate.yml</InlineCode> and the secret wired into the step:
+      </p>
+      <CodeBlock language="yaml">{`# .quorate.yml (base branch)
+  - id: glm
+    type: api
+    enabled: true
+    baseUrl: https://api.z.ai/api/coding/paas/v4
+    model: glm-5.1
+    apiKeyEnv: GLM_API_KEY
+    roles: [architect, security, performance]`}</CodeBlock>
+      <CodeBlock language="yaml">{`# workflow step
+- uses: UmutKorkmaz/quorate@v0.7.1
+  env:
+    GLM_API_KEY: \${{ secrets.GLM_API_KEY }}
+  with:
+    github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
+      <p>
+        The <InlineCode>apiKeyEnv</InlineCode> name is your choice — it just has to match the env var
+        the workflow exposes from <InlineCode>secrets</InlineCode>. With the default{" "}
+        <InlineCode>runner-mode: auto</InlineCode>, GitHub-hosted runs keep exactly the{" "}
+        <InlineCode>api</InlineCode> providers (+ heuristic), so GLM is the real reviewer with no extra
+        flags. See <Link to="/docs/providers">Providers</Link> and{" "}
+        <Link to="/docs/config">Configuration</Link>.
       </p>
 
       <h2>Security</h2>

@@ -106,10 +106,131 @@ quorate provider add reviewer --type api \\
   --base-url http://localhost:8000/v1 --model Qwen/Qwen2.5-Coder-32B-Instruct \\
   --api-key-env VLLM_API_KEY --roles security,architect`}</CodeBlock>
       <p>
-        Presets: <InlineCode>ollama</InlineCode>, <InlineCode>lmstudio</InlineCode>,{" "}
-        <InlineCode>vllm</InlineCode>, <InlineCode>llamacpp</InlineCode>,{" "}
-        <InlineCode>hf-router</InlineCode>, <InlineCode>openrouter</InlineCode>.
+        16 presets — local servers (<InlineCode>ollama</InlineCode>,{" "}
+        <InlineCode>lmstudio</InlineCode>, <InlineCode>vllm</InlineCode>,{" "}
+        <InlineCode>llamacpp</InlineCode>, <InlineCode>tgi</InlineCode>,{" "}
+        <InlineCode>litellm</InlineCode>) and hosted gateways (<InlineCode>hf-router</InlineCode>,{" "}
+        <InlineCode>openrouter</InlineCode>, <InlineCode>openai</InlineCode>,{" "}
+        <InlineCode>together</InlineCode>, <InlineCode>groq</InlineCode>,{" "}
+        <InlineCode>fireworks</InlineCode>, <InlineCode>deepseek</InlineCode>,{" "}
+        <InlineCode>mistral</InlineCode>, <InlineCode>gemini</InlineCode>,{" "}
+        <InlineCode>zai</InlineCode>).
       </p>
+
+      <h2>Hosted gateways at a glance</h2>
+      <p>
+        Every hosted preset is the same three fields — a <InlineCode>baseUrl</InlineCode>, a{" "}
+        <InlineCode>model</InlineCode>, and the env var holding the key. Pick a row, drop in your
+        key, and you have real model review. The example models are starting points — run{" "}
+        <InlineCode>quorate provider models &lt;preset&gt;</InlineCode> for the live catalog.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Preset</th>
+            <th>
+              <code>baseUrl</code>
+            </th>
+            <th>Example model</th>
+            <th>
+              <code>apiKeyEnv</code>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <InlineCode>openrouter</InlineCode>
+            </td>
+            <td>
+              <InlineCode>https://openrouter.ai/api/v1</InlineCode>
+            </td>
+            <td>
+              <InlineCode>anthropic/claude-sonnet-4.6</InlineCode>
+            </td>
+            <td>
+              <InlineCode>OPENROUTER_API_KEY</InlineCode>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <InlineCode>openai</InlineCode>
+            </td>
+            <td>
+              <InlineCode>https://api.openai.com/v1</InlineCode>
+            </td>
+            <td>
+              <InlineCode>gpt-4o</InlineCode>
+            </td>
+            <td>
+              <InlineCode>OPENAI_API_KEY</InlineCode>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <InlineCode>deepseek</InlineCode>
+            </td>
+            <td>
+              <InlineCode>https://api.deepseek.com</InlineCode>
+            </td>
+            <td>
+              <InlineCode>deepseek-chat</InlineCode>
+            </td>
+            <td>
+              <InlineCode>DEEPSEEK_API_KEY</InlineCode>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <InlineCode>groq</InlineCode>
+            </td>
+            <td>
+              <InlineCode>https://api.groq.com/openai/v1</InlineCode>
+            </td>
+            <td>
+              <InlineCode>llama-3.3-70b-versatile</InlineCode>
+            </td>
+            <td>
+              <InlineCode>GROQ_API_KEY</InlineCode>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <InlineCode>gemini</InlineCode>
+            </td>
+            <td>
+              <InlineCode>…/v1beta/openai</InlineCode>
+            </td>
+            <td>
+              <InlineCode>gemini-2.0-flash</InlineCode>
+            </td>
+            <td>
+              <InlineCode>GEMINI_API_KEY</InlineCode>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <InlineCode>zai</InlineCode> (GLM)
+            </td>
+            <td>
+              <InlineCode>https://api.z.ai/api/coding/paas/v4</InlineCode>
+            </td>
+            <td>
+              <InlineCode>glm-5.1</InlineCode>
+            </td>
+            <td>
+              <InlineCode>ZAI_API_KEY</InlineCode>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Worked example — wire up Z.ai&apos;s GLM-5.1, then run the council on it. Swap the preset
+        and model for any row above and the steps are identical:
+      </p>
+      <CodeBlock language="bash">{`export ZAI_API_KEY=…                    # your key, never written to the file
+quorate provider add glm --preset zai   # writes the entry to .quorate.yml
+quorate review                          # GLM-5.1 reviews as architect/security/performance`}</CodeBlock>
 
       <h2>Provider safety fields</h2>
       <table>

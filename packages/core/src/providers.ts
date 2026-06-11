@@ -144,6 +144,15 @@ export const PROVIDER_PRESETS: Record<string, Omit<ProviderConfig, "id">> = {
     apiKeyEnv: "GEMINI_API_KEY",
     roles: ["qa", "performance"],
     timeoutMs: 120_000
+  },
+  zai: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.z.ai/api/coding/paas/v4",
+    model: "glm-5.1",
+    apiKeyEnv: "ZAI_API_KEY",
+    roles: ["architect", "security", "performance"],
+    timeoutMs: 180_000
   }
 };
 
