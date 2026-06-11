@@ -14,6 +14,20 @@ providers:
     enabled: true
     timeoutMs: 5000
 
+  # GLM-5.1 via Z.ai's OpenAI-compatible endpoint. This is the real reviewer on
+  # GitHub-hosted runners: runner-mode `auto` downgrades to `api` there (no local
+  # agent CLIs), so only `api` + `mock` providers run. The bearer token comes from
+  # the GLM_API_KEY repository secret, wired into the workflow step's env.
+  - id: glm
+    type: api
+    model: glm-5.1
+    baseUrl: https://api.z.ai/api/coding/paas/v4
+    apiKeyEnv: GLM_API_KEY
+    roles: [architect, security, performance]
+    enabled: true
+    timeoutMs: 180000
+    maxOutputBytes: 1000000
+
   # Claude — the default profile's `--max-budget-usd 0.25` is REMOVED. With a
   # Claude Code subscription (Pro/Max) there is no per-token dollar billing, so
   # that flag only made claude abort mid-review ("Exceeded USD budget") and
