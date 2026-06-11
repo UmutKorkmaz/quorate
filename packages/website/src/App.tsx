@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
+import { Packs } from "./pages/Packs";
 import NotFound from "./pages/NotFound";
 import DocsLayout from "./pages/docs/DocsLayout";
 import DocsHub from "./pages/docs/DocsHub";
@@ -28,6 +29,7 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Home />} />
+        <Route path="packs" element={<Packs />} />
         <Route path="docs" element={<DocsLayout />}>
           <Route index element={<DocsHub />} />
           <Route path="install" element={<Install />} />

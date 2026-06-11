@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 
 const NAV_LINKS = [
   { to: "/", label: "Home", end: true },
+  { to: "/packs", label: "Packs", end: false },
   { to: "/docs", label: "Docs", end: false }
 ] as const;
 
