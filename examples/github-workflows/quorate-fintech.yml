@@ -1,19 +1,19 @@
-# Quorate — CI/CD & Supply Chain review example
+# Quorate — Fintech / PCI review example
 #
 # HOW TO USE:
-#   1. Run `quorate init --pack ci` in your repo root to generate a
-#      .quorate.yml with CI/CD and supply-chain security councils and role guidance.
+#   1. Run `quorate init --pack fintech` in your repo root to generate a
+#      .quorate.yml with payment-security and PCI-compliance councils and role guidance.
 #   2. Commit .quorate.yml to your base branch (the PR config must live on
 #      the base branch — Quorate never reads it from the PR head).
 #   3. Add OPENROUTER_API_KEY to your repository or organisation secrets.
-#   4. Copy this file to .github/workflows/quorate.yml (remove the .example
-#      suffix) to activate the workflow.
+#   4. Copy this file into your repo as .github/workflows/quorate.yml to
+#      activate the workflow.
 #
 # The heuristic reviewer runs automatically with zero setup — no model, no
 # key needed. `runner-mode: api` keeps the workflow on a standard
 # GitHub-hosted runner (no self-hosted machine required).
 
-name: Quorate — CI/CD & supply-chain review
+name: Quorate — Fintech / PCI review
 on: pull_request
 permissions:
   contents: read
