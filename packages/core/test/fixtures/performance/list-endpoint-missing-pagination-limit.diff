@@ -1,0 +1,6 @@
+diff --git a/src/api/events.ts b/src/api/events.ts
+--- a/src/api/events.ts
++++ b/src/api/events.ts
+@@ -1,1 +1,2 @@
+ // context
++  const rows = await db.query(`SELECT * FROM events WHERE tenant = $1`);

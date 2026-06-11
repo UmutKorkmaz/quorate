@@ -127,6 +127,14 @@ agents you enable). `quorate packs` lists them.
 | **Web / API (OWASP)** | `web` | 10 | SSRF, command injection, path traversal, XSS, mass assignment, CORS, CSRF, deserialization |
 | **Healthcare / HIPAA** | `healthcare` | 10 | PHI in logs/URLs/responses, plaintext PHI, patient-record IDOR, clinical credentials |
 | **Mobile (iOS/Android)** | `mobile` | 10 | insecure storage, cleartext/ATS, exported components, disabled TLS, debuggable builds |
+| **GraphQL API** | `graphql` | 10 | introspection in prod, no depth/complexity limit, resolver N+1, field auth, batch amplification |
+| **Accessibility (WCAG)** | `accessibility` | 10 | missing alt text, unlabelled inputs, non-interactive handlers, invalid ARIA, skipped headings |
+| **ML / MLOps** | `mlops` | 10 | pickle/torch.load, missing seeds, train/test leakage, registry creds, unpinned hub downloads |
+| **Data & SQL** | `data-sql` | 10 | SQL interpolation, `SELECT *`, missing WHERE on UPDATE/DELETE, unguarded DROP, PII in logs |
+| **Kubernetes** | `k8s` | 10 | privileged containers, runAsNonRoot:false, privilege escalation, empty limits, wildcard RBAC |
+| **Privacy (GDPR)** | `privacy` | 10 | PII in logs/URLs, analytics before consent, missing retention TTLs, soft-delete vs erasure |
+| **Performance & SRE** | `performance` | 10 | await-in-loop, N+1 queries, missing pagination, no fetch timeout, O(n²) scans, leaked intervals |
+| **Embedded (MISRA)** | `embedded` | 10 | unbounded string ops, unchecked malloc/memcpy, missing volatile, alloc on ISR, float equality |
 
 Every pack ships a vulnerable/clean demo corpus proving each class is detected
 with zero false positives on clean code, a docs page (`/docs/<pack>`), and a

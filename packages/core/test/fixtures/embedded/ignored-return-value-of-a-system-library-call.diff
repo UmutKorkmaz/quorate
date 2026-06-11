@@ -1,0 +1,6 @@
+diff --git a/src/flash.c b/src/flash.c
+--- a/src/flash.c
++++ b/src/flash.c
+@@ -1,1 +1,2 @@
+ // context
++HAL_FLASH_Program(addr, word);

@@ -1,0 +1,6 @@
+diff --git a/src/config/loader.py b/src/config/loader.py
+--- a/src/config/loader.py
++++ b/src/config/loader.py
+@@ -1,1 +1,2 @@
+ // context
++cfg = yaml.load(open("experiment.yaml"))

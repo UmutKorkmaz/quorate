@@ -1,0 +1,6 @@
+diff --git a/src/lib/diff.ts b/src/lib/diff.ts
+--- a/src/lib/diff.ts
++++ b/src/lib/diff.ts
+@@ -1,1 +1,2 @@
+ // context
++  const dupes = a.filter((x) => b.includes(x.id));

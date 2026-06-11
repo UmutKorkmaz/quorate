@@ -1,0 +1,6 @@
+diff --git a/src/components/CloseButton.tsx b/src/components/CloseButton.tsx
+--- a/src/components/CloseButton.tsx
++++ b/src/components/CloseButton.tsx
+@@ -1,1 +1,2 @@
+ // context
++        <button onClick={close}><svg viewBox="0 0 24 24" /></button>

@@ -64,6 +64,46 @@ const CARDS = [
     to: "/docs/mobile",
     title: "Mobile (iOS / Android)",
     desc: "MASVS-aligned mobile security council + ten deterministic heuristics covering insecure local storage, hardcoded secrets, cleartext HTTP, exported Android components, WebView bridge exposure, disabled TLS validation, sensitive data in logs, debuggable builds, insecure randomness, and weak Keychain accessibility. Zero-setup iOS/Android review."
+  },
+  {
+    to: "/docs/graphql",
+    title: "GraphQL API",
+    desc: "GraphQL API security council + ten deterministic heuristics covering production introspection, missing depth/complexity limits, resolver N+1, field-level authorization, batch amplification, raw queries from args, verbose errors, unrated mutations, unbounded pagination, and @skip/@include auth bypass. Zero-setup GraphQL review."
+  },
+  {
+    to: "/docs/accessibility",
+    title: "Accessibility (WCAG)",
+    desc: "WCAG 2.2 AA council + ten deterministic heuristics covering missing alt text, unlabelled inputs, non-interactive click handlers, placeholder href buttons, missing lang, positive tabindex, icon-only buttons, invalid ARIA, unmuted autoplay, and skipped heading levels. Zero-setup accessibility review."
+  },
+  {
+    to: "/docs/mlops",
+    title: "ML / MLOps",
+    desc: "ML supply-chain and model-lifecycle council + ten deterministic heuristics covering pickle/torch.load deserialization, missing seeds, train/test leakage, hardcoded registry credentials, unsafe yaml.load, unpinned hub downloads, full-dataset training, eval/exec on config, and target leakage. Zero-setup MLOps review."
+  },
+  {
+    to: "/docs/data-sql",
+    title: "Data & SQL",
+    desc: "Data-engineering council + ten deterministic heuristics covering SQL string interpolation, SELECT *, missing WHERE on UPDATE/DELETE, unbounded queries, unguarded DROP/TRUNCATE, hardcoded DSNs, PII in logs, cross joins, missing transactions, and float money columns. Zero-setup data-pipeline review."
+  },
+  {
+    to: "/docs/k8s",
+    title: "Kubernetes",
+    desc: "CIS Kubernetes Benchmark council + ten deterministic heuristics covering privileged containers, runAsNonRoot:false, UID 0, privilege escalation, host namespace sharing, dangerous capabilities, empty resource limits, mutable :latest tags, automounted tokens, and wildcard RBAC. Zero-setup workload-manifest review."
+  },
+  {
+    to: "/docs/privacy",
+    title: "Privacy (GDPR)",
+    desc: "GDPR/CCPA data-protection council + ten deterministic heuristics covering PII in logs, analytics before consent, missing retention TTLs, PII in URLs, third-party sharing, soft-delete vs erasure, cookies without consent, precise geolocation, full PII dumps, and PII to analytics/ML. Zero-setup privacy review."
+  },
+  {
+    to: "/docs/performance",
+    title: "Performance & SRE",
+    desc: "Performance, scalability, and reliability council + ten deterministic heuristics covering await-in-loop, N+1 queries, missing pagination, sync fs in request paths, fetch without timeout, per-request DB connections, unbounded accumulators, unbounded JSON.parse, O(n²) scans, and leaked intervals. Zero-setup performance review."
+  },
+  {
+    to: "/docs/embedded",
+    title: "Embedded (MISRA)",
+    desc: "MISRA C/C++ firmware-safety council + ten deterministic heuristics covering unbounded string ops, unchecked malloc, unchecked memcpy length, magic buffer sizes, missing volatile on registers, signed/unsigned loop bounds, goto, allocation on ISR paths, ignored return values, and float equality. Zero-setup firmware review."
   }
 ] as const;
 

@@ -1,0 +1,6 @@
+diff --git a/config/db.py b/config/db.py
+--- a/config/db.py
++++ b/config/db.py
+@@ -1,1 +1,2 @@
+ // context
++DB_URL = "postgresql://admin:s3cr3t@warehouse.internal:5432/prod"

@@ -1,0 +1,6 @@
+diff --git a/src/frame_parser.c b/src/frame_parser.c
+--- a/src/frame_parser.c
++++ b/src/frame_parser.c
+@@ -1,1 +1,2 @@
+ // context
++memcpy(rx_buffer, payload, payload_len);

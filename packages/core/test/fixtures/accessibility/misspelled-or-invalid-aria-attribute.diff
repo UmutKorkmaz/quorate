@@ -1,0 +1,6 @@
+diff --git a/src/components/Dialog.tsx b/src/components/Dialog.tsx
+--- a/src/components/Dialog.tsx
++++ b/src/components/Dialog.tsx
+@@ -1,1 +1,2 @@
+ // context
++        <div aria-labeledby="title" className="dialog">

@@ -1,0 +1,6 @@
+diff --git a/src/scan.c b/src/scan.c
+--- a/src/scan.c
++++ b/src/scan.c
+@@ -1,1 +1,2 @@
+ // context
++for (int i = 0; i < buffer_len; i++) {

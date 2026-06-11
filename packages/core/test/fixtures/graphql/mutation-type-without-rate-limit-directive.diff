@@ -1,0 +1,6 @@
+diff --git a/src/graphql/schema.graphql b/src/graphql/schema.graphql
+--- a/src/graphql/schema.graphql
++++ b/src/graphql/schema.graphql
+@@ -1,1 +1,2 @@
+ // context
++type Mutation {

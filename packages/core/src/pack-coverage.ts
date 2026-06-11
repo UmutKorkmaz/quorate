@@ -533,5 +533,421 @@ export const PACK_COVERAGE: Record<string, CoverageEntry[]> = {
       standard: "MASVS",
       reference: "MASVS-STORAGE"
     }
+  ],
+  "accessibility": [
+    {
+      title: "Image missing alt attribute",
+      standard: "WCAG 2.2",
+      reference: "WCAG 1.1.1 Non-text Content"
+    },
+    {
+      title: "Form input relies on placeholder instead of a label",
+      standard: "WCAG 2.2",
+      reference: "WCAG 1.3.1 Info and Relationships / 4.1.2 Name, Role, Value"
+    },
+    {
+      title: "Click handler on non-interactive element without role or keyboard handler",
+      standard: "WCAG 2.2",
+      reference: "WCAG 2.1.1 Keyboard"
+    },
+    {
+      title: "Anchor with empty or placeholder href used as a button",
+      standard: "WCAG 2.2",
+      reference: "WCAG 4.1.2 Name, Role, Value / 2.1.1 Keyboard"
+    },
+    {
+      title: "Root <html> element missing lang attribute",
+      standard: "WCAG 2.2",
+      reference: "WCAG 3.1.1 Language of Page"
+    },
+    {
+      title: "Positive tabindex value disrupts focus order",
+      standard: "WCAG 2.2",
+      reference: "WCAG 2.4.3 Focus Order"
+    },
+    {
+      title: "Icon-only button without an accessible name",
+      standard: "WCAG 2.2",
+      reference: "WCAG 4.1.2 Name, Role, Value"
+    },
+    {
+      title: "Misspelled or invalid aria-* attribute",
+      standard: "WCAG 2.2",
+      reference: "WCAG 4.1.2 Name, Role, Value"
+    },
+    {
+      title: "Autoplaying media that is not muted",
+      standard: "WCAG 2.2",
+      reference: "WCAG 1.4.2 Audio Control"
+    },
+    {
+      title: "Heading level skipped (h1 directly to h3)",
+      standard: "WCAG 2.2",
+      reference: "WCAG 1.3.1 Info and Relationships"
+    }
+  ],
+  "data-sql": [
+    {
+      title: "SQL query built by string concatenation or f-string interpolation",
+      standard: "Data Engineering",
+      reference: "OWASP A03:2021 Injection / parameterized query practice"
+    },
+    {
+      title: "SELECT * used in a production query",
+      standard: "Data Engineering",
+      reference: "Warehouse query optimization — explicit projection"
+    },
+    {
+      title: "UPDATE or DELETE statement missing a WHERE clause",
+      standard: "Data Engineering",
+      reference: "Destructive DML safety — mandatory WHERE predicate"
+    },
+    {
+      title: "Unbounded query missing a LIMIT clause",
+      standard: "Data Engineering",
+      reference: "Warehouse cost control — bounded result sets"
+    },
+    {
+      title: "DROP or TRUNCATE TABLE without an existence or environment guard",
+      standard: "Data Engineering",
+      reference: "DDL safety — guarded destructive operations"
+    },
+    {
+      title: "Hardcoded database connection string or DSN",
+      standard: "Data Engineering",
+      reference: "Secret management — no credentials in source"
+    },
+    {
+      title: "PII column selected into logs or printed output",
+      standard: "Data Engineering",
+      reference: "Data governance — PII minimization in observability"
+    },
+    {
+      title: "Cartesian or cross join that explodes row counts",
+      standard: "Data Engineering",
+      reference: "Join correctness — avoid unintended cartesian products"
+    },
+    {
+      title: "Multiple dependent writes executed without a transaction",
+      standard: "Data Engineering",
+      reference: "Atomicity — group dependent writes in a transaction"
+    },
+    {
+      title: "FLOAT or REAL used for a monetary column",
+      standard: "Data Engineering",
+      reference: "Schema correctness — exact decimal for money"
+    }
+  ],
+  "k8s": [
+    {
+      title: "Privileged container in securityContext",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.2.5 Minimize the admission of privileged containers"
+    },
+    {
+      title: "Container allowed to run as root",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.2.6 Minimize the admission of root containers"
+    },
+    {
+      title: "Container runs as UID 0 (root)",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.2.6 Minimize the admission of root containers"
+    },
+    {
+      title: "Pod container allows privilege escalation",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.2.5 Minimize the admission of containers with allowPrivilegeEscalation"
+    },
+    {
+      title: "Host namespace sharing enabled",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.2.2-5.2.4 Minimize admission of pods sharing host PID, IPC, or network namespaces"
+    },
+    {
+      title: "Dangerous Linux capability added",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.2.8-5.2.9 Minimize admission of containers with added capabilities"
+    },
+    {
+      title: "Container missing resource limits",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.7.x / Pod Security — Memory and CPU limits"
+    },
+    {
+      title: "Mutable :latest image tag",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.5.1 / Supply chain — pin image tags by digest"
+    },
+    {
+      title: "Service account token automounted",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.1.6 Ensure that Service Account Tokens are only mounted where necessary"
+    },
+    {
+      title: "RBAC rule grants wildcard access",
+      standard: "CIS Kubernetes",
+      reference: "CIS Kubernetes 5.1.3 Minimize wildcard use in Roles and ClusterRoles"
+    }
+  ],
+  "privacy": [
+    {
+      title: "PII written to logs",
+      standard: "GDPR",
+      reference: "GDPR Art. 5(1)(c) Data Minimisation; Art. 32 Security of Processing"
+    },
+    {
+      title: "Analytics fired before consent",
+      standard: "GDPR",
+      reference: "GDPR Art. 6(1)(a) & Recital 32; ePrivacy Directive Art. 5(3)"
+    },
+    {
+      title: "PII stored without retention/TTL",
+      standard: "GDPR",
+      reference: "GDPR Art. 5(1)(e) Storage Limitation"
+    },
+    {
+      title: "PII in URL/query string",
+      standard: "GDPR",
+      reference: "GDPR Art. 5(1)(f) Integrity & Confidentiality; Art. 32"
+    },
+    {
+      title: "PII shared with third party without contract flag",
+      standard: "GDPR",
+      reference: "GDPR Art. 28 Processor; Art. 44 Transfers; CCPA §1798.140(ah) Sharing"
+    },
+    {
+      title: "Soft-delete used instead of right-to-erasure",
+      standard: "GDPR",
+      reference: "GDPR Art. 17 Right to Erasure; CCPA §1798.105 Right to Delete"
+    },
+    {
+      title: "Cookie set without consent gating",
+      standard: "GDPR",
+      reference: "ePrivacy Directive Art. 5(3); GDPR Recital 32"
+    },
+    {
+      title: "Precise geolocation captured without notice",
+      standard: "GDPR",
+      reference: "GDPR Art. 9 / Recital 51; Art. 13 Information to be Provided"
+    },
+    {
+      title: "Full PII table dumped",
+      standard: "GDPR",
+      reference: "GDPR Art. 5(1)(c) Data Minimisation; Art. 25 Data Protection by Design"
+    },
+    {
+      title: "PII sent to analytics/ML without anonymisation",
+      standard: "GDPR",
+      reference: "GDPR Art. 5(1)(b) Purpose Limitation; Art. 25 & Recital 28 Pseudonymisation"
+    }
+  ],
+  "mlops": [
+    {
+      title: "Untrusted model artifact deserialized via pickle/torch/joblib load",
+      standard: "ML Supply Chain",
+      reference: "MITRE ATLAS AML.T0010 ML Supply Chain Compromise"
+    },
+    {
+      title: "torch.load called without weights_only=True",
+      standard: "ML Supply Chain",
+      reference: "PyTorch Security: torch.load weights_only"
+    },
+    {
+      title: "No random seed set — training is non-reproducible",
+      standard: "ML Supply Chain",
+      reference: "ML Reproducibility: deterministic seeding"
+    },
+    {
+      title: "Data leakage — scaler/transform fit before train-test split",
+      standard: "ML Supply Chain",
+      reference: "ML Evaluation Integrity: fit transforms on training data only"
+    },
+    {
+      title: "Hardcoded dataset/registry/storage credentials",
+      standard: "ML Supply Chain",
+      reference: "ML Supply Chain: secret management for data and registries"
+    },
+    {
+      title: "Unsafe yaml.load for experiment/pipeline config",
+      standard: "ML Supply Chain",
+      reference: "CWE-502 Deserialization of Untrusted Data"
+    },
+    {
+      title: "Unpinned model/dataset download from hub",
+      standard: "ML Supply Chain",
+      reference: "MITRE ATLAS AML.T0010: pin artifacts by revision"
+    },
+    {
+      title: "Model trained on full dataset with no train/test split",
+      standard: "ML Supply Chain",
+      reference: "ML Evaluation Integrity: hold-out evaluation"
+    },
+    {
+      title: "eval/exec on experiment config or hyperparameters",
+      standard: "ML Supply Chain",
+      reference: "CWE-95 Eval Injection"
+    },
+    {
+      title: "Target/identifier leakage column kept in training features",
+      standard: "ML Supply Chain",
+      reference: "ML Evaluation Integrity: exclude leakage features"
+    }
+  ],
+  "embedded": [
+    {
+      title: "Unbounded string operation (strcpy/strcat/sprintf/gets)",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Rule 21.17 / Dir 4.1 — use of unbounded string functions"
+    },
+    {
+      title: "Allocation result used without NULL check",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Dir 4.12 / Rule 22.1 — dynamic memory and resource validation"
+    },
+    {
+      title: "memcpy/memmove with an unchecked length",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Rule 18.1 / Dir 4.1 — pointer arithmetic and array bounds"
+    },
+    {
+      title: "Magic buffer-size literal in array declaration",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Dir 4.6 / Rule 7.x — avoid unnamed numeric constants"
+    },
+    {
+      title: "Hardware-register/ISR-shared variable missing volatile",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Rule 8.6 / Dir 4.x — volatile-qualified access to memory-mapped and shared objects"
+    },
+    {
+      title: "Signed/unsigned comparison mismatch in loop bound",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Rule 10.4 / 14.4 — operands of compatible essential type"
+    },
+    {
+      title: "Use of goto",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Rule 15.1 — the goto statement should not be used"
+    },
+    {
+      title: "Dynamic allocation via new on a real-time/ISR path",
+      standard: "MISRA C++ 2008",
+      reference: "MISRA C++:2008 Rule 18-4-1 — dynamic heap memory allocation shall not be used"
+    },
+    {
+      title: "Ignored return value of a system/library call",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Dir 4.7 / Rule 17.7 — value returned by a function shall be used"
+    },
+    {
+      title: "Floating-point equality comparison",
+      standard: "MISRA C 2012",
+      reference: "MISRA C:2012 Dir 1.1 / Rule 14.x — floating-point values shall not be tested for exact equality"
+    }
+  ],
+  "performance": [
+    {
+      title: "await inside a loop (serialized I/O)",
+      standard: "Performance & SRE",
+      reference: "Latency: serialized-io-in-loop"
+    },
+    {
+      title: "Database query inside a loop (N+1)",
+      standard: "Performance & SRE",
+      reference: "Scalability: n-plus-one-query"
+    },
+    {
+      title: "List endpoint missing pagination/LIMIT",
+      standard: "Performance & SRE",
+      reference: "Scalability: unbounded-result-set"
+    },
+    {
+      title: "Synchronous fs call in a request path",
+      standard: "Performance & SRE",
+      reference: "Latency: blocking-event-loop"
+    },
+    {
+      title: "Outbound fetch/axios without a timeout",
+      standard: "Performance & SRE",
+      reference: "Reliability: missing-network-timeout"
+    },
+    {
+      title: "New DB connection per request (no pool)",
+      standard: "Performance & SRE",
+      reference: "Resource-efficiency: connection-per-request"
+    },
+    {
+      title: "Unbounded in-memory accumulator growth",
+      standard: "Performance & SRE",
+      reference: "Resource-efficiency: unbounded-memory-growth"
+    },
+    {
+      title: "JSON.parse of an unbounded request body",
+      standard: "Performance & SRE",
+      reference: "Reliability: unbounded-body-parse"
+    },
+    {
+      title: "O(n^2) nested includes/indexOf scan",
+      standard: "Performance & SRE",
+      reference: "Scalability: quadratic-scan"
+    },
+    {
+      title: "setInterval without cleanup handle (leak)",
+      standard: "Performance & SRE",
+      reference: "Resource-efficiency: timer-leak"
+    }
+  ],
+  "graphql": [
+    {
+      title: "GraphQL introspection enabled in production",
+      standard: "GraphQL Security",
+      reference: "OWASP API8:2023 Security Misconfiguration — GraphQL introspection disclosure"
+    },
+    {
+      title: "Missing query depth/complexity limit",
+      standard: "GraphQL Security",
+      reference: "OWASP GraphQL Cheat Sheet — Query depth & cost analysis limiting"
+    },
+    {
+      title: "List resolver causes N+1 queries (no DataLoader)",
+      standard: "GraphQL Security",
+      reference: "GraphQL Best Practices — Server-side batching with DataLoader"
+    },
+    {
+      title: "Privileged resolver missing object/field-level authorization",
+      standard: "GraphQL Security",
+      reference: "OWASP API1:2023 Broken Object Level Authorization — GraphQL resolvers"
+    },
+    {
+      title: "Query batching amplification enabled",
+      standard: "GraphQL Security",
+      reference: "OWASP GraphQL Cheat Sheet — Batching attacks & request amplification"
+    },
+    {
+      title: "Raw database query built from GraphQL args",
+      standard: "GraphQL Security",
+      reference: "OWASP GraphQL Cheat Sheet — Injection via resolver argument interpolation"
+    },
+    {
+      title: "Verbose GraphQL error leaks internals",
+      standard: "GraphQL Security",
+      reference: "OWASP GraphQL Cheat Sheet — Error handling & information disclosure"
+    },
+    {
+      title: "Mutation type without rate-limit directive",
+      standard: "GraphQL Security",
+      reference: "OWASP API4:2023 Unrestricted Resource Consumption — GraphQL mutations"
+    },
+    {
+      title: "Unbounded list pagination argument",
+      standard: "GraphQL Security",
+      reference: "OWASP GraphQL Cheat Sheet — Pagination limits on list fields"
+    },
+    {
+      title: "@skip/@include used to bypass auth-protected field",
+      standard: "GraphQL Security",
+      reference: "GraphQL Spec §3.13 Directives — auth-bypass via @skip/@include conditions"
+    }
   ]
 };

@@ -1,0 +1,6 @@
+diff --git a/src/sensor_task.cpp b/src/sensor_task.cpp
+--- a/src/sensor_task.cpp
++++ b/src/sensor_task.cpp
+@@ -1,1 +1,2 @@
+ // context
++auto sample = new SensorReading();
