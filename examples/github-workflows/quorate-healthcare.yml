@@ -6,8 +6,8 @@
 #   2. Commit .quorate.yml to your base branch (the PR config must live on
 #      the base branch — Quorate never reads it from the PR head).
 #   3. Add OPENROUTER_API_KEY to your repository or organisation secrets.
-#   4. Copy this file to .github/workflows/quorate.yml (remove the .example
-#      suffix) to activate the workflow.
+#   4. Copy this file into your repo as .github/workflows/quorate.yml to
+#      activate the workflow.
 #
 # The heuristic reviewer runs automatically with zero setup — no model, no
 # key needed. `runner-mode: api` keeps the workflow on a standard

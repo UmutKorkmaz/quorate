@@ -18,4 +18,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           post-comment: "true"
-          fail-on: high
+          inline-comments: "true"
+          # This repo dogfoods Quorate on its own diffs. Because Quorate's test
+          # corpus is intentionally full of real vulnerabilities, a blocking
+          # gate would red-X every fixture-adding PR. Keep the self-review
+          # informational here (comment + inline annotations); consumers still
+          # get the blocking `fail-on: high` default from action.yml.
+          fail-on: never
