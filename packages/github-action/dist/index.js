@@ -48656,7 +48656,7 @@ async function run() {
     env: process.env
   });
 }
-if (!process.env.VITEST) {
+if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
   run().catch((error52) => {
     setFailed(error52 instanceof Error ? error52.message : String(error52));
   });

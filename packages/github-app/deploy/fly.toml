@@ -1,0 +1,33 @@
+# fly.toml — minimal Fly.io configuration for the Quorate GitHub App
+# Deploy: fly launch --dockerfile packages/github-app/Dockerfile
+#         fly secrets set APP_ID=... PRIVATE_KEY="$(cat private-key.pem)" WEBHOOK_SECRET=...
+
+app = "quorate-github-app"
+primary_region = "iad"
+
+[build]
+  dockerfile = "packages/github-app/Dockerfile"
+
+[http_service]
+  internal_port = 3000
+  force_https   = true
+  auto_stop_machines  = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type       = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+# Secrets — set via `fly secrets set`, never stored in this file:
+#   APP_ID          GitHub App ID
+#   PRIVATE_KEY     PEM private key (with literal newlines or \n escapes)
+#   WEBHOOK_SECRET  Webhook secret
+#   ANTHROPIC_API_KEY  (optional)
+#   OPENAI_API_KEY     (optional)

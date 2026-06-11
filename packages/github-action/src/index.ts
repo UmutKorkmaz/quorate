@@ -322,7 +322,9 @@ export async function run(): Promise<void> {
   });
 }
 
-if (!process.env.VITEST) {
+// Only auto-run the action entrypoint inside a real GitHub Actions runner.
+// Importing these helpers elsewhere (the GitHub App, tests) must NOT execute it.
+if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
   run().catch((error: unknown) => {
     core.setFailed(error instanceof Error ? error.message : String(error));
   });
