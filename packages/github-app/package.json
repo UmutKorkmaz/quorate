@@ -1,0 +1,26 @@
+{
+  "name": "@quorate/github-app",
+  "version": "0.1.0",
+  "description": "Quorate GitHub App — a multi-agent code review council on every PR, zero per-repo workflow setup.",
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "node --watch esbuild.config.mjs",
+    "start": "node dist/server.js",
+    "test": "vitest run test",
+    "typecheck": "tsc -p tsconfig.check.json --noEmit"
+  },
+  "dependencies": {
+    "@octokit/auth-app": "^7.2.2",
+    "@octokit/rest": "^21.1.1",
+    "@octokit/webhooks": "^13.9.1",
+    "@quorate/core": "0.7.2",
+    "@quorate/github-action": "0.7.2",
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.8"
+  }
+}

@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: quorate-github-app
+    runtime: docker
+    # Path is relative to the repo root so Render can find the Dockerfile
+    dockerContext: .
+    dockerfilePath: packages/github-app/Dockerfile
+    region: oregon
+    plan: starter
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ID
+        sync: false          # set manually in the Render dashboard
+      - key: PRIVATE_KEY
+        sync: false          # paste the PEM content; Render stores it as a secret
+      - key: WEBHOOK_SECRET
+        sync: false
+      # Optional provider API keys — add whichever you need:
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false
+      # - key: OPENAI_API_KEY
+      #   sync: false
+      - key: PORT
+        value: "3000"
+      - key: NODE_ENV
+        value: production
