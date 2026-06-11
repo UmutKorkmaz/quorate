@@ -1,0 +1,7 @@
+diff --git a/.npmrc b/.npmrc
+--- a/.npmrc
++++ b/.npmrc
+@@ -1,2 +1,4 @@
+ registry=https://registry.npmjs.org/
++//registry.npmjs.org/:_authToken=npm_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789ab
++@myorg:registry=https://npm.pkg.github.com/

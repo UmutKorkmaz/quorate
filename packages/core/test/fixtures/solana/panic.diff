@@ -1,0 +1,11 @@
+diff --git a/programs/vault/src/lib.rs b/programs/vault/src/lib.rs
+--- a/programs/vault/src/lib.rs
++++ b/programs/vault/src/lib.rs
+@@ -14,6 +14,8 @@ pub mod vault {
+     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+         let balance = ctx.accounts.vault.balance;
++        let remaining = balance.checked_sub(amount).unwrap();
++        ctx.accounts.vault.balance = remaining;
+         Ok(())
+     }
+ }

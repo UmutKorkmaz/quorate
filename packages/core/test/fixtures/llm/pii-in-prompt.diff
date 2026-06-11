@@ -1,0 +1,19 @@
+diff --git a/src/support/summarize.ts b/src/support/summarize.ts
+--- a/src/support/summarize.ts
++++ b/src/support/summarize.ts
+@@ -1,3 +1,16 @@
++import OpenAI from "openai";
++
++const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
++
++interface CustomerRecord {
++  name: string;
++  ssn: string;
++  notes: string;
++}
++
++export async function summarizeCustomer(record: CustomerRecord): Promise<string> {
++  const messages = [{ role: "user" as const, content: `Summarize: ${record.ssn} - ${record.notes}` }];
++  const res = await client.chat.completions.create({ model: "gpt-4o", messages });
++  return res.choices[0].message.content ?? "";
++}

@@ -1,0 +1,29 @@
+diff --git a/android/app/src/main/java/com/example/LoginManager.kt b/android/app/src/main/java/com/example/LoginManager.kt
+--- a/android/app/src/main/java/com/example/LoginManager.kt
++++ b/android/app/src/main/java/com/example/LoginManager.kt
+@@ -0,0 +1,24 @@
++package com.example
++
++import android.util.Log
++
++class LoginManager {
++
++    fun login(username: String, password: String, token: String) {
++        // BAD: password written to logcat
++        Log.d("LoginManager", "Attempting login with password=$password")
++
++        // BAD: auth token written to logcat
++        Log.i("LoginManager", "Session token=$token")
++
++        performLogin(username, password, token)
++    }
++
++    fun handleOtp(otp: String) {
++        // BAD: OTP logged
++        Log.v("Auth", "OTP received: $otp apiKey=${BuildConfig.DEBUG_API_KEY}")
++    }
++
++    private fun performLogin(username: String, password: String, token: String) {
++        // actual network call here
++    }
++}

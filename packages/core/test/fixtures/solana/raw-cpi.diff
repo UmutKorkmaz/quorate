@@ -1,0 +1,9 @@
+diff --git a/programs/foo/src/processor.rs b/programs/foo/src/processor.rs
+--- a/programs/foo/src/processor.rs
++++ b/programs/foo/src/processor.rs
+@@ -20,5 +20,6 @@ pub fn process(ctx: Context<Process>) -> Result<()> {
+     let ix = build_instruction(&ctx)?;
+     let accounts = ctx.accounts.to_account_infos();
++    invoke_signed(&ix, &accounts, &[seeds])?;
+     Ok(())
+ }

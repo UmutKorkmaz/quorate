@@ -1,0 +1,27 @@
+diff --git a/ios/CryptoUtil.swift b/ios/CryptoUtil.swift
+--- a/ios/CryptoUtil.swift
++++ b/ios/CryptoUtil.swift
+@@ -0,0 +1,22 @@
++import Foundation
++
++class CryptoUtil {
++
++    // BAD: arc4random used to generate a session token — not cryptographically secure
++    func generateSessionToken() -> String {
++        let token = arc4random()
++        return String(token, radix: 16)
++    }
++
++    // BAD: Math.random equivalent — arc4random used for IV
++    func generateIV() -> UInt32 {
++        // should use SecRandomCopyBytes
++        return arc4random()
++    }
++}
++
++// BAD: arc4random for a nonce — not CSPRNG
++func makeNonce() -> UInt32 {
++    return arc4random()
++}
++
++// Note: arc4random_uniform is safe for bounded values, but arc4random alone is not CSPRNG on all platforms

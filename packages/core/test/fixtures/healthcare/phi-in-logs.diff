@@ -1,0 +1,25 @@
+diff --git a/src/ehr/audit.ts b/src/ehr/audit.ts
+--- a/src/ehr/audit.ts
++++ b/src/ehr/audit.ts
+@@ -0,0 +1,22 @@
++import { logger } from "../lib/logger.js";
++import { PatientRecord } from "./types.js";
++
++export async function retrievePatientRecord(patientId: string): Promise<PatientRecord> {
++  const record = await db.patients.findById(patientId);
++
++  logger.info("Patient record retrieved", {
++    patientId,
++    patient: record.patient,
++    diagnosis: record.diagnosis,
++    mrn: record.mrn,
++  });
++
++  console.debug("PHI access", { ssn: record.ssn, dob: record.dob, prescription: record.prescription });
++
++  return record;
++}
++
++export async function logAdmission(record: PatientRecord): Promise<void> {
++  console.log("Admitting patient", { mrn: record.mrn, diagnosis: record.diagnosis });
++}

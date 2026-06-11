@@ -1,0 +1,69 @@
+diff --git a/infra/main.tf b/infra/main.tf
+--- a/infra/main.tf
++++ b/infra/main.tf
+@@ -0,0 +1,60 @@
++# Terraform — encrypted storage, scoped CIDR, private ACL
++
++terraform {
++  required_version = ">= 1.6.0"
++  required_providers {
++    aws = {
++      source  = "hashicorp/aws"
++      version = "~> 5.0"
++    }
++  }
++}
++
++variable "vpc_id" {
++  type        = string
++  description = "VPC in which resources will be created"
++}
++
++variable "db_password" {
++  type        = string
++  sensitive   = true
++  description = "Database master password — supplied at runtime, never hardcoded"
++}
++
++resource "aws_security_group" "app" {
++  name        = "app-sg"
++  description = "Allow HTTPS from internal subnets only"
++  vpc_id      = var.vpc_id
++
++  ingress {
++    from_port   = 443
++    to_port     = 443
++    protocol    = "tcp"
++    cidr_blocks = ["10.0.0.0/16"]
++  }
++
++  egress {
++    from_port   = 0
++    to_port     = 0
++    protocol    = "-1"
++    cidr_blocks = ["10.0.0.0/16"]
++  }
++}
++
++resource "aws_s3_bucket" "logs" {
++  bucket = "my-app-logs"
++  # ACL is private — no public-read or public-read-write
++}
++
++resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
++  bucket = aws_s3_bucket.logs.id
++  rule {
++    apply_server_side_encryption_by_default {
++      sse_algorithm = "AES256"
++    }
++  }
++}
++
++resource "aws_db_instance" "main" {
++  identifier     = "app-db"
++  engine         = "postgres"
++  instance_class = "db.t3.small"
++  username       = "dbadmin"
++  password       = var.db_password
++  encrypted      = true
++}

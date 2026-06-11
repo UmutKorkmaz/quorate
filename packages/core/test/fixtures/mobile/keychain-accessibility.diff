@@ -1,0 +1,31 @@
+diff --git a/ios/KeychainHelper.swift b/ios/KeychainHelper.swift
+--- a/ios/KeychainHelper.swift
++++ b/ios/KeychainHelper.swift
+@@ -0,0 +1,28 @@
++import Foundation
++import Security
++
++class KeychainHelper {
++
++    // BAD: kSecAttrAccessibleAlways — item accessible even when device is locked
++    func saveToken(_ token: String) {
++        let query: [String: Any] = [
++            kSecClass as String: kSecClassGenericPassword,
++            kSecAttrAccount as String: "authToken",
++            kSecValueData as String: token.data(using: .utf8)!,
++            kSecAttrAccessible as String: kSecAttrAccessibleAlways
++        ]
++        SecItemAdd(query as CFDictionary, nil)
++    }
++
++    // BAD: kSecAttrAccessibleAlwaysThisDeviceOnly — still accessible when locked
++    func saveRefreshToken(_ token: String) {
++        let query: [String: Any] = [
++            kSecClass as String: kSecClassGenericPassword,
++            kSecAttrAccount as String: "refreshToken",
++            kSecValueData as String: token.data(using: .utf8)!,
++            kSecAttrAccessible as String: kSecAttrAccessibleAlwaysThisDeviceOnly
++        ]
++        SecItemAdd(query as CFDictionary, nil)
++    }
++}

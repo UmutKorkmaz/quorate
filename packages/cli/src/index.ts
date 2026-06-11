@@ -1,16 +1,20 @@
 #!/usr/bin/env node
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import {
+  buildMultiPackConfig,
   createDefaultConfig,
   detectAvailableProviders,
+  detectPacks,
   fetchProviderModels,
   findConfigPath,
   isEmptyReviewDiff,
   loadConfig,
+  PACK_IDS,
+  PACKS,
   PALETTE,
   PROVIDER_PRESETS,
   PROVIDER_PRESET_NAMES,
@@ -46,6 +50,34 @@ const defaultCwd = process.env.INIT_CWD ?? process.cwd();
 function cwdFrom(program: Command): string {
   const opts = program.opts<GlobalOptions>();
   return resolve(opts.cwd ?? defaultCwd);
+}
+
+/**
+ * Recursively collect repo-relative file paths under `dir`, capping at
+ * `maxDepth` and `maxFiles`. Skips node_modules, .git, dist, build, and
+ * .quorate directories entirely.
+ */
+const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".quorate"]);
+
+function collectFilePaths(dir: string, root: string, depth: number, maxDepth: number, acc: string[]): void {
+  if (depth > maxDepth || acc.length >= 5000) return;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (acc.length >= 5000) break;
+    if (SKIP_DIRS.has(entry.name)) continue;
+    const full = join(dir, entry.name);
+    const rel = relative(root, full);
+    if (entry.isDirectory()) {
+      collectFilePaths(full, root, depth + 1, maxDepth, acc);
+    } else if (entry.isFile()) {
+      acc.push(rel);
+    }
+  }
 }
 
 /** Add `entry` to the repo's .gitignore if missing (best-effort, never throws). */
@@ -183,6 +215,11 @@ export function buildProgram(): Command {
     .helpGroup("Setup:")
     .description("Create a starter .quorate.yml with detected provider commands disabled by default.")
     .option("-f, --force", "Overwrite an existing config file")
+    .option(
+      "--pack <ids>",
+      "Scaffold one or more domain packs (comma-separated): " + PACK_IDS.join(", ")
+    )
+    .option("--auto", "Detect the repo's stack and scaffold the matching packs")
     .action((options) => {
       const cwd = cwdFrom(program);
       const configPath = resolve(cwd, ".quorate.yml");
@@ -190,13 +227,90 @@ export function buildProgram(): Command {
         throw new Error(`${configPath} already exists. Use --force to overwrite it.`);
       }
 
-      const config = createDefaultConfig(detectAvailableProviders());
-      writeFileSync(configPath, serializeConfig(config), "utf8");
-      console.log(`Created ${configPath}`);
+      if (options.pack && options.auto) {
+        throw new Error("Use either --pack or --auto, not both.");
+      }
+
+      let config: QuorateConfig;
+
+      if (options.pack) {
+        // CSV pack list
+        const ids = (options.pack as string)
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+
+        const packsArray = ids.map((id: string) => {
+          const pack = PACKS[id];
+          if (!pack) {
+            throw new Error(`Unknown pack "${id}". Available: ${PACK_IDS.join(", ")}.`);
+          }
+          return pack;
+        });
+
+        config = buildMultiPackConfig(packsArray, detectAvailableProviders());
+        writeFileSync(configPath, serializeConfig(config), "utf8");
+        const totalCouncils = config.councils.length;
+        console.log(
+          `Created ${configPath} with the ${ids.join(",")} pack(s) (${totalCouncils} councils).`
+        );
+      } else if (options.auto) {
+        // Gather repo signals
+        const files: string[] = [];
+        collectFilePaths(cwd, cwd, 0, 6, files);
+
+        let dependencies: string[] = [];
+        const pkgPath = resolve(cwd, "package.json");
+        if (existsSync(pkgPath)) {
+          try {
+            const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+              dependencies?: Record<string, string>;
+              devDependencies?: Record<string, string>;
+            };
+            dependencies = [
+              ...Object.keys(pkg.dependencies ?? {}),
+              ...Object.keys(pkg.devDependencies ?? {})
+            ];
+          } catch {
+            // non-fatal
+          }
+        }
+
+        const detectedIds = detectPacks({ files, dependencies });
+
+        if (detectedIds.length === 0) {
+          console.log("No known stack detected — falling back to a default config.");
+          config = createDefaultConfig(detectAvailableProviders());
+          writeFileSync(configPath, serializeConfig(config), "utf8");
+          console.log(`Created ${configPath}`);
+        } else {
+          const packsArray = detectedIds.map((id) => PACKS[id]);
+          config = buildMultiPackConfig(packsArray, detectAvailableProviders());
+          writeFileSync(configPath, serializeConfig(config), "utf8");
+          console.log(
+            `Detected: ${detectedIds.join(", ")}. Created ${configPath} with ${config.councils.length} councils.`
+          );
+        }
+      } else {
+        config = createDefaultConfig(detectAvailableProviders());
+        writeFileSync(configPath, serializeConfig(config), "utf8");
+        console.log(`Created ${configPath}`);
+      }
 
       // Session/report artifacts (diffs, transcripts, findings) are written under
       // .quorate/ — keep them out of version control.
       ensureGitignored(cwd, ".quorate/");
+    });
+
+  program
+    .command("packs")
+    .helpGroup("Setup:")
+    .description("List available domain packs (councils + per-role guidance).")
+    .action(() => {
+      for (const [id, pack] of Object.entries(PACKS)) {
+        console.log(`  ${id}  ${pack.description}`);
+        console.log(`    councils: ${pack.councils.join(", ")}`);
+      }
     });
 
   program

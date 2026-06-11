@@ -1,0 +1,26 @@
+diff --git a/ios/AuthManager.swift b/ios/AuthManager.swift
+--- a/ios/AuthManager.swift
++++ b/ios/AuthManager.swift
+@@ -0,0 +1,22 @@
++import Foundation
++
++/// Manages authentication state.
++class AuthManager {
++
++    func saveCredentials(token: String, password: String) {
++        // BAD: storing auth token in UserDefaults — not encrypted
++        UserDefaults.standard.set(token, forKey: "authToken")
++        // BAD: storing password in NSUserDefaults — accessible to any process
++        NSUserDefaults.standard.set(password, forKey: "userPassword")
++    }
++
++    func savePIN(pin: String) {
++        // BAD: PIN stored in UserDefaults — not protected by Secure Enclave
++        UserDefaults.standard.set(pin, forKey: "userPin")
++    }
++
++    func clearCredentials() {
++        UserDefaults.standard.removeObject(forKey: "authToken")
++        UserDefaults.standard.removeObject(forKey: "userPassword")
++    }
++}

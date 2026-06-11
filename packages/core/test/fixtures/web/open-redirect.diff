@@ -1,0 +1,14 @@
+diff --git a/src/api/auth.ts b/src/api/auth.ts
+--- a/src/api/auth.ts
++++ b/src/api/auth.ts
+@@ -0,0 +1,11 @@
++import express from "express";
++
++const router = express.Router();
++
++router.get("/login", (req, res) => {
++  // After login, redirect to the caller-supplied URL without validation
++  res.redirect(req.query.returnTo as string);
++});
++
++export default router;

@@ -1,0 +1,120 @@
+diff --git a/src/ehr/safe-patient-service.ts b/src/ehr/safe-patient-service.ts
+--- a/src/ehr/safe-patient-service.ts
++++ b/src/ehr/safe-patient-service.ts
+@@ -0,0 +1,110 @@
++/**
++ * Safe EHR patient service — HIPAA-compliant patterns.
++ * - PHI is never written to logs; only surrogate IDs are logged.
++ * - PHI is encrypted at rest using AES-256-GCM via encryptField().
++ * - PHI is never sent to analytics or uncontrolled external services.
++ * - Patient records are accessed only after explicit authorization check.
++ * - API responses return masked/tokenized identifiers, never raw PHI.
++ * - Queries use SELECT with specific fields and WHERE clauses (minimum-necessary).
++ * - Clinical system credentials are loaded from environment variables.
++ * - No plaintext PHI literals in source.
++ */
++import crypto from "crypto";
++import { pool } from "../db/pool.js";
++import { encryptField, decryptField } from "../crypto/aes-gcm.js";
++import { auditLog } from "../audit/logger.js";
++
++// Clinical system credentials loaded from environment — never hardcoded.
++const fhirBaseUrl = process.env.FHIR_BASE_URL!;
++const fhirBearerToken = process.env.FHIR_BEARER_TOKEN!;
++
++if (!fhirBearerToken) {
++  throw new Error("FHIR_BEARER_TOKEN environment variable is required");
++}
++
++// ---------------------------------------------------------------------------
++// Authorization check — must pass before any PHI is returned
++// ---------------------------------------------------------------------------
++
++async function assertAuthorized(requestingUserId: string, patientId: string): Promise<void> {
++  const permitted = await pool.query(
++    "SELECT 1 FROM access_grants WHERE user_id = $1 AND patient_id = $2 AND expires_at > NOW()",
++    [requestingUserId, patientId]
++  );
++  if (permitted.rows.length === 0) {
++    throw new Error("Access denied: no valid grant for this patient record");
++  }
++}
++
++// ---------------------------------------------------------------------------
++// Patient record retrieval — authorized, audited, minimum-necessary fields
++// ---------------------------------------------------------------------------
++
++export async function getPatientSummary(
++  requestingUserId: string,
++  patientId: string
++): Promise<{ id: string; displayName: string; insuranceToken: string }> {
++  await assertAuthorized(requestingUserId, patientId);
++
++  // Audit access — log accessor identity and surrogate ID only, never PHI content.
++  auditLog.info("PHI access", { accessorId: requestingUserId, recordRef: patientId, action: "READ" });
++
++  // Minimum-necessary query: only the three fields required by the caller.
++  const row = await pool.query(
++    "SELECT id, display_name_enc, insurance_token FROM patients WHERE id = $1",
++    [patientId]
++  );
++  if (row.rows.length === 0) throw new Error("Patient not found");
+
++  const { id, display_name_enc, insurance_token } = row.rows[0];
++  const displayName = await decryptField(display_name_enc);
++
++  return { id, displayName, insuranceToken: insurance_token };
++}
++
++// ---------------------------------------------------------------------------
++// PHI storage — field-level encryption; never plaintext PHI literals
++// ---------------------------------------------------------------------------
++
++export async function storePatientIdentifiers(patientId: string, rawSsn: string, rawMrn: string): Promise<void> {
++  const encSsn = await encryptField(rawSsn);
++  const encMrn = await encryptField(rawMrn);
+
++  await pool.query(
++    "UPDATE patients SET ssn_enc = $1, mrn_enc = $2 WHERE id = $3",
++    [encSsn, encMrn, patientId]
++  );
+
++  // Only the surrogate patient ID is logged — raw SSN/MRN are never in the log.
++  auditLog.info("Patient identifiers updated", { patientId });
++}
++
++// ---------------------------------------------------------------------------
++// PHI hashing — SHA-256 only; MD5/SHA-1 are not used
++// ---------------------------------------------------------------------------
++
++export function hashForIndex(value: string): string {
++  return crypto.createHash("sha256").update(value).digest("hex");
++}
++
++// ---------------------------------------------------------------------------
++// FHIR integration — credentials from env vars; no hardcoded tokens
++// ---------------------------------------------------------------------------
++
++export async function fetchFhirResource(resourceType: string, resourceId: string): Promise<unknown> {
++  const response = await fetch(`${fhirBaseUrl}/${resourceType}/${encodeURIComponent(resourceId)}`, {
++    headers: {
++      Authorization: `Bearer ${fhirBearerToken}`,
++      Accept: "application/fhir+json",
++    },
++  });
++  if (!response.ok) throw new Error(`FHIR request failed: ${response.status}`);
++  return response.json();
++}
++
++// ---------------------------------------------------------------------------
++// API response — masked identifiers only; raw PHI is never returned
++// ---------------------------------------------------------------------------
++
++export async function buildPatientResponse(
++  requestingUserId: string,
++  patientId: string
++): Promise<{ id: string; maskedName: string; token: string }> {
++  const summary = await getPatientSummary(requestingUserId, patientId);
++  const maskedName = summary.displayName.replace(/(?<=.{2}).(?=.{2})/g, "*");
++  return { id: summary.id, maskedName, token: summary.insuranceToken };
++}

@@ -5,6 +5,49 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Solana pack (slice 1).** `quorate init --pack solana` scaffolds a
+  Solana/Anchor review council (councils: solana-security, anchor-accounts,
+  transaction-safety, token-safety, maintainer) with per-role reviewer guidance;
+  `quorate packs` lists available packs.
+- **Shared reviewer prompt builder** (`buildReviewPrompt`) replaces the duplicated
+  prompt logic in the api and cli provider runners — byte-identical output when no
+  pack is active, and the single place pack `roleGuidance` is injected per role.
+- **Three deterministic Solana heuristics**: UncheckedAccount/AccountInfo (high),
+  raw CPI invoke/invoke_signed (medium), and skipPreflight: true (medium), with a
+  vulnerable/clean Anchor + web3.js diff corpus proving detection and zero false
+  positives.
+- **Solana pack complete (10 sealevel classes).** Four more on-chain
+  Rust heuristics (panic, non-canonical PDA bump, manual account closing,
+  unvalidated token account, unchecked arithmetic) plus a diff-shaped Anchor
+  constraint-removal check (via a new removedLines pass) and a hardcoded-keypair
+  check — 10 distinct vulnerability classes proven by the demo corpus, clean
+  Anchor/web3.js fixtures stay finding-free. New "Quorate for Solana / Anchor"
+  docs page and a ready-to-copy GitHub Action example workflow.
+- **EVM / Solidity pack.** `quorate init --pack evm` scaffolds a Solidity review
+  council; 10 deterministic .sol heuristics (tx.origin auth, delegatecall,
+  selfdestruct, inline assembly, block.timestamp dependence, unbounded loops,
+  floating pragma, ether-via-call, unchecked low-level call, unchecked ERC20
+  transfer) with a vulnerable/clean corpus — proves the pack registry
+  generalizes (no CLI changes; adding a registry entry is enough). Docs page +
+  Action example included.
+- **IaC pack (Terraform + Kubernetes).** `quorate init --pack iac` scaffolds an
+  infrastructure security council; 10 deterministic heuristics — public ACL,
+  0.0.0.0/0 ingress, encryption disabled, public IP, hardcoded secret (.tf);
+  privileged container, host namespace sharing, runs-as-root, privilege
+  escalation, :latest image tag (k8s yaml) — with a vulnerable/clean corpus.
+  Docs page + Action example.
+- **AI / LLM-app pack.** `quorate init --pack llm` scaffolds an LLM-application
+  security council; 10 deterministic heuristics — untrusted input interpolated
+  into prompts, model output to eval/exec (critical), model output as raw HTML,
+  unvalidated tool-call arguments, hardcoded LLM key, prompt/response logging,
+  moderation disabled, secret/PII in prompt, authz decided by model output,
+  external content fed into prompt — with a vulnerable/clean corpus. Docs page +
+  Action example. (4 packs, 41 vulnerability classes total.)
+
 ## [0.7.2] - 2026-06-10
 
 ### Added

@@ -1,0 +1,24 @@
+diff --git a/src/ehr/crypto-util.ts b/src/ehr/crypto-util.ts
+--- a/src/ehr/crypto-util.ts
++++ b/src/ehr/crypto-util.ts
+@@ -0,0 +1,22 @@
++import crypto from "crypto";
++
++export function hashPatientSsn(ssn: string): string {
++  return crypto.createHash("md5").update(ssn).digest("hex");
++}
++
++export function hashMrn(mrn: string): string {
++  return crypto.createHash("sha1").update(mrn).digest("hex");
++}
++
++export function storePatientData(patient: { ssn: string; mrn: string; phi: string }) {
++  const encryptPatient = false;
++  const encryptPhi = false;
++  return { ssn: patient.ssn, mrn: patient.mrn, phi: patient.phi, encrypted: false };
++}
++
++export function encryptMedicalRecord(medicalRecord: string) {
++  const encryptMedicalRecord = false;
++  return { data: medicalRecord, encryptMedicalRecord };
++}

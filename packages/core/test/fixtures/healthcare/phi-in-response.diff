@@ -1,0 +1,22 @@
+diff --git a/src/ehr/records-api.ts b/src/ehr/records-api.ts
+--- a/src/ehr/records-api.ts
++++ b/src/ehr/records-api.ts
+@@ -0,0 +1,20 @@
++import express from "express";
++import { db } from "../db/client.js";
++
++const router = express.Router();
++
++router.get("/records/:id", async (req, res) => {
++  const record = await db.records.findById(req.params.id);
++  if (!record) return res.status(404).json({ error: "Not found" });
++
++  return res.json({ id: record.id, ssn: record.ssn, mrn: record.mrn, diagnosis: record.diagnosis });
++});
++
++router.get("/patients/:id/full", async (req, res) => {
++  const p = await db.patients.findById(req.params.id);
++  return res.json({ patientName: p.name, medicalRecord: p.recordId, status: p.status });
++});
++
++export default router;

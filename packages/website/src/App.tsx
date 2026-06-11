@@ -12,6 +12,16 @@ import Config from "./pages/docs/Config";
 import GithubAction from "./pages/docs/GithubAction";
 import Faq from "./pages/docs/Faq";
 import ManualTesting from "./pages/docs/ManualTesting";
+import Solana from "./pages/docs/Solana";
+import Evm from "./pages/docs/Evm";
+import Iac from "./pages/docs/Iac";
+import LlmApp from "./pages/docs/LlmApp";
+import Move from "./pages/docs/Move";
+import Ci from "./pages/docs/Ci";
+import Fintech from "./pages/docs/Fintech";
+import Web from "./pages/docs/Web";
+import Healthcare from "./pages/docs/Healthcare";
+import Mobile from "./pages/docs/Mobile";
 
 export function App() {
   return (
@@ -28,6 +38,16 @@ export function App() {
           <Route path="github-action" element={<GithubAction />} />
           <Route path="faq" element={<Faq />} />
           <Route path="manual-testing" element={<ManualTesting />} />
+          <Route path="solana" element={<Solana />} />
+          <Route path="evm" element={<Evm />} />
+          <Route path="iac" element={<Iac />} />
+          <Route path="llm" element={<LlmApp />} />
+          <Route path="move" element={<Move />} />
+          <Route path="ci" element={<Ci />} />
+          <Route path="fintech" element={<Fintech />} />
+          <Route path="web" element={<Web />} />
+          <Route path="healthcare" element={<Healthcare />} />
+          <Route path="mobile" element={<Mobile />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

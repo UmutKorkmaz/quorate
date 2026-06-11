@@ -1,0 +1,9 @@
+diff --git a/programs/governance/src/lib.rs b/programs/governance/src/lib.rs
+--- a/programs/governance/src/lib.rs
++++ b/programs/governance/src/lib.rs
+@@ -30,8 +30,7 @@ pub struct ExecuteProposal<'info> {
+-    #[account(mut, has_one = authority)]
++    #[account(mut)]
+     pub proposal: Account<'info, Proposal>,
+     pub authority: Signer<'info>,
+ }

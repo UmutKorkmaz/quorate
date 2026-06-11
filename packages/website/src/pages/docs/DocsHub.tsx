@@ -14,6 +14,56 @@ const CARDS = [
     to: "/docs/manual-testing",
     title: "Manual testing",
     desc: "A release checklist for the website, shell, keyboard flow, sessions, and headless CLI."
+  },
+  {
+    to: "/docs/solana",
+    title: "Solana / Anchor",
+    desc: "Solana/Anchor-aware council + ten deterministic on-chain heuristics. Zero-setup sealevel security review."
+  },
+  {
+    to: "/docs/evm",
+    title: "EVM / Solidity",
+    desc: "Solidity-aware council + ten deterministic on-chain heuristics. Zero-setup smart-contract security review."
+  },
+  {
+    to: "/docs/iac",
+    title: "Infrastructure / IaC",
+    desc: "Terraform and Kubernetes security council + ten deterministic heuristics. Zero-setup infrastructure misconfiguration review."
+  },
+  {
+    to: "/docs/llm",
+    title: "AI / LLM apps",
+    desc: "LLM-application security council + ten deterministic heuristics covering prompt injection, data leakage, tool safety, and unsafe output. Zero-setup AI risk review."
+  },
+  {
+    to: "/docs/move",
+    title: "Move (Sui / Aptos)",
+    desc: "Sui/Aptos-aware Move security council + ten deterministic heuristics covering resource safety, capability misuse, and access-control gaps. Zero-setup Move review."
+  },
+  {
+    to: "/docs/ci",
+    title: "CI/CD & Supply Chain",
+    desc: "Workflow-security and supply-chain council + ten deterministic heuristics covering script injection, unpinned actions, hardcoded secrets, and pipe-to-shell patterns. Zero-setup CI review."
+  },
+  {
+    to: "/docs/fintech",
+    title: "Fintech / PCI",
+    desc: "Payment-security council + ten deterministic heuristics covering card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables. Zero-setup PCI review."
+  },
+  {
+    to: "/docs/web",
+    title: "Web & API (OWASP)",
+    desc: "OWASP-aligned web security council + ten deterministic heuristics covering SSRF, command injection, path traversal, reflected XSS, open redirect, mass assignment, permissive CORS, CSRF, insecure deserialization, and weak cryptography. Zero-setup OWASP review."
+  },
+  {
+    to: "/docs/healthcare",
+    title: "Healthcare / HIPAA",
+    desc: "PHI-protection council + ten deterministic heuristics covering PHI in logs, plaintext PHI, PHI in URLs, external transmission, API exposure, analytics leakage, insecure direct object references, hardcoded clinical credentials, over-broad queries, and weak encryption. Zero-setup HIPAA review."
+  },
+  {
+    to: "/docs/mobile",
+    title: "Mobile (iOS / Android)",
+    desc: "MASVS-aligned mobile security council + ten deterministic heuristics covering insecure local storage, hardcoded secrets, cleartext HTTP, exported Android components, WebView bridge exposure, disabled TLS validation, sensitive data in logs, debuggable builds, insecure randomness, and weak Keychain accessibility. Zero-setup iOS/Android review."
   }
 ] as const;
 

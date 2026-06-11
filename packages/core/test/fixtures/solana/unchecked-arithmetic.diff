@@ -1,0 +1,11 @@
+diff --git a/programs/lending/src/lib.rs b/programs/lending/src/lib.rs
+--- a/programs/lending/src/lib.rs
++++ b/programs/lending/src/lib.rs
+@@ -20,6 +20,8 @@ pub mod lending {
+     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+         let pool = &mut ctx.accounts.pool;
++        pool.balance += amount;
++        pool.total_supply += amount;
+         Ok(())
+     }
+ }

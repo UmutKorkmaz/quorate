@@ -1,0 +1,16 @@
+diff --git a/src/rag/webFetcher.ts b/src/rag/webFetcher.ts
+--- a/src/rag/webFetcher.ts
++++ b/src/rag/webFetcher.ts
+@@ -1,3 +1,14 @@
++import OpenAI from "openai";
++
++const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
++
++export async function summarizeUrl(url: string): Promise<string> {
++  const messages = [{ role: "system", content: "Summarize." }, { role: "user", content: await fetch(url).then((r) => r.text()) }];
++  const res = await client.chat.completions.create({
++    model: "gpt-4o",
++    messages
++  });
++  return res.choices[0].message.content ?? "";
++}

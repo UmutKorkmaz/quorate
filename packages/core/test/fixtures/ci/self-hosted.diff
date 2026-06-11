@@ -1,0 +1,17 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1,3 +1,18 @@
++name: Integration Tests
++
++on:
++  pull_request:
++    branches: [main]
++
++jobs:
++  integration:
++    runs-on: [self-hosted, linux, x64]
++    steps:
++      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
++      - name: Run integration tests
++        run: npm run test:integration

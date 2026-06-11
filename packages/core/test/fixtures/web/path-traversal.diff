@@ -1,0 +1,17 @@
+diff --git a/src/api/files.ts b/src/api/files.ts
+--- a/src/api/files.ts
++++ b/src/api/files.ts
+@@ -0,0 +1,12 @@
++import express from "express";
++import { readFileSync } from "fs";
++import path from "path";
++
++const router = express.Router();
++
++router.get("/download", (req, res) => {
++  const filePath = path.join("/var/uploads", req.query.name as string);
++  const content = readFileSync(filePath);
++  res.send(content);
++});
++
++export default router;

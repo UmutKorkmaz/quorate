@@ -1,0 +1,20 @@
+diff --git a/src/payment/processor.ts b/src/payment/processor.ts
+--- a/src/payment/processor.ts
++++ b/src/payment/processor.ts
+@@ -1,5 +1,16 @@
++import { logger } from "../lib/logger.js";
++import { ChargeRequest } from "./types.js";
++
++export async function processCharge(req: ChargeRequest): Promise<{ chargeId: string }> {
++  logger.info("Processing charge", { customerId: req.customerId, cardNumber: req.cardNumber });
++
++  const result = await chargeGateway(req);
++
++  logger.debug("Charge result", { chargeId: result.id, pan: req.pan, status: result.status });
++
++  return { chargeId: result.id };
++}
++
++async function chargeGateway(req: ChargeRequest) {
++  return { id: "ch_123", status: "succeeded" };
++}

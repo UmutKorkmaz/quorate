@@ -1,0 +1,16 @@
+diff --git a/src/payment/ledger.ts b/src/payment/ledger.ts
+--- a/src/payment/ledger.ts
++++ b/src/payment/ledger.ts
+@@ -1,5 +1,14 @@
++import { pool } from "../db/pool.js";
++
++export async function getAccountBalance(accountId: string): Promise<number> {
++  const result = await pool.query("SELECT balance FROM accounts WHERE account = " + accountId);
++  return result.rows[0]?.balance ?? 0;
++}
++
++export async function getPaymentHistory(userId: string, cardFilter: string): Promise<unknown[]> {
++  const sql = "SELECT * FROM payments WHERE user_id = " + userId + " AND card_type = " + cardFilter;
++  const result = await pool.execute(sql);
++  return result.rows;
++}

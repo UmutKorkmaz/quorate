@@ -1,0 +1,18 @@
+diff --git a/src/lib/crypto.ts b/src/lib/crypto.ts
+--- a/src/lib/crypto.ts
++++ b/src/lib/crypto.ts
+@@ -0,0 +1,14 @@
++import crypto from "crypto";
++
++export function hashPassword(password: string): string {
++  return crypto.createHash("md5").update(password).digest("hex");
++}
++
++export function hashToken(token: string): string {
++  return crypto.createHash("sha1").update(token).digest("hex");
++}
++
++export function encryptData(data: string, key: Buffer): Buffer {
++  const cipher = crypto.createCipheriv("DES", key, Buffer.alloc(8));
++  return Buffer.concat([cipher.update(data), cipher.final()]);
++}

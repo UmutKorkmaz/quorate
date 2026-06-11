@@ -1,0 +1,95 @@
+diff --git a/src/services/dataTransform.ts b/src/services/dataTransform.ts
+--- a/src/services/dataTransform.ts
++++ b/src/services/dataTransform.ts
+@@ -0,0 +1,85 @@
++/**
++ * Ordinary business-logic service.
++ *
++ * Variables named output/result/response/data are used in normal,
++ * non-exec contexts — pipelines, logging, mapping.
++ *
++ * The execSync calls use hard-coded commands with output path variables —
++ * none of the arguments come from LLM responses or user input.
++ */
++import { execSync } from "child_process";
++import { logger } from "../lib/logger.js";
++
++interface RawRecord {
++  id: string;
++  value: number;
++  label: string;
++}
++
++interface TransformedRecord {
++  id: string;
++  normalizedValue: number;
++  displayLabel: string;
++}
++
++function normalize(value: number, max: number): number {
++  if (max === 0) return 0;
++  return value / max;
++}
++
++export function transformRecords(records: RawRecord[]): TransformedRecord[] {
++  const maxValue = Math.max(...records.map((r) => r.value), 0);
++
++  const output = records.map((record): TransformedRecord => {
++    const normalizedValue = normalize(record.value, maxValue);
++    return {
++      id: record.id,
++      normalizedValue,
++      displayLabel: record.label.trim().toUpperCase(),
++    };
++  });
++
++  return output;
++}
++
++export async function fetchAndTransform(endpoint: string): Promise<TransformedRecord[]> {
++  const response = await fetch(endpoint);
++  if (!response.ok) {
++    throw new Error(`Fetch failed: ${response.status}`);
++  }
++  const data = (await response.json()) as RawRecord[];
++  const result = transformRecords(data);
++  logger.info("transform complete", { count: result.length });
++  return result;
++}
++
++export function groupByLabel(records: TransformedRecord[]): Record<string, TransformedRecord[]> {
++  const output: Record<string, TransformedRecord[]> = {};
++  for (const record of records) {
++    const key = record.displayLabel;
++    if (!output[key]) {
++      output[key] = [];
++    }
++    output[key].push(record);
++  }
++  return output;
++}
++
++/**
++ * Compress the report folder.
++ * The `output` variable holds a filesystem path validated against an allow-list.
++ * It is NOT derived from any LLM call, user HTTP input, or untrusted source.
++ */
++export function archiveReport(reportDir: string): void {
++  const allowedDirs = ["/var/reports", "/tmp/reports"];
++  if (!allowedDirs.some((d) => reportDir.startsWith(d))) {
++    throw new Error("Directory not permitted");
++  }
++  const output = `${reportDir}/archive.tar.gz`;
++  execSync(`tar -czf ${output} ${reportDir}/data`);
++}
++
++/**
++ * Invoke a fixed build tool. The `output` argument names the output file.
++ * The value is validated before use — no LLM output is involved.
++ */
++export function buildArtifact(output: string): void {
++  if (!/^[a-zA-Z0-9_\-.]+$/.test(output)) {
++    throw new Error("Invalid output name");
++  }
++  execSync(`make build OUTPUT=${output}`);
++}

@@ -18,5 +18,25 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/faq":
     "Frequently asked questions about Quorate — install, providers, degraded reviews, and the GitHub Action.",
   "/docs/manual-testing":
-    "Manual testing checklist for Quorate — website, CLI shell, keyboard shortcuts, sessions, headless commands, and edge cases."
+    "Manual testing checklist for Quorate — website, CLI shell, keyboard shortcuts, sessions, headless commands, and edge cases.",
+  "/docs/solana":
+    "Quorate Solana pack — Anchor-aware review council and ten deterministic on-chain heuristics for sealevel security.",
+  "/docs/evm":
+    "Quorate EVM pack — Solidity-aware review council and ten deterministic on-chain heuristics for smart-contract security.",
+  "/docs/iac":
+    "Quorate IaC pack — Terraform and Kubernetes security council and ten deterministic heuristics for infrastructure misconfiguration review.",
+  "/docs/llm":
+    "Quorate LLM app pack — AI-application security council and ten deterministic heuristics for prompt injection, data leakage, tool safety, and unsafe output review.",
+  "/docs/move":
+    "Quorate Move pack — Sui/Aptos-aware security council and ten deterministic heuristics for resource safety, capability misuse, and access-control review.",
+  "/docs/ci":
+    "Quorate CI pack — workflow-security and supply-chain council and ten deterministic heuristics for script injection, unpinned actions, hardcoded secrets, and pipe-to-shell review.",
+  "/docs/fintech":
+    "Quorate Fintech pack — payment-security and PCI-compliance council and ten deterministic heuristics for card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables.",
+  "/docs/web":
+    "Quorate Web pack — OWASP-aligned web security council and ten deterministic heuristics for SSRF, command injection, path traversal, reflected XSS, open redirect, mass assignment, permissive CORS, CSRF, insecure deserialization, and weak cryptographic algorithms.",
+  "/docs/healthcare":
+    "Quorate Healthcare pack — PHI-protection and HIPAA Security Rule-aligned council and ten deterministic heuristics for PHI in logs, plaintext PHI literals, PHI in URLs, external PHI transmission, API over-exposure, analytics leakage, insecure direct object references on patient records, hardcoded clinical-system credentials, over-broad PHI queries, and weak or disabled encryption for PHI.",
+  "/docs/mobile":
+    "Quorate Mobile pack — MASVS-aligned iOS/Android security council and ten deterministic heuristics for insecure local storage, hardcoded secrets in mobile source, cleartext HTTP and ATS exceptions, exported Android components, WebView JavaScript bridge exposure, disabled TLS certificate validation, sensitive data in device logs, debuggable release builds, insecure randomness for security values, and weak Keychain accessibility."
 };

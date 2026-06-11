@@ -1,0 +1,20 @@
+diff --git a/src/api/session.py b/src/api/session.py
+--- a/src/api/session.py
++++ b/src/api/session.py
+@@ -0,0 +1,14 @@
++import pickle
++import yaml
++from flask import Flask, request, jsonify
++
++app = Flask(__name__)
++
++@app.route("/restore-session", methods=["POST"])
++def restore_session():
++    data = request.json.get("session_data")
++    session = pickle.loads(data.encode("latin1"))
++    return jsonify({"user": session.get("user")})
++
++@app.route("/load-config", methods=["POST"])
++def load_config():
++    cfg = yaml.load(request.json.get("config"))
++    return jsonify(cfg)

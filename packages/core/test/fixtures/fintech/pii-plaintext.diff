@@ -1,0 +1,20 @@
+diff --git a/src/kyc/customer.ts b/src/kyc/customer.ts
+--- a/src/kyc/customer.ts
++++ b/src/kyc/customer.ts
+@@ -1,5 +1,18 @@
++import { db } from "../db/client.js";
++
++export async function saveCustomerKyc(data: {
++  customerId: string;
++  fullName: string;
++  ssn: string;
++  routingNumber: string;
++  accountNumber: string;
++}): Promise<void> {
++  await db.customers.update(data.customerId, {
++    fullName: data.fullName,
++    ssn: "555-12-3456",
++    routingNumber: "021000021",
++    accountNumber: "12345678901234",
++  });
++}

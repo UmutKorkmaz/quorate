@@ -1,0 +1,61 @@
+diff --git a/src/components/UserCard.tsx b/src/components/UserCard.tsx
+--- a/src/components/UserCard.tsx
++++ b/src/components/UserCard.tsx
+@@ -0,0 +1,52 @@
++import React from "react";
++
++interface User {
++  id: string;
++  displayName: string;
++  bio: string;
++  avatarUrl: string;
++  verified: boolean;
++}
++
++interface UserCardProps {
++  user: User;
++  onFollow: (id: string) => void;
++}
++
++/**
++ * UserCard — renders user profile info.
++ * All props are escaped by React's JSX renderer; no dangerouslySetInnerHTML is used.
++ */
++export function UserCard({ user, onFollow }: UserCardProps): React.ReactElement {
++  const handleFollow = (): void => {
++    onFollow(user.id);
++  };
++
++  return (
++    <article className="user-card" aria-label={`Profile card for ${user.displayName}`}>
++      <img
++        src={user.avatarUrl}
++        alt={`Avatar for ${user.displayName}`}
++        width={64}
++        height={64}
++        loading="lazy"
++        className="user-card__avatar"
++      />
++      <div className="user-card__body">
++        <h2 className="user-card__name">
++          {user.displayName}
++          {user.verified && (
++            <span aria-label="Verified" className="user-card__badge">
++              ✓
++            </span>
++          )}
++        </h2>
++        <p className="user-card__bio">{user.bio}</p>
++      </div>
++      <button
++        type="button"
++        className="user-card__follow-btn"
++        onClick={handleFollow}
++      >
++        Follow
++      </button>
++    </article>
++  );
++}
++
++export default UserCard;

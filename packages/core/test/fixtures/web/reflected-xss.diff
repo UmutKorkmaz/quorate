@@ -1,0 +1,16 @@
+diff --git a/src/api/search.ts b/src/api/search.ts
+--- a/src/api/search.ts
++++ b/src/api/search.ts
+@@ -0,0 +1,12 @@
++import express from "express";
++
++const router = express.Router();
++
++router.get("/search", (req, res) => {
++  const query = req.query.q as string;
++  res.send(`<h1>Search results for: ${req.query.q}</h1>`);
++});
++
++router.post("/echo", (req, res) => {
++  res.write(req.body.message);
++});
