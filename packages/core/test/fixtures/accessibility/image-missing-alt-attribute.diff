@@ -1,0 +1,6 @@
+diff --git a/src/components/Hero.tsx b/src/components/Hero.tsx
+--- a/src/components/Hero.tsx
++++ b/src/components/Hero.tsx
+@@ -1,1 +1,2 @@
+ // context
++      <img src="/hero.png" className="w-full" />

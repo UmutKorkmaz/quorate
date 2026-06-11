@@ -1,0 +1,6 @@
+diff --git a/src/serving/load_model.py b/src/serving/load_model.py
+--- a/src/serving/load_model.py
++++ b/src/serving/load_model.py
+@@ -1,1 +1,2 @@
+ // context
++model = torch.load("/tmp/checkpoint.pt")

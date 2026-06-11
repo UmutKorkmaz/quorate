@@ -1,0 +1,6 @@
+diff --git a/deploy/agent.yaml b/deploy/agent.yaml
+--- a/deploy/agent.yaml
++++ b/deploy/agent.yaml
+@@ -1,1 +1,2 @@
+ // context
++      hostNetwork: true

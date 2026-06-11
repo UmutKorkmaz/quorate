@@ -17,6 +17,7 @@ Type `/` in the Quorate interactive shell to open the command palette.
 | `/roles <ids>` | Limit council roles |
 | `/route [role provider...\|reset]` | View & reassign role→provider routing for this session |
 | `/fix [finding#]` | Delegate a finding to a write-mode agent (snapshotted + revertible) |
+| `/merge <provider\|off>` | Pick a master agent that merges duplicate findings (or off) |
 | `/models <provider> [model]` | List an api provider's live models, or switch its model |
 | `/mode review\|plan` | Set mode: review or plan |
 | `/diff <path>` | Load a unified diff file |

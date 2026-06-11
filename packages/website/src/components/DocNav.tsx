@@ -9,17 +9,32 @@ export const DOC_PATHS = [
   "/docs/config",
   "/docs/github-action",
   "/docs/faq",
-  "/docs/manual-testing",
+  // Blockchain & Web3
   "/docs/solana",
   "/docs/evm",
-  "/docs/iac",
-  "/docs/llm",
   "/docs/move",
-  "/docs/ci",
-  "/docs/fintech",
+  // Apps & APIs
   "/docs/web",
+  "/docs/graphql",
+  "/docs/accessibility",
+  // AI & Data
+  "/docs/llm",
+  "/docs/mlops",
+  "/docs/data-sql",
+  // Infra & Delivery
+  "/docs/iac",
+  "/docs/k8s",
+  "/docs/ci",
+  "/docs/performance",
+  // Compliance & Privacy
+  "/docs/fintech",
   "/docs/healthcare",
-  "/docs/mobile"
+  "/docs/privacy",
+  // Mobile & Embedded
+  "/docs/mobile",
+  "/docs/embedded",
+  // Quality
+  "/docs/manual-testing"
 ] as const;
 
 export type DocPath = (typeof DOC_PATHS)[number];
@@ -33,17 +48,25 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/config": "Configuration",
   "/docs/github-action": "GitHub Action",
   "/docs/faq": "FAQ",
-  "/docs/manual-testing": "Manual testing",
   "/docs/solana": "Solana / Anchor",
   "/docs/evm": "EVM / Solidity",
-  "/docs/iac": "Infrastructure / IaC",
-  "/docs/llm": "AI / LLM apps",
   "/docs/move": "Move (Sui / Aptos)",
-  "/docs/ci": "CI/CD & Supply Chain",
-  "/docs/fintech": "Fintech / PCI",
   "/docs/web": "Web & API (OWASP)",
+  "/docs/graphql": "GraphQL API",
+  "/docs/accessibility": "Accessibility (WCAG)",
+  "/docs/llm": "AI / LLM apps",
+  "/docs/mlops": "ML / MLOps",
+  "/docs/data-sql": "Data & SQL",
+  "/docs/iac": "Infrastructure / IaC",
+  "/docs/k8s": "Kubernetes",
+  "/docs/ci": "CI/CD & Supply Chain",
+  "/docs/performance": "Performance & SRE",
+  "/docs/fintech": "Fintech / PCI",
   "/docs/healthcare": "Healthcare / HIPAA",
-  "/docs/mobile": "Mobile (iOS / Android)"
+  "/docs/privacy": "Privacy (GDPR)",
+  "/docs/mobile": "Mobile (iOS / Android)",
+  "/docs/embedded": "Embedded (MISRA)",
+  "/docs/manual-testing": "Manual testing"
 };
 
 const SECTIONS = [
@@ -65,17 +88,55 @@ const SECTIONS = [
       { to: "/docs/providers", label: "Providers" },
       { to: "/docs/config", label: "Configuration" },
       { to: "/docs/github-action", label: "GitHub Action" },
-      { to: "/docs/faq", label: "FAQ" },
+      { to: "/docs/faq", label: "FAQ" }
+    ]
+  },
+  {
+    label: "Packs · Blockchain & Web3",
+    links: [
       { to: "/docs/solana", label: "Solana / Anchor" },
       { to: "/docs/evm", label: "EVM / Solidity" },
-      { to: "/docs/iac", label: "Infrastructure / IaC" },
-      { to: "/docs/llm", label: "AI / LLM apps" },
-      { to: "/docs/move", label: "Move (Sui / Aptos)" },
-      { to: "/docs/ci", label: "CI/CD & Supply Chain" },
-      { to: "/docs/fintech", label: "Fintech / PCI" },
+      { to: "/docs/move", label: "Move (Sui / Aptos)" }
+    ]
+  },
+  {
+    label: "Packs · Apps & APIs",
+    links: [
       { to: "/docs/web", label: "Web & API (OWASP)" },
+      { to: "/docs/graphql", label: "GraphQL API" },
+      { to: "/docs/accessibility", label: "Accessibility (WCAG)" }
+    ]
+  },
+  {
+    label: "Packs · AI & Data",
+    links: [
+      { to: "/docs/llm", label: "AI / LLM apps" },
+      { to: "/docs/mlops", label: "ML / MLOps" },
+      { to: "/docs/data-sql", label: "Data & SQL" }
+    ]
+  },
+  {
+    label: "Packs · Infra & Delivery",
+    links: [
+      { to: "/docs/iac", label: "Infrastructure / IaC" },
+      { to: "/docs/k8s", label: "Kubernetes" },
+      { to: "/docs/ci", label: "CI/CD & Supply Chain" },
+      { to: "/docs/performance", label: "Performance & SRE" }
+    ]
+  },
+  {
+    label: "Packs · Compliance & Privacy",
+    links: [
+      { to: "/docs/fintech", label: "Fintech / PCI" },
       { to: "/docs/healthcare", label: "Healthcare / HIPAA" },
-      { to: "/docs/mobile", label: "Mobile (iOS / Android)" }
+      { to: "/docs/privacy", label: "Privacy (GDPR)" }
+    ]
+  },
+  {
+    label: "Packs · Mobile & Embedded",
+    links: [
+      { to: "/docs/mobile", label: "Mobile (iOS / Android)" },
+      { to: "/docs/embedded", label: "Embedded (MISRA)" }
     ]
   },
   {

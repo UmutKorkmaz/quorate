@@ -1,0 +1,6 @@
+diff --git a/migrations/reset_status.sql b/migrations/reset_status.sql
+--- a/migrations/reset_status.sql
++++ b/migrations/reset_status.sql
+@@ -1,1 +1,2 @@
+ // context
++DELETE FROM analytics.sessions

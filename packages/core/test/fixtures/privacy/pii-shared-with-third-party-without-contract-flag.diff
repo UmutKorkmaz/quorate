@@ -1,0 +1,6 @@
+diff --git a/src/integrations/enrich.ts b/src/integrations/enrich.ts
+--- a/src/integrations/enrich.ts
++++ b/src/integrations/enrich.ts
+@@ -1,1 +1,2 @@
+ // context
++await axios.post('https://api.thirdparty.io/enrich', { email: user.email, phone: user.phone })

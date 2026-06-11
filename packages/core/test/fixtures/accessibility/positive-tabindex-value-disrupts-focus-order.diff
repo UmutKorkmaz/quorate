@@ -1,0 +1,6 @@
+diff --git a/src/components/Panel.tsx b/src/components/Panel.tsx
+--- a/src/components/Panel.tsx
++++ b/src/components/Panel.tsx
+@@ -1,1 +1,2 @@
+ // context
++        <div tabIndex={3} className="panel">

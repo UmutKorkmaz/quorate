@@ -1,0 +1,6 @@
+diff --git a/src/server/webhook.ts b/src/server/webhook.ts
+--- a/src/server/webhook.ts
++++ b/src/server/webhook.ts
+@@ -1,1 +1,2 @@
+ // context
++  const data = JSON.parse(await req.text());

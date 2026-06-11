@@ -1,0 +1,6 @@
+diff --git a/src/components/Promo.tsx b/src/components/Promo.tsx
+--- a/src/components/Promo.tsx
++++ b/src/components/Promo.tsx
+@@ -1,1 +1,2 @@
+ // context
++      <video autoPlay src="/promo.mp4" loop />

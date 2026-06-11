@@ -1,0 +1,6 @@
+diff --git a/pipelines/load_users.py b/pipelines/load_users.py
+--- a/pipelines/load_users.py
++++ b/pipelines/load_users.py
+@@ -1,1 +1,2 @@
+ // context
++    cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")

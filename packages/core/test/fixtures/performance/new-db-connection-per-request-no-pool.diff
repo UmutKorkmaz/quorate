@@ -1,0 +1,6 @@
+diff --git a/src/db/handler.ts b/src/db/handler.ts
+--- a/src/db/handler.ts
++++ b/src/db/handler.ts
+@@ -1,1 +1,2 @@
+ // context
++  const client = new Client({ connectionString: process.env.DATABASE_URL });

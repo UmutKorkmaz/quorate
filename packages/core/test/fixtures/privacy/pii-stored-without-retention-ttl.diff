@@ -1,0 +1,6 @@
+diff --git a/src/models/user.ts b/src/models/user.ts
+--- a/src/models/user.ts
++++ b/src/models/user.ts
+@@ -1,1 +1,2 @@
+ // context
++const userSchema = new Schema({ email: String, phone: String })

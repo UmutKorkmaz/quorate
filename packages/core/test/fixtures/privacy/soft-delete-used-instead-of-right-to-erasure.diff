@@ -1,0 +1,6 @@
+diff --git a/src/services/account.ts b/src/services/account.ts
+--- a/src/services/account.ts
++++ b/src/services/account.ts
+@@ -1,1 +1,2 @@
+ // context
++await db.users.update({ id }, { isDeleted: true });

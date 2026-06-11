@@ -1,0 +1,6 @@
+diff --git a/notebooks/explore.sql b/notebooks/explore.sql
+--- a/notebooks/explore.sql
++++ b/notebooks/explore.sql
+@@ -1,1 +1,2 @@
+ // context
++SELECT user_id, event_ts FROM events ORDER BY event_ts DESC

@@ -1,0 +1,6 @@
+diff --git a/src/clients/api.ts b/src/clients/api.ts
+--- a/src/clients/api.ts
++++ b/src/clients/api.ts
+@@ -1,1 +1,2 @@
+ // context
++  const res = await fetch(`https://api.example.com/users/${id}`)

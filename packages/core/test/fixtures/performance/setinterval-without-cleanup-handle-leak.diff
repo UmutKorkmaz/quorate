@@ -1,0 +1,6 @@
+diff --git a/src/hooks/usePoller.ts b/src/hooks/usePoller.ts
+--- a/src/hooks/usePoller.ts
++++ b/src/hooks/usePoller.ts
+@@ -1,1 +1,2 @@
+ // context
++  setInterval(() => pollStatus(), 1000)

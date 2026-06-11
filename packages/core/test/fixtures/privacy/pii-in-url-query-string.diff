@@ -1,0 +1,6 @@
+diff --git a/src/lib/links.ts b/src/lib/links.ts
+--- a/src/lib/links.ts
++++ b/src/lib/links.ts
+@@ -1,1 +1,2 @@
+ // context
++const link = `https://app.example.com/verify?email=${user.email}&token=${t}`

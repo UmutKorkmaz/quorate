@@ -1,0 +1,6 @@
+diff --git a/src/repo/orders.ts b/src/repo/orders.ts
+--- a/src/repo/orders.ts
++++ b/src/repo/orders.ts
+@@ -1,1 +1,2 @@
+ // context
++  for (const o of orders) { const u = await db.findById(o.userId); }

@@ -15,7 +15,16 @@ const STANDARD_STYLE: Record<string, string> = {
   "PCI-DSS": "border-quorate-amber/40 text-quorate-amber bg-quorate-amber/8",
   OWASP: "border-quorate-security/40 text-quorate-security bg-quorate-security/8",
   HIPAA: "border-quorate-accent/40 text-quorate-accent bg-quorate-accent/8",
-  MASVS: "border-quorate-performance/40 text-quorate-performance bg-quorate-performance/8"
+  MASVS: "border-quorate-performance/40 text-quorate-performance bg-quorate-performance/8",
+  "WCAG 2.2": "border-quorate-architect/40 text-quorate-architect bg-quorate-architect/8",
+  "Data Engineering": "border-quorate-qa/40 text-quorate-qa bg-quorate-qa/8",
+  "CIS Kubernetes": "border-quorate-maintainer/40 text-quorate-maintainer bg-quorate-maintainer/8",
+  GDPR: "border-quorate-accent/40 text-quorate-accent bg-quorate-accent/8",
+  "ML Supply Chain": "border-quorate-security/40 text-quorate-security bg-quorate-security/8",
+  "MISRA C 2012": "border-quorate-amber/40 text-quorate-amber bg-quorate-amber/8",
+  "MISRA C++ 2008": "border-quorate-amber/40 text-quorate-amber bg-quorate-amber/8",
+  "Performance & SRE": "border-quorate-performance/40 text-quorate-performance bg-quorate-performance/8",
+  "GraphQL Security": "border-quorate-architect/40 text-quorate-architect bg-quorate-architect/8"
 };
 
 function standardStyle(standard: string): string {
@@ -36,7 +45,15 @@ const PACK_ICON: Record<string, string> = {
   fintech: "◈",
   web: "◉",
   healthcare: "✚",
-  mobile: "▣"
+  mobile: "▣",
+  accessibility: "♿",
+  "data-sql": "⌗",
+  k8s: "⎈",
+  privacy: "⚖",
+  mlops: "◴",
+  embedded: "⬓",
+  performance: "⚡",
+  graphql: "◐"
 };
 
 // ── Bento sizing for the pack grid ───────────────────────────────
@@ -51,14 +68,22 @@ const PACK_SPAN: Record<string, string> = {
   fintech: "lg:col-span-2",
   web: "lg:col-span-2",
   healthcare: "lg:col-span-2",
-  mobile: "lg:col-span-2"
+  mobile: "lg:col-span-2",
+  accessibility: "lg:col-span-2",
+  "data-sql": "lg:col-span-2",
+  k8s: "lg:col-span-2",
+  privacy: "lg:col-span-2",
+  mlops: "lg:col-span-2",
+  embedded: "lg:col-span-2",
+  performance: "lg:col-span-2",
+  graphql: "lg:col-span-2"
 };
 
 // ── Stat banner ───────────────────────────────────────────────────
 const STATS = [
-  { value: "10", label: "domain packs" },
-  { value: "100", label: "vulnerability classes" },
-  { value: "10", label: "recognised standards" },
+  { value: "18", label: "domain packs" },
+  { value: "180", label: "vulnerability classes" },
+  { value: "19", label: "recognised standards" },
   { value: "0", label: "false positives on clean code" }
 ];
 
@@ -170,7 +195,7 @@ export function Packs() {
     <>
       <Seo
         title="Review Packs"
-        description="Quorate ships 10 domain-aware review packs — Solana, EVM, Move, IaC, LLM, CI/CD, Fintech, Web, Healthcare, and Mobile — each grounding 10 vulnerability classes in a recognised standard."
+        description="Quorate ships 18 domain-aware review packs — Solana, EVM, Move, IaC, Kubernetes, CI/CD, LLM, MLOps, Web, GraphQL, Accessibility, Data & SQL, Fintech, Healthcare, Privacy, Mobile, Embedded, and Performance — each grounding 10 vulnerability classes in a recognised standard."
         path="/packs"
       />
 
@@ -199,7 +224,7 @@ export function Packs() {
           </div>
 
           <h1 className="display-hero text-[2.6rem] leading-[1.04] text-white md:text-5xl lg:text-[3.8rem]">
-            Ten review councils.
+            Eighteen review councils.
             <span
               className="mt-1 block bg-clip-text text-transparent"
               style={{ backgroundImage: "linear-gradient(90deg, #6e97ff, #a8c4ff, #6e97ff)" }}
@@ -265,7 +290,7 @@ export function Packs() {
             id="packs-heading"
             className="display-section mb-2 text-2xl text-white md:text-4xl"
           >
-            Ten domains, each with its own council
+            Eighteen domains, each with its own council
           </h2>
           <p className="mb-10 max-w-xl text-quorate-muted">
             Select a pack to auto-configure councils, role guidance, and heuristics for that

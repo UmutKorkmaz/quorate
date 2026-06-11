@@ -1,0 +1,6 @@
+diff --git a/src/train/resume.py b/src/train/resume.py
+--- a/src/train/resume.py
++++ b/src/train/resume.py
+@@ -1,1 +1,2 @@
+ // context
++state = torch.load(ckpt_path, map_location="cpu")
