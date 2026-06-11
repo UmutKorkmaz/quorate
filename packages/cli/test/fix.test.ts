@@ -26,6 +26,11 @@ beforeEach(() => {
   git(repo, ["init", "-q"]);
   git(repo, ["config", "user.email", "t@t.t"]);
   git(repo, ["config", "user.name", "t"]);
+  // Keep line endings byte-identical on every platform: Windows git defaults
+  // core.autocrlf=true, which rewrites \n -> \r\n on checkout/restore and would
+  // break the exact-content assertions below after a revert.
+  git(repo, ["config", "core.autocrlf", "false"]);
+  git(repo, ["config", "core.eol", "lf"]);
   writeFileSync(join(repo, "a.txt"), "original\n");
   git(repo, ["add", "."]);
   git(repo, ["commit", "-qm", "init"]);
