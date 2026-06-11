@@ -1,0 +1,6 @@
+diff --git a/src/pipeline/events.ts b/src/pipeline/events.ts
+--- a/src/pipeline/events.ts
++++ b/src/pipeline/events.ts
+@@ -1,1 +1,2 @@
+ // context
++await bigquery.insert('events', { ssn: user.ssn, name: user.fullName })

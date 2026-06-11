@@ -1,0 +1,6 @@
+diff --git a/scripts/rebuild.sql b/scripts/rebuild.sql
+--- a/scripts/rebuild.sql
++++ b/scripts/rebuild.sql
+@@ -1,1 +1,2 @@
+ // context
++DROP TABLE analytics.staging_orders

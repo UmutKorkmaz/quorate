@@ -1,0 +1,6 @@
+diff --git a/models/orders.sql b/models/orders.sql
+--- a/models/orders.sql
++++ b/models/orders.sql
+@@ -1,1 +1,2 @@
+ // context
++SELECT * FROM analytics.orders WHERE status = 'paid'

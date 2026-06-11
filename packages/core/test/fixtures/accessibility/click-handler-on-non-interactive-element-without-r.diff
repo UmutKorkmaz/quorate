@@ -1,0 +1,6 @@
+diff --git a/src/components/Card.tsx b/src/components/Card.tsx
+--- a/src/components/Card.tsx
++++ b/src/components/Card.tsx
+@@ -1,1 +1,2 @@
+ // context
++      <div onClick={handleOpen} className="card">Open</div>

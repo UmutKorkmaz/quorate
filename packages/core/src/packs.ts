@@ -330,7 +330,202 @@ const mobile: QuoratePack = {
   }
 };
 
-export const PACKS: Record<string, QuoratePack> = { solana, evm, iac, llm, move, ci, fintech, web, healthcare, mobile };
+const accessibility: QuoratePack = {
+  id: "accessibility",
+  description: "Web/app accessibility (WCAG 2.2 AA) review council",
+  councils: [
+    "semantic-structure",
+    "aria-correctness",
+    "keyboard-interaction",
+    "perceivable-media",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "semantic-structure":
+      "Audit document and content structure for native semantics: a single <html lang> declaration, exactly one logical <h1>, and headings that descend without skipping levels (h1 to h2 to h3, never h1 to h3). Flag generic <div>/<span> wrappers used where <button>, <nav>, <main>, <header>, or a heading element exists, since assistive technology relies on the native role and outline. Verify that landmark and heading hierarchy gives screen-reader users a coherent page map.",
+    "aria-correctness":
+      "Verify that every ARIA attribute is spelled and used correctly per the WAI-ARIA spec: flag typos like aria-labeledby or aria-describ, invalid attribute names, and roles applied to elements that cannot host them. Confirm that aria-label, aria-labelledby, and title are present wherever an icon-only control or unlabelled region needs an accessible name. Reject ARIA that contradicts native semantics or duplicates a visible label, since the first rule of ARIA is to prefer a native element.",
+    "keyboard-interaction":
+      "Ensure every interactive control is reachable and operable by keyboard alone. Flag onClick handlers on non-interactive elements (div/span) that lack a role plus a keyboard handler (onKeyDown/onKeyUp), and reject positive tabIndex values that fight the natural DOM tab order. Confirm anchors used as buttons carry a real href rather than '#' or 'javascript:void(0)', and that focus order is logical and visible.",
+    "perceivable-media":
+      "Audit non-text content for text alternatives and user control. Every <img> conveying meaning must carry an alt attribute (empty alt only for purely decorative images), and every form control must have an associated label or aria-label rather than relying on a placeholder. Flag autoplaying <video>/<audio> that is not muted and lacks controls, since unexpected sound and motion violate WCAG and disorient users.",
+    "maintainer":
+      "Assess the overall structure, test coverage, and maintainability of the accessibility work. Identify missing automated a11y assertions (axe/jest-axe), components that re-implement native semantics instead of composing accessible primitives, and inconsistent labelling patterns across the codebase. Flag dead ARIA, duplicated focus-management logic, and any pattern that will make accessibility hard to verify or extend at team scale."
+  }
+};
+
+const dataSql: QuoratePack = {
+  id: "data-sql",
+  description: "Data engineering and SQL pipeline safety review council for queries, warehouses, dbt, and Airflow",
+  councils: [
+    "query-safety-reviewer",
+    "warehouse-cost-reviewer",
+    "data-correctness-reviewer",
+    "pii-governance-reviewer",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "query-safety-reviewer":
+      "Verify that no SQL is assembled from string concatenation, f-strings, or string formatting with runtime variables; require parameterized queries or a vetted query builder. Confirm destructive statements (UPDATE, DELETE, DROP, TRUNCATE) are guarded by an explicit WHERE clause or environment check. Treat any interpolated identifier or literal in a SQL string as a potential injection and correctness hazard.",
+    "warehouse-cost-reviewer":
+      "Flag queries that scan more than necessary: SELECT * in production paths, unbounded result sets missing a LIMIT, and cartesian or cross joins that explode row counts. Confirm columnar warehouses are queried with explicit projections and predicate pushdown. Push back on patterns that turn a cheap query into a full-table or full-partition scan.",
+    "data-correctness-reviewer":
+      "Ensure monetary and exact-decimal values use DECIMAL/NUMERIC rather than FLOAT, REAL, or DOUBLE to avoid rounding drift. Verify that multiple dependent writes execute inside a single transaction so partial failures cannot leave inconsistent state. Check joins, filters, and aggregations for the silent data-loss patterns that pass tests but corrupt downstream tables.",
+    "pii-governance-reviewer":
+      "Identify sensitive columns (email, SSN, phone, address, card numbers) that are selected into logs, print statements, or unmasked output. Confirm DSNs, passwords, and connection strings are never hardcoded and come from environment variables or a secret manager. Treat any PII flowing into observability or stdout as a governance violation requiring masking or removal.",
+    "maintainer":
+      "Assess the structure, testability, and maintainability of pipeline and SQL model code: clear separation of transformation logic, documented assumptions, and tests for boundary conditions. Confirm queries and DAGs are idempotent, parameterized via config, and not duplicated across models. Ensure changes include coverage for the data-correctness edge cases the other reviewers raise."
+  }
+};
+
+const k8s: QuoratePack = {
+  id: "k8s",
+  description: "Kubernetes workload manifest hardening review council",
+  councils: [
+    "pod-security-context-reviewer",
+    "host-isolation-reviewer",
+    "rbac-scope-reviewer",
+    "resource-governance-reviewer",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "pod-security-context-reviewer":
+      "Scrutinize container and pod securityContext fields for privilege escalation vectors: privileged:true, runAsNonRoot:false, runAsUser:0, allowPrivilegeEscalation:true, and dangerous added capabilities. Require workloads to drop ALL capabilities by default and run as a non-root UID. Treat any privileged container or root execution as a critical finding unless an explicit, justified exception exists.",
+    "host-isolation-reviewer":
+      "Verify the pod does not break the boundary between container and node. Flag hostNetwork, hostPID, and hostIPC set to true, and hostPath volume mounts that expose the node filesystem. Confirm automountServiceAccountToken is disabled where the workload does not call the Kubernetes API, since a leaked host namespace plus a mounted token is a direct path to cluster compromise.",
+    "rbac-scope-reviewer":
+      "Audit Role and ClusterRole rules for least privilege. Reject wildcard verbs, resources, or apiGroups that grant broad authority, and confirm rules name specific verbs and resources. Pay special attention to bindings that attach permissive roles to default or automounted service accounts.",
+    "resource-governance-reviewer":
+      "Ensure every container declares CPU and memory limits so a single workload cannot exhaust node resources or trigger noisy-neighbor denial of service. Flag containers missing resources.limits entirely. Confirm limits are paired with sensible requests for scheduling fairness.",
+    "maintainer":
+      "Assess manifest structure, naming, label conventions, and whether changes are covered by manifest linting or policy tests (e.g. kubeconform, conftest/OPA, kyverno). Confirm pinned image tags instead of mutable :latest so deployments are reproducible. Ensure the diff is reviewable and does not regress existing hardening."
+  }
+};
+
+const privacy: QuoratePack = {
+  id: "privacy",
+  description: "Data-protection & privacy lifecycle review council (GDPR / CCPA)",
+  councils: [
+    "consent-lawful-basis",
+    "data-minimization",
+    "retention-erasure",
+    "transfer-sharing",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "consent-lawful-basis":
+      "Verify that any data collection or tracking that depends on consent is gated behind an explicit, opt-in consent check before it fires. Flag analytics, pixels, and cookies set before consent is recorded, and precise-geolocation capture that has no accompanying notice or permission prompt. Confirm the lawful basis for each processing activity is identifiable in code and that consent is freely given, specific, and revocable.",
+    "data-minimization":
+      "Enforce data minimisation and purpose limitation: code should collect, log, and transmit only the personal data strictly necessary for the stated purpose. Flag PII written to logs, embedded in URLs or query strings, and full-table SELECT * dumps of user records. Require pseudonymisation or anonymisation before personal data is sent to analytics warehouses, ML training, or any secondary use.",
+    "retention-erasure":
+      "Check that stored personal data has a defined retention period or TTL and that a working right-to-erasure (right to be forgotten) path exists. Flag PII-bearing schemas and tables created without expiry, and soft-delete or deactivation patterns masquerading as deletion when GDPR Art. 17 requires actual erasure or irreversible anonymisation. Confirm deletion cascades to backups, caches, and downstream copies.",
+    "transfer-sharing":
+      "Scrutinise every flow that sends personal data to a third party or across a border. Flag PII forwarded to external APIs, marketing/CRM platforms, or sub-processors without an evident contract, data-processing agreement, or transfer-mechanism flag. Confirm cross-border transfers rely on an adequacy decision or appropriate safeguards (SCCs) and that 'sale'/'share' of personal information is honoured against CCPA opt-out signals.",
+    "maintainer":
+      "Assess overall structure, test coverage, and maintainability of the privacy-relevant code. Identify missing consent-gating abstractions, absent unit tests for erasure and retention logic, unclear data-flow boundaries, and any patterns that will make the data-protection posture hard to audit, prove, or extend. Confirm privacy controls are centralised rather than copy-pasted per call site."
+  }
+};
+
+const mlops: QuoratePack = {
+  id: "mlops",
+  description: "ML training & model-lifecycle safety review council",
+  councils: [
+    "artifact-provenance",
+    "data-leakage",
+    "reproducibility",
+    "pipeline-security",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "artifact-provenance":
+      "Trace every model and dataset artifact back to a trusted, pinned source. Flag deserialization of untrusted weights via pickle.load, torch.load, or joblib.load, and any hub download (from_pretrained, hf_hub_download, load_dataset) that lacks a revision or commit pin. Confirm checksums or signatures gate artifacts before they enter training or serving.",
+    "data-leakage":
+      "Audit feature engineering and split ordering for information bleeding from test into train. Flag scalers, encoders, or imputers fit on the full dataset before train_test_split, and target-derived columns left in the feature matrix. Verify transforms are fit inside a pipeline or only on training folds.",
+    "reproducibility":
+      "Confirm every source of randomness is seeded and every dependency is pinned so a run can be reproduced bit-for-bit. Flag training that omits seed_everything / random_state, missing train/validation splits, and model or dataset versions referenced without an explicit version or revision. Reproducibility is a prerequisite for trustworthy evaluation.",
+    "pipeline-security":
+      "Review config and orchestration code for unsafe loading and credential handling. Flag yaml.load without SafeLoader, eval/exec over experiment config, and hardcoded dataset, registry, or storage credentials. Configuration must be parsed safely and secrets must come from environment or a secret manager.",
+    "maintainer":
+      "Assess overall pipeline structure, test coverage, and long-term maintainability of the ML codebase. Identify duplicated preprocessing logic, untested data-split and metric code, unclear experiment naming, and any patterns that make training runs hard to audit, reproduce, or extend."
+  }
+};
+
+const embedded: QuoratePack = {
+  id: "embedded",
+  description: "Embedded C/C++ firmware safety review council (memory, MISRA, real-time)",
+  councils: [
+    "memory-safety",
+    "misra-conformance",
+    "concurrency-isr",
+    "realtime-timing",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "memory-safety":
+      "Audit every buffer operation, allocation, and pointer cast for spatial and temporal safety. Flag unbounded string functions (strcpy, strcat, sprintf, gets), memcpy/memmove calls whose length argument is not provably bounded by the destination size, and any allocation whose returned pointer is dereferenced before a NULL check. Confirm buffer sizes flow from a single named constant rather than ad-hoc literals.",
+    "misra-conformance":
+      "Enforce MISRA C/C++ discipline on each changed line. Flag use of goto, mixed signed/unsigned comparisons, reliance on implicit conversions, and floating-point equality tests. Verify that essential-type rules are respected and that constructs banned or restricted by MISRA carry a documented, justified deviation rather than slipping in silently.",
+    "concurrency-isr":
+      "Review every variable shared between an ISR and the main loop, and every memory-mapped hardware register, for a missing volatile qualifier that lets the compiler cache or reorder accesses. Confirm that ISR-shared state is accessed atomically or under a critical section, and that interrupt handlers never call non-reentrant or blocking library routines.",
+    "realtime-timing":
+      "Hunt for behaviour that destroys deterministic timing: dynamic allocation (malloc, calloc, new) on hot or interrupt paths, unbounded loops, and blocking calls inside time-critical code. Verify that worst-case execution time is bounded and that allocations, if any, happen only during startup rather than in steady-state real-time paths.",
+    "maintainer":
+      "Assess overall structure, test coverage, and long-term maintainability of the firmware change. Flag ignored return values from system/HAL calls, magic numbers, oversized functions, and missing unit or hardware-in-the-loop tests. Confirm error paths are handled explicitly and that the code will remain auditable against the coding standard as it evolves."
+  }
+};
+
+const performance: QuoratePack = {
+  id: "performance",
+  description: "Performance, scalability and reliability review council",
+  councils: [
+    "latency-io",
+    "data-access-scaling",
+    "resource-lifecycle",
+    "reliability-timeouts",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "latency-io":
+      "Hunt for serialized I/O on hot paths: await inside for/while loops, sequential network or disk calls that could run concurrently, and synchronous fs calls (readFileSync, existsSync) inside request handlers. Recommend Promise.all / asyncio.gather batching and non-blocking async fs APIs. Quantify the cost: N serial round-trips at p99 latency L means N x L added to the request.",
+    "data-access-scaling":
+      "Scrutinise every database and ORM access for N+1 patterns (a query issued once per item in a loop) and for list/collection endpoints that fetch without a LIMIT, take, or pagination cursor. Push callers toward batched IN queries, JOINs, dataloaders, and bounded page sizes. Treat any query whose result set grows with tenant data but has no upper bound as a scalability defect.",
+    "resource-lifecycle":
+      "Track the lifecycle of every acquired resource and every accumulator. Flag new DB clients/connections created per request instead of drawing from a pool, in-memory caches and arrays that grow without an eviction or size cap, JSON.parse over an unbounded request/stream body, and timers or listeners registered without matching teardown. Confirm bounded memory and deterministic cleanup.",
+    "reliability-timeouts":
+      "Ensure every outbound network call has an explicit timeout or AbortController/AbortSignal so a slow dependency cannot exhaust the request pool or pin connections. Flag fetch/axios/requests calls with no timeout and quadratic O(n^2) scans (nested includes/indexOf over arrays) that turn into CPU cliffs as input grows. Reliability means bounded blast radius under partial failure.",
+    "maintainer":
+      "Assess overall structure, test coverage and observability of the changed code. Confirm there are load or regression tests around hot paths, that performance-critical constants (page sizes, timeouts, cache caps) are named and configurable, and that the change is easy to reason about. Flag missing metrics/tracing on new I/O paths and any structure that makes future tuning hard."
+  }
+};
+
+const graphql: QuoratePack = {
+  id: "graphql",
+  description: "GraphQL API security & design review council",
+  councils: [
+    "query-execution",
+    "resolver-authorization",
+    "schema-design",
+    "data-access",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "query-execution":
+      "Audit server configuration for the absence of query-cost controls: depth limits, complexity/cost analysis, and batch/alias amplification guards. Flag introspection left enabled in production, empty validationRules arrays, and allowBatchedHttpRequests: true, all of which let a single request fan out into an expensive operation. Confirm a maximum query depth and a complexity ceiling are enforced before execution, and that timeouts cap long-running resolvers.",
+    "resolver-authorization":
+      "Verify every sensitive Query and Mutation resolver performs an explicit object- and field-level authorization check using the request context, not just gateway-level authentication. Flag resolvers for privileged operations (deleteUser, setRole, allUsers) that omit the context argument entirely, and any @skip/@include directive whose condition gates an auth-protected field — a classic auth-bypass primitive. Authorization must be re-checked at each resolver because GraphQL lets clients reach nested fields through many paths.",
+    "schema-design":
+      "Review the SDL for fields that invite abuse by design: list fields whose pagination argument (first, last, limit) has no default or upper bound, and mutations that lack a rate-limit directive. Ensure list resolvers expose cursor- or offset-based pagination with a server-enforced ceiling rather than returning unbounded collections. Confirm error-shaping configuration does not leak stack traces, original errors, or internal exception details to clients.",
+    "data-access":
+      "Scrutinise resolvers for N+1 query patterns — per-parent findAll/findMany calls that should be batched through a DataLoader — and for raw database queries interpolating GraphQL args or input directly into query strings. Require parameterized queries and batched/loader-based data fetching. Confirm that list resolvers invoked per parent node do not issue an unbounded number of downstream queries.",
+    "maintainer":
+      "Assess overall schema modularity, resolver test coverage, and long-term maintainability of the GraphQL layer. Identify resolvers without unit tests, duplicated authorization logic that should be a shared directive or middleware, unclear error mapping, and dead schema fields. Check that schema changes are reviewed for breaking-change impact and that complexity/depth limits are covered by integration tests."
+  }
+};
+
+export const PACKS: Record<string, QuoratePack> = {
+  solana, evm, iac, llm, move, ci, fintech, web, healthcare, mobile,
+  accessibility, "data-sql": dataSql, k8s, privacy, mlops, embedded, performance, graphql
+};
 export const PACK_IDS = Object.keys(PACKS);
 
 // ---------------------------------------------------------------------------
@@ -517,6 +712,65 @@ export function detectPacks(signals: {
     matched.add("mobile");
   }
 
+  // ── Kubernetes: *.yaml/*.yml under a k8s/kubernetes/manifests path, or whose
+  //   basename names a workload kind (deployment/statefulset/daemonset/pod).
+  if (
+    lowerFiles.some((f) => {
+      if (!f.endsWith(".yaml") && !f.endsWith(".yml")) return false;
+      const basename = f.split("/").at(-1) ?? f;
+      return (
+        f.includes("k8s") ||
+        f.includes("kubernetes") ||
+        f.includes("manifests") ||
+        /^(deployment|statefulset|daemonset|pod|cronjob|job)\b/.test(basename)
+      );
+    })
+  ) {
+    matched.add("k8s");
+  }
+
+  // ── Accessibility: any web UI component file (jsx/tsx/vue/svelte/html).
+  if (
+    lowerFiles.some(
+      (f) =>
+        f.endsWith(".jsx") ||
+        f.endsWith(".tsx") ||
+        f.endsWith(".vue") ||
+        f.endsWith(".svelte") ||
+        f.endsWith(".html")
+    )
+  ) {
+    matched.add("accessibility");
+  }
+
+  // ── Embedded: C/C++ firmware sources and headers.
+  if (
+    lowerFiles.some(
+      (f) =>
+        f.endsWith(".c") ||
+        f.endsWith(".h") ||
+        f.endsWith(".cpp") ||
+        f.endsWith(".cc") ||
+        f.endsWith(".cxx") ||
+        f.endsWith(".hpp")
+    )
+  ) {
+    matched.add("embedded");
+  }
+
+  // ── Data & SQL: *.sql files OR dbt/Airflow project markers.
+  if (
+    lowerFiles.some((f) => f.endsWith(".sql")) ||
+    lowerFiles.some(
+      (f) =>
+        f.endsWith("dbt_project.yml") ||
+        f.includes("/dags/") ||
+        f.includes("airflow")
+    )
+  ) {
+    matched.add("data-sql");
+  }
+
   // ── Dependency-based signals (package names, case-insensitive).
   if (dependencies.length > 0) {
     const lowerDeps = dependencies.map((d) => d.toLowerCase());
@@ -539,6 +793,16 @@ export function detectPacks(signals: {
     const healthcarePattern = /^fhir$|^hl7$|^@medplum|^cerner$|^epic$/;
     if (lowerDeps.some((d) => healthcarePattern.test(d))) {
       matched.add("healthcare");
+    }
+
+    const graphqlPattern = /^graphql$|^apollo-server|^@apollo\/server|^type-graphql$|^@nestjs\/graphql|^graphql-yoga$|^mercurius$/;
+    if (lowerDeps.some((d) => graphqlPattern.test(d))) {
+      matched.add("graphql");
+    }
+
+    const mlopsPattern = /^torch$|^tensorflow$|^scikit-learn$|^transformers$|^datasets$|^mlflow$|^joblib$|^xgboost$/;
+    if (lowerDeps.some((d) => mlopsPattern.test(d))) {
+      matched.add("mlops");
     }
   }
 

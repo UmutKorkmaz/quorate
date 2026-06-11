@@ -1,0 +1,6 @@
+diff --git a/src/config/resolve.py b/src/config/resolve.py
+--- a/src/config/resolve.py
++++ b/src/config/resolve.py
+@@ -1,1 +1,2 @@
+ // context
++value = eval(config["lr_schedule"])

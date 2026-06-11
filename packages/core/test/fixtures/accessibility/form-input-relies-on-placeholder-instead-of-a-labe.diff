@@ -1,0 +1,6 @@
+diff --git a/src/components/SignupForm.tsx b/src/components/SignupForm.tsx
+--- a/src/components/SignupForm.tsx
++++ b/src/components/SignupForm.tsx
+@@ -1,1 +1,2 @@
+ // context
++        <input type="text" name="email" placeholder="Email" />

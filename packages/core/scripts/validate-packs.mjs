@@ -135,6 +135,102 @@ const PACK_VULNERABLE_FIXTURES = {
     "debuggable.diff",
     "insecure-random.diff",
     "keychain-accessibility.diff"
+  ],
+  accessibility: [
+    "anchor-with-empty-or-placeholder-href-used-as-a-bu.diff",
+    "autoplaying-media-that-is-not-muted.diff",
+    "click-handler-on-non-interactive-element-without-r.diff",
+    "form-input-relies-on-placeholder-instead-of-a-labe.diff",
+    "heading-level-skipped-h1-directly-to-h3.diff",
+    "icon-only-button-without-an-accessible-name.diff",
+    "image-missing-alt-attribute.diff",
+    "misspelled-or-invalid-aria-attribute.diff",
+    "positive-tabindex-value-disrupts-focus-order.diff",
+    "root-html-element-missing-lang-attribute.diff"
+  ],
+  "data-sql": [
+    "cartesian-or-cross-join-that-explodes-row-counts.diff",
+    "drop-or-truncate-table-without-an-existence-or-env.diff",
+    "float-or-real-used-for-a-monetary-column.diff",
+    "hardcoded-database-connection-string-or-dsn.diff",
+    "multiple-dependent-writes-executed-without-a-trans.diff",
+    "pii-column-selected-into-logs-or-printed-output.diff",
+    "select-used-in-a-production-query.diff",
+    "sql-query-built-by-string-concatenation-or-f-strin.diff",
+    "unbounded-query-missing-a-limit-clause.diff",
+    "update-or-delete-statement-missing-a-where-clause.diff"
+  ],
+  k8s: [
+    "container-allowed-to-run-as-root.diff",
+    "container-missing-resource-limits.diff",
+    "container-runs-as-uid-0-root.diff",
+    "dangerous-linux-capability-added.diff",
+    "host-namespace-sharing-enabled.diff",
+    "mutable-latest-image-tag.diff",
+    "privilege-escalation-allowed.diff",
+    "privileged-container-in-securitycontext.diff",
+    "rbac-rule-grants-wildcard-access.diff",
+    "service-account-token-automounted.diff"
+  ],
+  privacy: [
+    "analytics-fired-before-consent.diff",
+    "cookie-set-without-consent-gating.diff",
+    "full-pii-table-dumped.diff",
+    "pii-in-url-query-string.diff",
+    "pii-sent-to-analytics-ml-without-anonymisation.diff",
+    "pii-shared-with-third-party-without-contract-flag.diff",
+    "pii-stored-without-retention-ttl.diff",
+    "pii-written-to-logs.diff",
+    "precise-geolocation-captured-without-notice.diff",
+    "soft-delete-used-instead-of-right-to-erasure.diff"
+  ],
+  mlops: [
+    "data-leakage-scaler-transform-fit-before-train-tes.diff",
+    "eval-exec-on-experiment-config-or-hyperparameters.diff",
+    "hardcoded-dataset-registry-storage-credentials.diff",
+    "model-trained-on-full-dataset-with-no-train-test-s.diff",
+    "no-random-seed-set-training-is-non-reproducible.diff",
+    "target-identifier-leakage-column-kept-in-training-.diff",
+    "torch-load-called-without-weights-only-true.diff",
+    "unpinned-model-dataset-download-from-hub.diff",
+    "unsafe-yaml-load-for-experiment-pipeline-config.diff",
+    "untrusted-model-artifact-deserialized-via-pickle-t.diff"
+  ],
+  embedded: [
+    "allocation-result-used-without-null-check.diff",
+    "dynamic-allocation-via-new-on-a-real-time-isr-path.diff",
+    "floating-point-equality-comparison.diff",
+    "hardware-register-isr-shared-variable-missing-vola.diff",
+    "ignored-return-value-of-a-system-library-call.diff",
+    "magic-buffer-size-literal-in-array-declaration.diff",
+    "memcpy-memmove-with-an-unchecked-length.diff",
+    "signed-unsigned-comparison-mismatch-in-loop-bound.diff",
+    "unbounded-string-operation-strcpy-strcat-sprintf-g.diff",
+    "use-of-goto.diff"
+  ],
+  performance: [
+    "await-inside-a-loop-serialized-i-o.diff",
+    "database-query-inside-a-loop-n-1.diff",
+    "json-parse-of-an-unbounded-request-body.diff",
+    "list-endpoint-missing-pagination-limit.diff",
+    "new-db-connection-per-request-no-pool.diff",
+    "o-n-2-nested-includes-indexof-scan.diff",
+    "outbound-fetch-axios-without-a-timeout.diff",
+    "setinterval-without-cleanup-handle-leak.diff",
+    "synchronous-fs-call-in-a-request-path.diff",
+    "unbounded-in-memory-accumulator-growth.diff"
+  ],
+  graphql: [
+    "graphql-introspection-enabled-in-production.diff",
+    "list-resolver-causes-n-1-queries-no-dataloader.diff",
+    "missing-query-depth-complexity-limit.diff",
+    "mutation-type-without-rate-limit-directive.diff",
+    "privileged-resolver-missing-object-field-level-aut.diff",
+    "query-batching-amplification-enabled.diff",
+    "raw-database-query-built-from-graphql-args.diff",
+    "skip-include-used-to-bypass-auth-protected-field.diff",
+    "unbounded-list-pagination-argument.diff",
+    "verbose-graphql-error-leaks-internals.diff"
   ]
 };
 
@@ -148,7 +244,17 @@ const PACK_CLEAN_FIXTURES = {
   fintech: ["clean-fintech.diff"],
   web: ["clean-web.diff"],
   healthcare: ["clean-healthcare.diff"],
-  mobile: ["clean-mobile.diff"]
+  mobile: ["clean-mobile.diff"],
+  // New packs rely on the shared cross-domain benign/ corpus rather than
+  // per-pack clean fixtures.
+  accessibility: [],
+  "data-sql": [],
+  k8s: [],
+  privacy: [],
+  mlops: [],
+  embedded: [],
+  performance: [],
+  graphql: []
 };
 
 function readFixture(packDir, name) {
@@ -276,5 +382,5 @@ on top of these heuristics for richer, context-sensitive analysis.
 writeFileSync(join(docsDir, "PACK-VALIDATION.md"), md, "utf8");
 
 console.error(
-  `[validate-packs] 10 packs, ${totalClasses} classes, ${totalDetected}/${totalClasses} detected, ${totalFalsePositives} false positives — report written to docs/PACK-VALIDATION.md`
+  `[validate-packs] ${packIds.length} packs, ${totalClasses} classes, ${totalDetected}/${totalClasses} detected, ${totalFalsePositives} false positives — report written to docs/PACK-VALIDATION.md`
 );

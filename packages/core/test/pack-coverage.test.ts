@@ -18,7 +18,15 @@ const EXPECTED_PACK_IDS = [
   "fintech",
   "web",
   "healthcare",
-  "mobile"
+  "mobile",
+  "accessibility",
+  "data-sql",
+  "k8s",
+  "privacy",
+  "mlops",
+  "embedded",
+  "performance",
+  "graphql"
 ] as const;
 
 const PACK_VULNERABLE_FIXTURES: Record<string, string[]> = {
@@ -141,6 +149,102 @@ const PACK_VULNERABLE_FIXTURES: Record<string, string[]> = {
     "debuggable.diff",
     "insecure-random.diff",
     "keychain-accessibility.diff"
+  ],
+  "accessibility": [
+    "image-missing-alt-attribute.diff",
+    "form-input-relies-on-placeholder-instead-of-a-labe.diff",
+    "click-handler-on-non-interactive-element-without-r.diff",
+    "anchor-with-empty-or-placeholder-href-used-as-a-bu.diff",
+    "root-html-element-missing-lang-attribute.diff",
+    "positive-tabindex-value-disrupts-focus-order.diff",
+    "icon-only-button-without-an-accessible-name.diff",
+    "misspelled-or-invalid-aria-attribute.diff",
+    "autoplaying-media-that-is-not-muted.diff",
+    "heading-level-skipped-h1-directly-to-h3.diff"
+  ],
+  "data-sql": [
+    "sql-query-built-by-string-concatenation-or-f-strin.diff",
+    "select-used-in-a-production-query.diff",
+    "update-or-delete-statement-missing-a-where-clause.diff",
+    "unbounded-query-missing-a-limit-clause.diff",
+    "drop-or-truncate-table-without-an-existence-or-env.diff",
+    "hardcoded-database-connection-string-or-dsn.diff",
+    "pii-column-selected-into-logs-or-printed-output.diff",
+    "cartesian-or-cross-join-that-explodes-row-counts.diff",
+    "multiple-dependent-writes-executed-without-a-trans.diff",
+    "float-or-real-used-for-a-monetary-column.diff"
+  ],
+  "k8s": [
+    "privileged-container-in-securitycontext.diff",
+    "container-allowed-to-run-as-root.diff",
+    "container-runs-as-uid-0-root.diff",
+    "privilege-escalation-allowed.diff",
+    "host-namespace-sharing-enabled.diff",
+    "dangerous-linux-capability-added.diff",
+    "container-missing-resource-limits.diff",
+    "mutable-latest-image-tag.diff",
+    "service-account-token-automounted.diff",
+    "rbac-rule-grants-wildcard-access.diff"
+  ],
+  "privacy": [
+    "pii-written-to-logs.diff",
+    "analytics-fired-before-consent.diff",
+    "pii-stored-without-retention-ttl.diff",
+    "pii-in-url-query-string.diff",
+    "pii-shared-with-third-party-without-contract-flag.diff",
+    "soft-delete-used-instead-of-right-to-erasure.diff",
+    "cookie-set-without-consent-gating.diff",
+    "precise-geolocation-captured-without-notice.diff",
+    "full-pii-table-dumped.diff",
+    "pii-sent-to-analytics-ml-without-anonymisation.diff"
+  ],
+  "mlops": [
+    "untrusted-model-artifact-deserialized-via-pickle-t.diff",
+    "torch-load-called-without-weights-only-true.diff",
+    "no-random-seed-set-training-is-non-reproducible.diff",
+    "data-leakage-scaler-transform-fit-before-train-tes.diff",
+    "hardcoded-dataset-registry-storage-credentials.diff",
+    "unsafe-yaml-load-for-experiment-pipeline-config.diff",
+    "unpinned-model-dataset-download-from-hub.diff",
+    "model-trained-on-full-dataset-with-no-train-test-s.diff",
+    "eval-exec-on-experiment-config-or-hyperparameters.diff",
+    "target-identifier-leakage-column-kept-in-training-.diff"
+  ],
+  "embedded": [
+    "unbounded-string-operation-strcpy-strcat-sprintf-g.diff",
+    "allocation-result-used-without-null-check.diff",
+    "memcpy-memmove-with-an-unchecked-length.diff",
+    "magic-buffer-size-literal-in-array-declaration.diff",
+    "hardware-register-isr-shared-variable-missing-vola.diff",
+    "signed-unsigned-comparison-mismatch-in-loop-bound.diff",
+    "use-of-goto.diff",
+    "dynamic-allocation-via-new-on-a-real-time-isr-path.diff",
+    "ignored-return-value-of-a-system-library-call.diff",
+    "floating-point-equality-comparison.diff"
+  ],
+  "performance": [
+    "await-inside-a-loop-serialized-i-o.diff",
+    "database-query-inside-a-loop-n-1.diff",
+    "list-endpoint-missing-pagination-limit.diff",
+    "synchronous-fs-call-in-a-request-path.diff",
+    "outbound-fetch-axios-without-a-timeout.diff",
+    "new-db-connection-per-request-no-pool.diff",
+    "unbounded-in-memory-accumulator-growth.diff",
+    "json-parse-of-an-unbounded-request-body.diff",
+    "o-n-2-nested-includes-indexof-scan.diff",
+    "setinterval-without-cleanup-handle-leak.diff"
+  ],
+  "graphql": [
+    "graphql-introspection-enabled-in-production.diff",
+    "missing-query-depth-complexity-limit.diff",
+    "list-resolver-causes-n-1-queries-no-dataloader.diff",
+    "privileged-resolver-missing-object-field-level-aut.diff",
+    "query-batching-amplification-enabled.diff",
+    "raw-database-query-built-from-graphql-args.diff",
+    "verbose-graphql-error-leaks-internals.diff",
+    "mutation-type-without-rate-limit-directive.diff",
+    "unbounded-list-pagination-argument.diff",
+    "skip-include-used-to-bypass-auth-protected-field.diff"
   ]
 };
 
@@ -166,7 +270,7 @@ function getDetectedTitles(packId: string, vulnFixtures: string[]): Set<string> 
 describe("PACK_COVERAGE — structural invariants", () => {
   it("has exactly 10 pack keys", () => {
     const keys = Object.keys(PACK_COVERAGE);
-    expect(keys).toHaveLength(10);
+    expect(keys).toHaveLength(18);
     for (const id of EXPECTED_PACK_IDS) {
       expect(keys, `Missing pack: ${id}`).toContain(id);
     }

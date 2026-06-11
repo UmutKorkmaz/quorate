@@ -1,0 +1,6 @@
+diff --git a/src/features/scale.py b/src/features/scale.py
+--- a/src/features/scale.py
++++ b/src/features/scale.py
+@@ -1,1 +1,2 @@
+ // context
++X = StandardScaler().fit_transform(X)

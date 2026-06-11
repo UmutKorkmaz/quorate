@@ -38,5 +38,21 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/healthcare":
     "Quorate Healthcare pack — PHI-protection and HIPAA Security Rule-aligned council and ten deterministic heuristics for PHI in logs, plaintext PHI literals, PHI in URLs, external PHI transmission, API over-exposure, analytics leakage, insecure direct object references on patient records, hardcoded clinical-system credentials, over-broad PHI queries, and weak or disabled encryption for PHI.",
   "/docs/mobile":
-    "Quorate Mobile pack — MASVS-aligned iOS/Android security council and ten deterministic heuristics for insecure local storage, hardcoded secrets in mobile source, cleartext HTTP and ATS exceptions, exported Android components, WebView JavaScript bridge exposure, disabled TLS certificate validation, sensitive data in device logs, debuggable release builds, insecure randomness for security values, and weak Keychain accessibility."
+    "Quorate Mobile pack — MASVS-aligned iOS/Android security council and ten deterministic heuristics for insecure local storage, hardcoded secrets in mobile source, cleartext HTTP and ATS exceptions, exported Android components, WebView JavaScript bridge exposure, disabled TLS certificate validation, sensitive data in device logs, debuggable release builds, insecure randomness for security values, and weak Keychain accessibility.",
+  "/docs/accessibility":
+    "Quorate Accessibility pack — WCAG 2.2 AA review council and ten deterministic heuristics for missing alt text, unlabelled form inputs, non-interactive click handlers, placeholder href buttons, missing lang, positive tabindex, icon-only buttons without a name, invalid ARIA, unmuted autoplay, and skipped heading levels.",
+  "/docs/data-sql":
+    "Quorate Data & SQL pack — data-engineering review council and ten deterministic heuristics for SQL string interpolation, SELECT *, missing WHERE on UPDATE/DELETE, unbounded queries, unguarded DROP/TRUNCATE, hardcoded DSNs, PII in logs, cross joins, missing transactions, and float money columns.",
+  "/docs/k8s":
+    "Quorate Kubernetes pack — CIS Kubernetes Benchmark review council and ten deterministic heuristics for privileged containers, runAsNonRoot:false, UID 0, privilege escalation, host namespace sharing, dangerous capabilities, empty resource limits, mutable :latest tags, automounted service-account tokens, and wildcard RBAC.",
+  "/docs/privacy":
+    "Quorate Privacy pack — GDPR/CCPA data-protection review council and ten deterministic heuristics for PII in logs, analytics before consent, missing retention TTLs, PII in URLs, third-party sharing, soft-delete vs erasure, cookies without consent, precise geolocation, full PII dumps, and PII to analytics/ML.",
+  "/docs/mlops":
+    "Quorate ML / MLOps pack — ML supply-chain and model-lifecycle review council and ten deterministic heuristics for pickle/torch.load deserialization, missing random seeds, train/test leakage, hardcoded model-registry credentials, unsafe yaml.load, unpinned hub downloads, full-dataset training, eval/exec on config, and target leakage.",
+  "/docs/embedded":
+    "Quorate Embedded pack — MISRA C/C++ firmware-safety review council and ten deterministic heuristics for unbounded string ops, unchecked malloc, unchecked memcpy length, magic buffer sizes, missing volatile on hardware registers, signed/unsigned loop bounds, goto, dynamic allocation on ISR paths, ignored return values, and float equality comparisons.",
+  "/docs/performance":
+    "Quorate Performance & SRE pack — performance, scalability, and reliability review council and ten deterministic heuristics for await-in-loop, N+1 queries, missing pagination, sync fs in request paths, fetch without timeout, per-request DB connections, unbounded accumulators, JSON.parse of unbounded bodies, O(n²) scans, and leaked intervals.",
+  "/docs/graphql":
+    "Quorate GraphQL pack — GraphQL API security and design review council and ten deterministic heuristics for production introspection, missing depth/complexity limits, resolver N+1, missing field-level authorization, batch amplification, raw queries from GraphQL args, verbose error leakage, unrated mutations, unbounded pagination, and @skip/@include auth bypass."
 };

@@ -1,0 +1,6 @@
+diff --git a/src/graphql/server.ts b/src/graphql/server.ts
+--- a/src/graphql/server.ts
++++ b/src/graphql/server.ts
+@@ -1,1 +1,2 @@
+ // context
++  allowBatchedHttpRequests: true,
