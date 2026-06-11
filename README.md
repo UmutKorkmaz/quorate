@@ -285,9 +285,37 @@ quorate provider add reviewer --type api \
   --api-key-env VLLM_API_KEY --roles security,architect
 ```
 
-Presets cover **ollama · lmstudio · vllm · llamacpp · hf-router · openrouter** —
+Presets cover **ollama · lmstudio · vllm · llamacpp · hf-router · openrouter ·
+openai · together · groq · fireworks · deepseek · mistral · gemini · zai** —
 run `quorate provider presets` for the full list, or see
 [`.quorate.example.yml`](./.quorate.example.yml) for ports, models, and example councils.
+
+#### Hosted gateways at a glance
+
+Any of these is a one-liner. Pick a row, drop in your key, and you have real model
+review — locally or in CI. The shape is always the same: a `baseUrl`, a `model`,
+and the name of the env var holding the key.
+
+| Preset | `baseUrl` | Example `model` | `apiKeyEnv` |
+| --- | --- | --- | --- |
+| `openrouter` | `https://openrouter.ai/api/v1` | `anthropic/claude-sonnet-4.6` | `OPENROUTER_API_KEY` |
+| `openai` | `https://api.openai.com/v1` | `gpt-4o` | `OPENAI_API_KEY` |
+| `deepseek` | `https://api.deepseek.com` | `deepseek-chat` | `DEEPSEEK_API_KEY` |
+| `groq` | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | `GROQ_API_KEY` |
+| `mistral` | `https://api.mistral.ai/v1` | `codestral-latest` | `MISTRAL_API_KEY` |
+| `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` | `GEMINI_API_KEY` |
+| `zai` (GLM) | `https://api.z.ai/api/coding/paas/v4` | `glm-5.1` | `ZAI_API_KEY` |
+
+Worked example — wire up Z.ai's GLM-5.1, then run the council on it:
+
+```bash
+export ZAI_API_KEY=…                       # your key, never written to the file
+quorate provider add glm --preset zai      # writes the entry to .quorate.yml
+quorate review                             # GLM-5.1 reviews as architect/security/performance
+```
+
+Swap `zai`/`glm-5.1` for any row above — the steps don't change. Your repo dogfoods
+this exact path: Quorate's own self-review runs GLM-5.1 in CI (see below).
 
 ## Terminal & theming
 

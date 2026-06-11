@@ -75,18 +75,23 @@ export default function Providers() {
         (<InlineCode>quorate provider presets</InlineCode> lists them):
       </p>
       <CodeBlock language="bash">{`quorate provider add local --preset ollama   # picks the model from the LIVE list
+quorate provider add glm --preset zai        # hosted GLM-5.1 (set ZAI_API_KEY)
 quorate provider add reviewer --type api \\
   --base-url http://localhost:8000/v1 --model Qwen/Qwen2.5-Coder-32B-Instruct \\
   --api-key-env VLLM_API_KEY --roles security,architect
 quorate provider remove reviewer`}</CodeBlock>
       <p>
-        15 presets: <InlineCode>ollama</InlineCode>, <InlineCode>lmstudio</InlineCode>,{" "}
+        16 presets: <InlineCode>ollama</InlineCode>, <InlineCode>lmstudio</InlineCode>,{" "}
         <InlineCode>vllm</InlineCode>, <InlineCode>llamacpp</InlineCode>, <InlineCode>tgi</InlineCode>,{" "}
         <InlineCode>litellm</InlineCode>, <InlineCode>hf-router</InlineCode>,{" "}
         <InlineCode>openrouter</InlineCode>, <InlineCode>openai</InlineCode>,{" "}
         <InlineCode>together</InlineCode>, <InlineCode>groq</InlineCode>,{" "}
         <InlineCode>fireworks</InlineCode>, <InlineCode>deepseek</InlineCode>,{" "}
-        <InlineCode>mistral</InlineCode>, <InlineCode>gemini</InlineCode>. After a run,{" "}
+        <InlineCode>mistral</InlineCode>, <InlineCode>gemini</InlineCode>,{" "}
+        <InlineCode>zai</InlineCode>. Each hosted preset is just a{" "}
+        <InlineCode>baseUrl</InlineCode> + <InlineCode>model</InlineCode> +{" "}
+        <InlineCode>apiKeyEnv</InlineCode> — see the{" "}
+        <Link to="/docs/config">gateway table in Configuration</Link>. After a run,{" "}
         <InlineCode>/logs &lt;provider:role&gt;</InlineCode> shows each agent&apos;s full output.
       </p>
 
