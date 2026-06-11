@@ -13,6 +13,7 @@ import {
   findConfigPath,
   isEmptyReviewDiff,
   loadConfig,
+  PACK_COVERAGE,
   PACK_IDS,
   PACKS,
   PALETTE,
@@ -305,12 +306,38 @@ export function buildProgram(): Command {
   program
     .command("packs")
     .helpGroup("Setup:")
-    .description("List available domain packs (councils + per-role guidance).")
-    .action(() => {
-      for (const [id, pack] of Object.entries(PACKS)) {
-        console.log(`  ${id}  ${pack.description}`);
-        console.log(`    councils: ${pack.councils.join(", ")}`);
+    .description("List available domain packs (councils, heuristics, per-role guidance).")
+    .option("--json", "Print the pack catalog as JSON")
+    .action((options: { json?: boolean }) => {
+      const entries = Object.entries(PACKS);
+      if (options.json) {
+        console.log(
+          JSON.stringify(
+            entries.map(([id, pack]) => ({
+              id,
+              description: pack.description,
+              councils: pack.councils,
+              classes: PACK_COVERAGE[id]?.length ?? 0
+            })),
+            null,
+            2
+          )
+        );
+        return;
       }
+      const total = entries.reduce((sum, [id]) => sum + (PACK_COVERAGE[id]?.length ?? 0), 0);
+      const width = Math.max(...entries.map(([id]) => id.length));
+      console.log(paint(PALETTE.dim, `${entries.length} domain packs · ${total} heuristic classes · zero-config with \`quorate init --auto\``));
+      console.log("");
+      for (const [id, pack] of entries) {
+        const count = PACK_COVERAGE[id]?.length ?? 0;
+        console.log(
+          `  ${paint(PALETTE.accent, id.padEnd(width))}  ${pack.description}  ${paint(PALETTE.dim, `(${count} classes)`)}`
+        );
+        console.log(`  ${" ".repeat(width)}  ${paint(PALETTE.dim, "councils:")} ${pack.councils.join(", ")}`);
+      }
+      console.log("");
+      console.log(paint(PALETTE.dim, "Scaffold one: ") + "quorate init --pack <id[,id]>  " + paint(PALETTE.dim, "·  Auto-detect: ") + "quorate init --auto");
     });
 
   program
