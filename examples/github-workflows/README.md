@@ -33,3 +33,5 @@ The heuristic reviewer runs with zero setup; provider keys enable full AI review
 | `quorate-web.yml` | `web` | Web & API (OWASP) |
 | `quorate-healthcare.yml` | `healthcare` | Healthcare / HIPAA |
 | `quorate-mobile.yml` | `mobile` | Mobile (iOS / Android) |
+
+> On this repository the Quorate self-review runs **GLM-5.1** (Z.ai, api mode) on GitHub-hosted runners, with the heuristic as the always-on baseline.
