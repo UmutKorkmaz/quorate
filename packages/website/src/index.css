@@ -1279,6 +1279,12 @@ body {
 /* ── Prism syntax highlighting (Council Chamber palette) ─────────── */
 
 .code-block code {
+  /* Reset the inline-code prose styling (.docs-content/.doc-page code) that would
+     otherwise apply px/bg/radius to this multi-line inline <code>, indenting the
+     first line by its padding and boxing each line with a background. */
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
   color: var(--color-quorate-muted);
 }
 
