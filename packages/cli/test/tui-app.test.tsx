@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { render } from "ink-testing-library";
 import { createDefaultConfig } from "@quorate/core";
@@ -14,8 +17,12 @@ async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 15));
 }
 
+// Mount on a fresh temp cwd so the suite is HERMETIC: saved sessions live at
+// ~/.quorate/sessions/<repoHash(cwd)>, so using the real repo cwd let pre-existing
+// sessions leak in (e.g. `/resume` finding sessions when the test assumes none).
 function mount() {
-  return render(<App cwd={process.cwd()} config={createDefaultConfig([])} mode="review" />);
+  const cwd = mkdtempSync(join(tmpdir(), "quorate-tui-"));
+  return render(<App cwd={cwd} config={createDefaultConfig([])} mode="review" />);
 }
 
 describe("App", () => {
