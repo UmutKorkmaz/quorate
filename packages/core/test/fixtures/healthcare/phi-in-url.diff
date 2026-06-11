@@ -1,0 +1,20 @@
+diff --git a/src/ehr/patient-api.ts b/src/ehr/patient-api.ts
+--- a/src/ehr/patient-api.ts
++++ b/src/ehr/patient-api.ts
+@@ -0,0 +1,20 @@
++import express from "express";
++import { fetchPatient } from "../services/patient.js";
++
++const router = express.Router();
++
++router.get("/records", async (req, res) => {
++  const patientId = req.query.patient;
++  const ssnParam = req.query.ssn;
++  const mrnParam = req.query.mrn;
++  const dobParam = req.query.dob;
++
++  const record = await fetchPatient({ patientId, ssnParam, mrnParam });
++  return res.json(record);
++});
++
++export default router;

@@ -1,0 +1,34 @@
+diff --git a/ios/NetworkManager.swift b/ios/NetworkManager.swift
+--- a/ios/NetworkManager.swift
++++ b/ios/NetworkManager.swift
+@@ -0,0 +1,30 @@
++import Foundation
++
++/// Insecure network manager — TLS validation bypassed.
++class InsecureSessionDelegate: NSObject, URLSessionDelegate {
++
++    // BAD: empty checkServerTrusted — accepts any certificate
++    func urlSession(
++        _ session: URLSession,
++        didReceive challenge: URLAuthenticationChallenge,
++        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
++    ) {
++        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
++            // BAD: trusting all certs unconditionally
++            let cred = URLCredential(trust: challenge.protectionSpace.serverTrust!)
++            completionHandler(.useCredential, cred)
++        }
++    }
++}
++
++class TrustAllManager: NSObject, URLSessionDelegate {
++    // BAD: trustAllCerts pattern
++    var trustAllCerts = true
++
++    func checkServerTrusted(_ certs: [Any]) throws {
++    }
++}
++
++// BAD: NSExceptionAllowsInsecureHTTPLoads flag referenced
++// Info.plist key: NSExceptionAllowsInsecureHTTPLoads = true
++let bypassTLS = true

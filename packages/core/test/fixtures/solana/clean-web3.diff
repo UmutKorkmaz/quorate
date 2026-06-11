@@ -1,0 +1,17 @@
+diff --git a/app/src/utils.ts b/app/src/utils.ts
+--- a/app/src/utils.ts
++++ b/app/src/utils.ts
+@@ -1,3 +1,14 @@
++import { Connection, PublicKey, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
++import { Keypair } from "@solana/web3.js";
++
++export async function safeTransfer(
++    connection: Connection,
++    payer: Keypair,
++    destination: PublicKey,
++    lamports: number
++): Promise<string> {
++    const tx = new Transaction();
++    const sig = await sendAndConfirmTransaction(connection, tx, [payer]);
++    return sig;
++}

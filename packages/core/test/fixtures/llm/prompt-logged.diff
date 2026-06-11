@@ -1,0 +1,18 @@
+diff --git a/src/chat/logger.ts b/src/chat/logger.ts
+--- a/src/chat/logger.ts
++++ b/src/chat/logger.ts
+@@ -1,3 +1,18 @@
++import OpenAI from "openai";
++
++const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
++
++export async function trackedCompletion(messages: OpenAI.ChatCompletionMessageParam[]): Promise<string> {
++  console.log("Sending messages:", messages);
++  const res = await client.chat.completions.create({
++    model: "gpt-4o",
++    messages
++  });
++  const text = res.choices[0].message.content ?? "";
++  console.debug("Got completion:", completion);
++  return text;
++}

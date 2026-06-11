@@ -1,0 +1,21 @@
+diff --git a/src/payment/gateway-client.ts b/src/payment/gateway-client.ts
+--- a/src/payment/gateway-client.ts
++++ b/src/payment/gateway-client.ts
+@@ -1,5 +1,18 @@
++import https from "node:https";
++import axios from "axios";
++
++const gatewayAgent = new https.Agent({
++  rejectUnauthorized: false,
++});
++
++export const gatewayClient = axios.create({
++  baseURL: process.env.PAYMENT_GATEWAY_URL,
++  httpsAgent: gatewayAgent,
++  timeout: 10_000,
++});
++
++export async function chargeCard(payload: unknown): Promise<unknown> {
++  const { data } = await gatewayClient.post("/charge", payload);
++  return data;
++}

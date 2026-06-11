@@ -1,0 +1,72 @@
+diff --git a/contracts/SafeToken.sol b/contracts/SafeToken.sol
+--- a/contracts/SafeToken.sol
++++ b/contracts/SafeToken.sol
+@@ -0,0 +1,68 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
++import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
++import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
++import "@openzeppelin/contracts/access/Ownable.sol";
++
++/**
++ * SafeToken — pinned pragma, msg.sender auth, nonReentrant, SafeERC20 throughout.
++ * Authorization uses msg.sender only. No assembly, no selfdestruct, no floating pragma.
++ */
++contract SafeToken is ReentrancyGuard, Ownable {
++    using SafeERC20 for IERC20;
++
++    IERC20 public immutable underlying;
++    mapping(address => uint256) private _balances;
++    uint256 private _totalStaked;
++
++    event Staked(address indexed staker, uint256 amount);
++    event Unstaked(address indexed staker, uint256 amount);
++
++    error ZeroAmount();
++    error InsufficientStake();
++
++    constructor(address token) Ownable(msg.sender) {
++        underlying = IERC20(token);
++    }
++
++    /**
++     * Stake tokens. Authorization: msg.sender is the staker.
++     */
++    function stake(uint256 amount) external nonReentrant {
++        if (amount == 0) revert ZeroAmount();
++        _balances[msg.sender] += amount;
++        _totalStaked += amount;
++        underlying.safeTransferFrom(msg.sender, address(this), amount);
++        emit Staked(msg.sender, amount);
++    }
++
++    /**
++     * Unstake tokens. Authorization: msg.sender owns the stake.
++     */
++    function unstake(uint256 amount) external nonReentrant {
++        if (amount == 0) revert ZeroAmount();
++        if (_balances[msg.sender] < amount) revert InsufficientStake();
++        _balances[msg.sender] -= amount;
++        _totalStaked -= amount;
++        underlying.safeTransfer(msg.sender, amount);
++        emit Unstaked(msg.sender, amount);
++    }
++
++    /**
++     * Emergency withdrawal — owner only, sends to a fixed admin address.
++     * No ether send via low-level call; no delegatecall; no assembly.
++     */
++    function emergencyWithdraw(address recipient, uint256 amount) external onlyOwner nonReentrant {
++        underlying.safeTransfer(recipient, amount);
++    }
++
++    function balanceOf(address account) external view returns (uint256) {
++        return _balances[account];
++    }
++
++    function totalStaked() external view returns (uint256) {
++        return _totalStaked;
++    }
++}

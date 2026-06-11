@@ -1,0 +1,26 @@
+diff --git a/src/ehr/reports.ts b/src/ehr/reports.ts
+--- a/src/ehr/reports.ts
++++ b/src/ehr/reports.ts
+@@ -0,0 +1,22 @@
++import { db } from "../db/client.js";
++import { pool } from "../db/pool.js";
++
++export async function getAllPatientRecords() {
++  const rows = await pool.query("SELECT * FROM patient WHERE department = 'oncology'");
++  return rows;
++}
++
++export async function exportMedicalRecords() {
++  const rows = await pool.query("SELECT * FROM medical_record ORDER BY created_at DESC");
++  return rows;
++}
++
++export async function listAllPatients() {
++  const results = await db.patients.findAll().where({ active: true }).medicalRecord;
++  return results;
++}
++
++export async function listPhi() {
++  const all = await db.phi.find().patient;
++  return all;
++}

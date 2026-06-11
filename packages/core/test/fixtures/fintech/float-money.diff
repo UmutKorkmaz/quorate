@@ -1,0 +1,18 @@
+diff --git a/src/payment/cart.ts b/src/payment/cart.ts
+--- a/src/payment/cart.ts
++++ b/src/payment/cart.ts
+@@ -1,5 +1,15 @@
++import { CartItem } from "./types.js";
++
++export function calculateCartTotal(items: CartItem[]): { total: number; tax: number } {
++  const subtotal: number = items.reduce((acc, item) => acc + item.price * item.quantity, 0);
++  const taxRate = 0.08;
++  const taxAmount: number = parseFloat((subtotal * taxRate).toFixed(2));
++  const total: number = parseFloat((subtotal + taxAmount).toFixed(2));
++  return { total, tax: taxAmount };
++}
++
++export function applyDiscount(amount: number, discountPct: number): number {
++  const discountValue: number = parseFloat((amount * discountPct / 100).toFixed(2));
++  return amount - discountValue;
++}

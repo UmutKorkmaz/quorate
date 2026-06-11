@@ -1,0 +1,58 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,48 @@
++name: CI
++
++on:
++  pull_request:
++    branches: [main]
++  push:
++    branches: [main]
++
++permissions:
++  contents: read
++
++jobs:
++  test:
++    runs-on: ubuntu-latest
++    timeout-minutes: 15
++    steps:
++      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
++        # actions/checkout v4.2.2 — pinned to SHA
++      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
++        # actions/setup-node v4.1.0 — pinned to SHA
++        with:
++          node-version: "20"
++          cache: "npm"
++      - name: Install dependencies
++        run: npm ci
++      - name: Run tests
++        run: npm test
++        env:
++          NODE_ENV: test
++
++  lint:
++    runs-on: ubuntu-latest
++    timeout-minutes: 10
++    permissions:
++      contents: read
++    steps:
++      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
++        # actions/checkout v4.2.2 — pinned to SHA
++      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
++        # actions/setup-node v4.1.0 — pinned to SHA
++        with:
++          node-version: "20"
++      - name: Lint
++        run: npm run lint
++
++  security:
++    runs-on: ubuntu-latest
++    permissions:
++      contents: read
++    steps:
++      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
++        # actions/checkout v4.2.2 — pinned to SHA
++      - name: Audit dependencies
++        run: npm audit --audit-level=high

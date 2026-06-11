@@ -1,0 +1,16 @@
+diff --git a/src/api/convert.ts b/src/api/convert.ts
+--- a/src/api/convert.ts
++++ b/src/api/convert.ts
+@@ -0,0 +1,12 @@
++import express from "express";
++import { execSync } from "child_process";
++
++const router = express.Router();
++
++router.post("/convert", (req, res) => {
++  const filename = req.body.filename as string;
++  const cmdResult = execSync(`convert ${req.body.filename} converted.png`);
++  res.json({ result: cmdResult.toString() });
++});
++
++export default router;

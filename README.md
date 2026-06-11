@@ -105,6 +105,34 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 `--diff`, `--base/--head`, and `--pr` select the diff source; `--json` streams NDJSON
 events with the final report as the last line, ideal for piping into other tools.
 
+## Domain packs
+
+`quorate init --auto` detects your repo's stack (Rust/Solidity/Move/Terraform/
+workflows/Swift/Kotlin + framework deps) and scaffolds the matching pack(s);
+`quorate init --pack <id>` (or a comma-separated `<id,id>`) picks them explicitly.
+Each scaffolds a domain-aware council — ecosystem-specific
+councils + per-role reviewer guidance — and turns on **deterministic, diff-based
+heuristics** for that domain (always-on, zero setup, layered under whatever real
+agents you enable). `quorate packs` lists them.
+
+| Pack | `init --pack` | Classes | Catches (examples) |
+| --- | --- | --- | --- |
+| **Solana / Anchor** | `solana` | 10 | unchecked accounts, raw CPI, skipPreflight, non-canonical bump, manual close, constraint removal |
+| **EVM / Solidity** | `evm` | 10 | tx.origin auth, delegatecall, selfdestruct, unchecked call, reentrancy surface, unchecked ERC20 |
+| **Move (Sui/Aptos)** | `move` | 10 | public entry auth, borrow_global_mut, shared objects, copy/drop abilities, privileged fns |
+| **IaC (Terraform/K8s)** | `iac` | 11 | public ACLs, 0.0.0.0/0 ingress, encryption off, privileged containers, host namespaces |
+| **AI / LLM apps** | `llm` | 12 | prompt injection, output→eval, raw-HTML output, tool-arg validation, PII in prompts |
+| **CI/CD + supply chain** | `ci` | 10 | pull_request_target, expression injection, unpinned actions, install scripts, pipe-to-shell |
+| **Fintech / PCI** | `fintech` | 10 | money as float, card data in logs, CVV stored, unverified webhooks, financial PII |
+| **Web / API (OWASP)** | `web` | 10 | SSRF, command injection, path traversal, XSS, mass assignment, CORS, CSRF, deserialization |
+| **Healthcare / HIPAA** | `healthcare` | 10 | PHI in logs/URLs/responses, plaintext PHI, patient-record IDOR, clinical credentials |
+| **Mobile (iOS/Android)** | `mobile` | 10 | insecure storage, cleartext/ATS, exported components, disabled TLS, debuggable builds |
+
+Every pack ships a vulnerable/clean demo corpus proving each class is detected
+with zero false positives on clean code, a docs page (`/docs/<pack>`), and a
+ready-to-copy GitHub Action example. A pack is **data, not a code path** — adding
+an ecosystem is one registry entry, so the set grows without rewrites.
+
 ## Fix findings — and revert them
 
 The council **judges**; one agent **fixes**; the council **re-reviews the fix**.

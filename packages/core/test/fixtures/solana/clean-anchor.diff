@@ -1,0 +1,19 @@
+diff --git a/programs/bar/src/lib.rs b/programs/bar/src/lib.rs
+--- a/programs/bar/src/lib.rs
++++ b/programs/bar/src/lib.rs
+@@ -5,6 +5,14 @@ declare_id!("Bar111111111111111111111111111111111111111");
+
+ #[program]
+ pub mod bar {
++    pub fn update(ctx: Context<Update>, value: u64) -> Result<()> {
++        ctx.accounts.data.value = value;
++        Ok(())
++    }
++}
++
++#[derive(Accounts)]
++pub struct Update<'info> {
++    #[account(mut, has_one = authority)]
++    pub data: Account<'info, DataAccount>,
++    pub authority: Signer<'info>,
+ }

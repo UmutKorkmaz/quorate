@@ -1,0 +1,102 @@
+diff --git a/sources/safe_vault.move b/sources/safe_vault.move
+--- a/sources/safe_vault.move
++++ b/sources/safe_vault.move
+@@ -1,3 +1,85 @@
++/// Safe vault module: demonstrates correct authorization, capability gating,
++/// proper struct abilities, length-checked vector access, and owned objects.
++module safe_vault::safe_vault {
++    use sui::object::{Self, UID};
++    use sui::transfer;
++    use sui::tx_context::{Self, TxContext};
++    use std::vector;
++
++    // ── Capability types — no copy, no drop ──────────────────────────────────
++
++    /// AdminCap: key + store only. Cannot be copied or silently dropped.
++    struct AdminCap has key, store {
++        id: UID,
++    }
++
++    /// VaultCap: grants deposit/take-out rights. No copy, no drop.
++    struct VaultCap has key, store {
++        id: UID,
++    }
++
++    // ── State structs ────────────────────────────────────────────────────────
++
++    /// Vault is owned (not shared) — only the owner can pass it as &mut.
++    struct Vault has key {
++        id: UID,
++        balance: u64,
++        entries: vector<u64>,
++    }
++
++    /// Price snapshot — a plain non-asset value type with copy and drop.
++    /// (copy/drop are intentional: this carries no authority or asset value.)
++    struct PriceSnapshot has store {
++        price: u64,
++        timestamp: u64,
++    }
++
++    // ── Module setup ─────────────────────────────────────────────────────────
++
++    /// One-time module setup called at publish: issues AdminCap to deployer.
++    public fun setup(ctx: &mut TxContext) {
++        let cap = AdminCap { id: object::new(ctx) };
++        transfer::transfer(cap, tx_context::sender(ctx));
++    }
++
++    // ── Vault lifecycle ──────────────────────────────────────────────────────
++
++    /// Create a new vault owned by the caller — NOT shared.
++    public fun create_vault(ctx: &mut TxContext): Vault {
++        Vault {
++            id: object::new(ctx),
++            balance: 0,
++            entries: vector::empty(),
++        }
++    }
++
++    // ── Privileged operations — all gated by capability ──────────────────────
++
++    /// Deposit is gated by VaultCap — caller must hold the capability.
++    public fun deposit(_cap: &VaultCap, vault: &mut Vault, amount: u64) {
++        vault.balance = vault.balance + amount;
++    }
++
++    /// Protected payout gated by VaultCap.
++    public fun protected_payout(_cap: &VaultCap, vault: &mut Vault, amount: u64): u64 {
++        assert!(vault.balance >= amount, 1);
++        vault.balance = vault.balance - amount;
++        amount
++    }
++
++    /// Cap-gated reset — caller must supply AdminCap.
++    public fun cap_reset(_cap: &AdminCap, vault: &mut Vault) {
++        vault.balance = 0;
++    }
++
++    // ── Vector access — always length-checked ────────────────────────────────
++
++    /// Returns the number of stored entries.
++    public fun entry_count(vault: &Vault): u64 {
++        vector::length(&vault.entries)
++    }
++
++    /// Safe push.
++    public fun add_entry(vault: &mut Vault, value: u64) {
++        vector::push_back(&mut vault.entries, value);
++    }
++
++    /// Pop last entry (aborts on empty — caller checks entry_count first).
++    public fun pop_entry(vault: &mut Vault): u64 {
++        vector::pop_back(&mut vault.entries)
++    }
++
++    // ── Price helpers — no asset casts ───────────────────────────────────────
++
++    /// Stores a price snapshot — stays in u64 throughout, no narrowing cast.
++    public fun record_price(vault: &mut Vault, price: u64) {
++        vault.balance = price;
++    }
++}

@@ -1,0 +1,120 @@
+diff --git a/ios/SecureAuthManager.swift b/ios/SecureAuthManager.swift
+--- a/ios/SecureAuthManager.swift
++++ b/ios/SecureAuthManager.swift
+@@ -0,0 +1,75 @@
++import Foundation
++import Security
++import CryptoKit
++
++/// Secure auth manager — MASVS-compliant patterns.
++/// - Secrets stored in Keychain with WhenUnlocked accessibility
++/// - API keys and secrets loaded from build config / environment, never literals
++/// - HTTPS only; no ATS exceptions
++/// - SecRandomCopyBytes used for all cryptographic randomness
++/// - No sensitive data written to os_log / NSLog
++/// - No JS bridge or WebView JS enabled
++class SecureAuthManager {
++
++    // GOOD: API key comes from build configuration, not a literal
++    private let apiKey = Bundle.main.object(forInfoDictionaryKey: "API_KEY") as? String ?? ""
++
++    // GOOD: Store token in Keychain with WhenUnlocked accessibility
++    func saveToken(_ token: String) throws {
++        guard let data = token.data(using: .utf8) else { return }
++        let query: [String: Any] = [
++            kSecClass as String: kSecClassGenericPassword,
++            kSecAttrAccount as String: "authToken",
++            kSecValueData as String: data,
++            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
++        ]
++        let status = SecItemAdd(query as CFDictionary, nil)
++        guard status == errSecSuccess else {
++            throw KeychainError.saveFailed(status)
++        }
++    }
++
++    // GOOD: Use SecRandomCopyBytes for cryptographic nonce generation
++    func generateNonce() throws -> Data {
++        var nonce = Data(count: 32)
++        let result = nonce.withUnsafeMutableBytes { ptr in
++            SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
++        }
++        guard result == errSecSuccess else { throw CryptoError.randomFailed }
++        return nonce
++    }
++
++    // GOOD: Only log non-sensitive surrogate identifiers
++    func logAccessEvent(userId: String) {
++        // userId is a non-identifying surrogate — not a password, token, or secret
++        os_log("Access event for user: %{public}@", userId)
++    }
++}
++
++enum KeychainError: Error { case saveFailed(OSStatus) }
++enum CryptoError: Error { case randomFailed }
+diff --git a/android/app/src/main/java/com/example/SecureStorage.kt b/android/app/src/main/java/com/example/SecureStorage.kt
+--- a/android/app/src/main/java/com/example/SecureStorage.kt
++++ b/android/app/src/main/java/com/example/SecureStorage.kt
+@@ -0,0 +1,40 @@
++package com.example
++
++import android.content.Context
++import androidx.security.crypto.EncryptedSharedPreferences
++import androidx.security.crypto.MasterKey
++import java.security.SecureRandom
++
++/**
++ * GOOD: Uses EncryptedSharedPreferences backed by Android Keystore.
++ * Secrets come from build config, not string literals.
++ * SecureRandom used for all cryptographic operations.
++ * No sensitive data written to Log.
++ */
++class SecureStorage(context: Context) {
++
++    private val masterKey = MasterKey.Builder(context)
++        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
++        .build()
++
++    private val prefs = EncryptedSharedPreferences.create(
++        context,
++        "secure_prefs",
++        masterKey,
++        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
++        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
++    )
++
++    // GOOD: store token in EncryptedSharedPreferences, not plain SharedPreferences
++    fun saveToken(token: String) {
++        prefs.edit().putString("auth_token", token).apply()
++    }
++
++    // GOOD: SecureRandom for IV generation
++    fun generateIV(): ByteArray {
++        val iv = ByteArray(16)
++        SecureRandom().nextBytes(iv)
++        return iv
++    }
++
++    // GOOD: API key from BuildConfig, not a literal
++    fun getApiKey(): String = BuildConfig.API_KEY
++}
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -0,0 +1,16 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="schemas.android.com/apk/res/android">
++    <!-- GOOD: debuggable flag absent from release manifest -->
++    <!-- GOOD: cleartext traffic flag absent; HTTPS enforced via network security config -->
++    <application
++        android:label="@string/app_name"
++        android:networkSecurityConfig="@xml/network_security_config"
++        android:theme="@style/AppTheme">
++
++        <!-- GOOD: activities not exported; permission guard required for external access -->
++        <activity android:name=".MainActivity"
++            android:exported="false">
++        </activity>
++
++    </application>
++</manifest>

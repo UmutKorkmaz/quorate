@@ -47,7 +47,8 @@ const configSchema = z.object({
         .optional()
     })
     .default({}),
-  merge: z.object({ provider: z.string().min(1) }).optional()
+  merge: z.object({ provider: z.string().min(1) }).optional(),
+  roleGuidance: z.record(z.string(), z.string()).optional()
 });
 
 export function parseConfig(source: string): QuorateConfig {
@@ -62,7 +63,8 @@ export function parseConfig(source: string): QuorateConfig {
       ...defaults.github,
       ...userConfig.github
     },
-    merge: userConfig.merge
+    merge: userConfig.merge,
+    roleGuidance: userConfig.roleGuidance
   };
 }
 

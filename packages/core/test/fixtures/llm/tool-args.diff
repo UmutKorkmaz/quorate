@@ -1,0 +1,20 @@
+diff --git a/src/tools/callHandler.ts b/src/tools/callHandler.ts
+--- a/src/tools/callHandler.ts
++++ b/src/tools/callHandler.ts
+@@ -1,3 +1,18 @@
++import OpenAI from "openai";
++
++const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
++
++export async function handleToolCall(userTask: string): Promise<void> {
++  const res = await client.chat.completions.create({
++    model: "gpt-4o",
++    messages: [{ role: "user", content: userTask }],
++    tools: [{ type: "function", function: { name: "run_query", parameters: {} } }]
++  });
++  const toolCall = res.choices[0].message.tool_calls?.[0];
++  if (toolCall) {
++    const args = JSON.parse(toolCall.function.arguments);
++    console.dir(args);
++  }
++}

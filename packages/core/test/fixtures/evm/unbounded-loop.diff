@@ -1,0 +1,20 @@
+diff --git a/contracts/Distributor.sol b/contracts/Distributor.sol
+--- a/contracts/Distributor.sol
++++ b/contracts/Distributor.sol
+@@ -1,6 +1,14 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++contract Distributor {
++    address[] public recipients;
++
++    function addRecipient(address r) external {
++        recipients.push(r);
++    }
++
++    function distributeAll() external payable {
++        for (uint256 i = 0; i < recipients.length; i++) {
++            payable(recipients[i]).transfer(msg.value / recipients.length);
++        }
++    }
++}

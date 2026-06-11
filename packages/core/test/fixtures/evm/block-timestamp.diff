@@ -1,0 +1,18 @@
+diff --git a/contracts/Lottery.sol b/contracts/Lottery.sol
+--- a/contracts/Lottery.sol
++++ b/contracts/Lottery.sol
+@@ -1,6 +1,12 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++contract Lottery {
++    uint256 public deadline;
++
++    constructor(uint256 durationSeconds) {
++        deadline = block.timestamp + durationSeconds;
++    }
++
++    function isExpired() external view returns (bool) {
++        return block.timestamp >= deadline;
++    }
++}

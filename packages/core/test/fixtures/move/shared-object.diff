@@ -1,0 +1,25 @@
+diff --git a/sources/pool.move b/sources/pool.move
+--- a/sources/pool.move
++++ b/sources/pool.move
+@@ -1,3 +1,22 @@
++module pool::pool {
++    use sui::object::{Self, UID};
++    use sui::transfer;
++    use sui::tx_context::{Self, TxContext};
++    use sui::coin::{Self, Coin};
++    use sui::sui::SUI;
++
++    struct LiquidityPool has key {
++        id: UID,
++        reserves: u64,
++    }
++
++    public fun create_pool(ctx: &mut TxContext) {
++        let pool = LiquidityPool {
++            id: object::new(ctx),
++            reserves: 0,
++        };
++        // Sharing the pool object — any tx can now mutate it via &mut
++        transfer::share_object(pool);
++    }
++}

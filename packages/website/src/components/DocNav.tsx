@@ -9,7 +9,17 @@ export const DOC_PATHS = [
   "/docs/config",
   "/docs/github-action",
   "/docs/faq",
-  "/docs/manual-testing"
+  "/docs/manual-testing",
+  "/docs/solana",
+  "/docs/evm",
+  "/docs/iac",
+  "/docs/llm",
+  "/docs/move",
+  "/docs/ci",
+  "/docs/fintech",
+  "/docs/web",
+  "/docs/healthcare",
+  "/docs/mobile"
 ] as const;
 
 export type DocPath = (typeof DOC_PATHS)[number];
@@ -23,7 +33,17 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/config": "Configuration",
   "/docs/github-action": "GitHub Action",
   "/docs/faq": "FAQ",
-  "/docs/manual-testing": "Manual testing"
+  "/docs/manual-testing": "Manual testing",
+  "/docs/solana": "Solana / Anchor",
+  "/docs/evm": "EVM / Solidity",
+  "/docs/iac": "Infrastructure / IaC",
+  "/docs/llm": "AI / LLM apps",
+  "/docs/move": "Move (Sui / Aptos)",
+  "/docs/ci": "CI/CD & Supply Chain",
+  "/docs/fintech": "Fintech / PCI",
+  "/docs/web": "Web & API (OWASP)",
+  "/docs/healthcare": "Healthcare / HIPAA",
+  "/docs/mobile": "Mobile (iOS / Android)"
 };
 
 const SECTIONS = [
@@ -45,7 +65,17 @@ const SECTIONS = [
       { to: "/docs/providers", label: "Providers" },
       { to: "/docs/config", label: "Configuration" },
       { to: "/docs/github-action", label: "GitHub Action" },
-      { to: "/docs/faq", label: "FAQ" }
+      { to: "/docs/faq", label: "FAQ" },
+      { to: "/docs/solana", label: "Solana / Anchor" },
+      { to: "/docs/evm", label: "EVM / Solidity" },
+      { to: "/docs/iac", label: "Infrastructure / IaC" },
+      { to: "/docs/llm", label: "AI / LLM apps" },
+      { to: "/docs/move", label: "Move (Sui / Aptos)" },
+      { to: "/docs/ci", label: "CI/CD & Supply Chain" },
+      { to: "/docs/fintech", label: "Fintech / PCI" },
+      { to: "/docs/web", label: "Web & API (OWASP)" },
+      { to: "/docs/healthcare", label: "Healthcare / HIPAA" },
+      { to: "/docs/mobile", label: "Mobile (iOS / Android)" }
     ]
   },
   {

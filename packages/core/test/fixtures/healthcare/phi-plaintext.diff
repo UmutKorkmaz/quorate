@@ -1,0 +1,18 @@
+diff --git a/src/ehr/seed-data.ts b/src/ehr/seed-data.ts
+--- a/src/ehr/seed-data.ts
++++ b/src/ehr/seed-data.ts
+@@ -0,0 +1,18 @@
++import { db } from "../db/client.js";
++
++export async function seedTestPatient(): Promise<void> {
++  await db.patients.create({
++    patientId: "PT-0001",
++    patientName: "Jane Doe",
++    ssn: "123-45-6789",
++    mrn: "MRN-987654",
++    diagnosis: "Type 2 Diabetes",
++    prescription: "Metformin 500mg",
++    dateOfBirth: "1975-03-22",
++    icd10: "E11.9",
++  });
++}

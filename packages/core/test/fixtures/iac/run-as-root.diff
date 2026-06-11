@@ -1,0 +1,18 @@
+diff --git a/k8s/job.yaml b/k8s/job.yaml
+--- a/k8s/job.yaml
++++ b/k8s/job.yaml
+@@ -1,3 +1,20 @@
++apiVersion: batch/v1
++kind: Job
++metadata:
++  name: migrate
++spec:
++  template:
++    spec:
++      restartPolicy: Never
++      containers:
++        - name: migrate
++          image: migrate:3.1.0
++          securityContext:
++            runAsUser: 0
++            allowPrivilegeEscalation: false

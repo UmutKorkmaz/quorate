@@ -1,0 +1,25 @@
+diff --git a/src/ehr/patient-service.ts b/src/ehr/patient-service.ts
+--- a/src/ehr/patient-service.ts
++++ b/src/ehr/patient-service.ts
+@@ -0,0 +1,22 @@
++import express from "express";
++import { db } from "../db/client.js";
++
++const router = express.Router();
++
++router.get("/patients/:id", async (req, res) => {
++  const record = await getPatientRecord(req.params);
++  return res.json(record);
++});
++
++router.post("/medical-records/search", async (req, res) => {
++  const results = await findPatient(req.query);
++  return res.json(results);
++});
++
++router.get("/records/full", async (req, res) => {
++  const data = await medicalRecord(req.body);
++  return res.json(data);
++});
++
++export default router;

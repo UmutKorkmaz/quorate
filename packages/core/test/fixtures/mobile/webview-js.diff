@@ -1,0 +1,33 @@
+diff --git a/android/app/src/main/java/com/example/WebActivity.kt b/android/app/src/main/java/com/example/WebActivity.kt
+--- a/android/app/src/main/java/com/example/WebActivity.kt
++++ b/android/app/src/main/java/com/example/WebActivity.kt
+@@ -0,0 +1,28 @@
++package com.example
++
++import android.os.Bundle
++import android.webkit.WebView
++import androidx.appcompat.app.AppCompatActivity
++
++class WebActivity : AppCompatActivity() {
++
++    private lateinit var webView: WebView
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++
++        webView = WebView(this)
++
++        // BAD: JavaScript enabled on WebView
++        webView.settings.setJavaScriptEnabled(true)
++
++        // BAD: native bridge exposed to JavaScript
++        webView.addJavascriptInterface(NativeBridge(this), "AndroidBridge")
++
++        webView.loadUrl("https://app.example.com/dashboard")
++        setContentView(webView)
++    }
++}
++
++class NativeBridge(private val activity: WebActivity) {
++    // exposes device APIs to JS — every @JavascriptInterface method is callable from any page
++}

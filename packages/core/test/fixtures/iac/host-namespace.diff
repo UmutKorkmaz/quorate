@@ -1,0 +1,21 @@
+diff --git a/k8s/daemonset.yaml b/k8s/daemonset.yaml
+--- a/k8s/daemonset.yaml
++++ b/k8s/daemonset.yaml
+@@ -1,3 +1,20 @@
++apiVersion: apps/v1
++kind: DaemonSet
++metadata:
++  name: monitor
++spec:
++  selector:
++    matchLabels:
++      app: monitor
++  template:
++    metadata:
++      labels:
++        app: monitor
++    spec:
++      hostNetwork: true
++      containers:
++        - name: monitor
++          image: monitor:2.0.1

@@ -1,0 +1,19 @@
+diff --git a/src/api/users.ts b/src/api/users.ts
+--- a/src/api/users.ts
++++ b/src/api/users.ts
+@@ -0,0 +1,14 @@
++import express from "express";
++import { User } from "../models/user.js";
++
++const router = express.Router();
++
++router.post("/users", async (req, res) => {
++  const user = await User.create(req.body);
++  res.json(user);
++});
++
++router.put("/users/:id", async (req, res) => {
++  const updated = Object.assign(await User.findById(req.params.id), req.body);
++  await updated.save();
++  res.json(updated);
++});

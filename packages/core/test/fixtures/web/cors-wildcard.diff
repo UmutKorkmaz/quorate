@@ -1,0 +1,16 @@
+diff --git a/src/middleware/cors.ts b/src/middleware/cors.ts
+--- a/src/middleware/cors.ts
++++ b/src/middleware/cors.ts
+@@ -0,0 +1,12 @@
++import cors from "cors";
++import express from "express";
++
++const app = express();
++
++app.use(cors({
++  origin: '*',
++  credentials: true,
++  methods: ["GET", "POST", "PUT", "DELETE"]
++}));
++
++export default app;

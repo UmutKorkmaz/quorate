@@ -1,0 +1,19 @@
+diff --git a/contracts/Auth.sol b/contracts/Auth.sol
+--- a/contracts/Auth.sol
++++ b/contracts/Auth.sol
+@@ -1,8 +1,14 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++contract Auth {
++    address public owner;
++
++    constructor() {
++        owner = msg.sender;
++    }
++
++    function withdraw() external {
++        require(tx.origin == owner, "not owner");
++        payable(owner).transfer(address(this).balance);
++    }
++}

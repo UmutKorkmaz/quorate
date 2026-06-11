@@ -1,0 +1,9 @@
+diff --git a/app/src/tx.ts b/app/src/tx.ts
+--- a/app/src/tx.ts
++++ b/app/src/tx.ts
+@@ -8,5 +8,6 @@ export async function sendTx(connection: Connection, tx: Transaction): Promise<s
+     const signature = await connection.sendTransaction(tx, [wallet], {
++      skipPreflight: true,
+       preflightCommitment: "confirmed",
+     });
+     return signature;

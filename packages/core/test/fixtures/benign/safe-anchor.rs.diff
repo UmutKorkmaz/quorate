@@ -1,0 +1,76 @@
+diff --git a/programs/safe_counter/src/lib.rs b/programs/safe_counter/src/lib.rs
+--- a/programs/safe_counter/src/lib.rs
++++ b/programs/safe_counter/src/lib.rs
+@@ -0,0 +1,54 @@
++use anchor_lang::prelude::*;
++
++declare_id!("Count111111111111111111111111111111111111111");
++
++#[program]
++pub mod safe_counter {
++    use super::*;
++
++    pub fn initialize(ctx: Context<Initialize>, bump: u8) -> Result<()> {
++        let counter = &mut ctx.accounts.counter;
++        counter.authority = ctx.accounts.authority.key();
++        counter.count = 0;
++        counter.bump = bump;
++        Ok(())
++    }
++
++    pub fn increment(ctx: Context<Increment>) -> Result<()> {
++        let counter = &mut ctx.accounts.counter;
++        counter.count = counter.count.checked_add(1).ok_or(ErrorCode::Overflow)?;
++        Ok(())
++    }
++
++    pub fn decrement(ctx: Context<Decrement>) -> Result<()> {
++        let counter = &mut ctx.accounts.counter;
++        counter.count = counter.count.checked_sub(1).ok_or(ErrorCode::Underflow)?;
++        Ok(())
++    }
++}
++
++#[derive(Accounts)]
++pub struct Initialize<'info> {
++    #[account(
++        init,
++        payer = authority,
++        space = 8 + 32 + 8 + 1,
++        seeds = [b"counter", authority.key().as_ref()],
++        bump
++    )]
++    pub counter: Account<'info, Counter>,
++    #[account(mut)]
++    pub authority: Signer<'info>,
++    pub system_program: Program<'info, System>,
++}
++
++#[derive(Accounts)]
++pub struct Increment<'info> {
++    #[account(mut, has_one = authority)]
++    pub counter: Account<'info, Counter>,
++    pub authority: Signer<'info>,
++}
++
++#[derive(Accounts)]
++pub struct Decrement<'info> {
++    #[account(mut, has_one = authority)]
++    pub counter: Account<'info, Counter>,
++    pub authority: Signer<'info>,
++}
++
++#[account]
++pub struct Counter {
++    pub authority: Pubkey,
++    pub count: u64,
++    pub bump: u8,
++}
++
++#[error_code]
++pub enum ErrorCode {
++    #[msg("Counter would overflow")]
++    Overflow,
++    #[msg("Counter would underflow")]
++    Underflow,
++}

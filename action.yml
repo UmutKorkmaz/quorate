@@ -23,6 +23,13 @@ inputs:
       Comma-separated provider ids to enable for this run (overrides enabled: in
       .quorate.yml). Generate entries locally with `quorate provider add`.
     required: false
+  pack:
+    description: >-
+      Domain pack(s) to layer onto the review: a comma-separated list (e.g.
+      "solana,web") or "auto" to detect from the pull request's changed files.
+      Adds pack councils + per-role reviewer guidance on top of the base config;
+      the deterministic heuristics for a language always run regardless.
+    required: false
   fail-on:
     description: "Minimum severity that fails the action: critical, high, medium, low, info, or never."
     required: false

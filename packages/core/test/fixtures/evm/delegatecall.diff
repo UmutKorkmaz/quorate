@@ -1,0 +1,19 @@
+diff --git a/contracts/Proxy.sol b/contracts/Proxy.sol
+--- a/contracts/Proxy.sol
++++ b/contracts/Proxy.sol
+@@ -1,6 +1,14 @@
++// SPDX-License-Identifier: MIT
++pragma solidity 0.8.24;
++
++contract Proxy {
++    address public implementation;
++
++    function setImplementation(address impl) external {
++        implementation = impl;
++    }
++
++    fallback() external payable {
++        (bool ok,) = implementation.delegatecall(msg.data);
++        require(ok, "delegatecall failed");
++    }
++}

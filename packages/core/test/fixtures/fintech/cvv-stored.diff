@@ -1,0 +1,21 @@
+diff --git a/src/payment/card-vault.ts b/src/payment/card-vault.ts
+--- a/src/payment/card-vault.ts
++++ b/src/payment/card-vault.ts
+@@ -1,5 +1,18 @@
++import { db } from "../db/client.js";
++import { CardData } from "./types.js";
++
++export async function vaultCard(data: CardData): Promise<string> {
++  const cardToken = await generateToken();
++
++  await db.cards.insert({
++    token: cardToken,
++    lastFour: data.cardNumber.slice(-4),
++    cvv: data.cvv,
++    cvv2: data.cvv2,
++    expiry: data.expiry,
++    customerId: data.customerId,
++  });
++
++  return cardToken;
++}

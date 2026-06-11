@@ -1,0 +1,16 @@
+diff --git a/src/api/proxy.ts b/src/api/proxy.ts
+--- a/src/api/proxy.ts
++++ b/src/api/proxy.ts
+@@ -0,0 +1,12 @@
++import express from "express";
++import fetch from "node-fetch";
++
++const router = express.Router();
++
++router.get("/fetch-url", async (req, res) => {
++  const response = await fetch(req.query.url as string);
++  const body = await response.text();
++  res.send(body);
++});
++
++export default router;
