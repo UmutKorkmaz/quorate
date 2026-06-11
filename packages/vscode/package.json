@@ -2,7 +2,7 @@
   "name": "quorate-vscode",
   "displayName": "Quorate — AI Review Council",
   "description": "Convene Quorate's multi-agent AI review council on your current change, right inside VS Code.",
-  "version": "0.3.0",
+  "version": "0.6.0",
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",
@@ -71,16 +71,21 @@
       { "command": "quorate.clearFindings", "title": "Clear Findings", "category": "Quorate", "icon": "$(clear-all)" },
       { "command": "quorate.setKey", "title": "Set API Key…", "category": "Quorate", "icon": "$(key)" },
       { "command": "quorate.fixFinding", "title": "Fix Finding with Agent…", "category": "Quorate", "icon": "$(wrench)" },
-      { "command": "quorate.revertFix", "title": "Revert Last Fix", "category": "Quorate", "icon": "$(discard)" }
+      { "command": "quorate.revertFix", "title": "Revert Last Fix", "category": "Quorate", "icon": "$(discard)" },
+      { "command": "quorate.suppressFinding", "title": "Ignore Finding (// quorate-ignore)", "category": "Quorate", "icon": "$(eye-closed)" },
+      { "command": "quorate.setupPack", "title": "Set Up Domain Pack…", "category": "Quorate", "icon": "$(extensions)" },
+      { "command": "quorate.openVerdict", "title": "Open Verdict Panel", "category": "Quorate", "icon": "$(graph)" }
     ],
     "menus": {
       "view/title": [
         { "command": "quorate.run", "when": "view == quorate.council && quorate.cliReady", "group": "navigation@1" },
         { "command": "quorate.pickDiffSource", "when": "view == quorate.council", "group": "navigation@2" },
         { "command": "quorate.refresh", "when": "view == quorate.council", "group": "navigation@3" },
-        { "command": "quorate.addProvider", "when": "view == quorate.council", "group": "1_config@1" },
-        { "command": "quorate.openConfig", "when": "view == quorate.council", "group": "1_config@2" },
-        { "command": "quorate.openSettings", "when": "view == quorate.council", "group": "1_config@3" },
+        { "command": "quorate.setupPack", "when": "view == quorate.council", "group": "1_config@1" },
+        { "command": "quorate.addProvider", "when": "view == quorate.council", "group": "1_config@2" },
+        { "command": "quorate.openConfig", "when": "view == quorate.council", "group": "1_config@3" },
+        { "command": "quorate.openSettings", "when": "view == quorate.council", "group": "1_config@4" },
+        { "command": "quorate.openVerdict", "when": "view == quorate.results", "group": "navigation@0" },
         { "command": "quorate.clearFindings", "when": "view == quorate.results", "group": "navigation@1" },
         { "command": "quorate.revertFix", "when": "view == quorate.results", "group": "1_fix@1" },
         { "command": "quorate.runDoctor", "when": "view == quorate.status", "group": "navigation@1" }
@@ -101,7 +106,56 @@
           "description": "Path to the quorate CLI, or just \"quorate\" if it is on your PATH (npm i -g quorate)."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "quorate.gettingStarted",
+        "title": "Get started with Quorate",
+        "description": "Convene a multi-agent AI review council on your code changes in four steps.",
+        "steps": [
+          {
+            "id": "quorate.gettingStarted.installCli",
+            "title": "Install the Quorate CLI",
+            "description": "Quorate needs its CLI on your PATH.\n\nRun:\n```\nnpm i -g quorate\n```\nOr [Install now](command:quorate.installCli) to open a terminal and run it for you.",
+            "media": {
+              "image": "media/walkthrough/install-cli.svg",
+              "altText": "A terminal showing npm i -g quorate being run and the version output."
+            },
+            "completionEvents": ["onCommand:quorate.installCli"]
+          },
+          {
+            "id": "quorate.gettingStarted.setupPack",
+            "title": "Set up a domain pack",
+            "description": "Domain packs tailor the council's focus to your stack — web, Solana, LLM, IaC, and more.\n\n[Set Up a Pack](command:quorate.setupPack) to pick one or auto-detect from your repo.",
+            "media": {
+              "image": "media/walkthrough/setup-pack.svg",
+              "altText": "A QuickPick showing domain pack options including auto-detect."
+            },
+            "completionEvents": ["onCommand:quorate.setupPack"]
+          },
+          {
+            "id": "quorate.gettingStarted.runReview",
+            "title": "Run your first review",
+            "description": "Convene the council on your current diff. The verdict panel shows findings grouped by file, reviewer chips, and a severity breakdown.\n\n[Run Review](command:quorate.run)",
+            "media": {
+              "image": "media/walkthrough/run-review.svg",
+              "altText": "The Quorate verdict panel showing a WARN verdict with findings grouped by file."
+            },
+            "completionEvents": ["onCommand:quorate.run"]
+          },
+          {
+            "id": "quorate.gettingStarted.fixFinding",
+            "title": "Fix a finding with an agent",
+            "description": "Delegate an actionable finding to an AI agent. The agent applies the fix, and you can revert it at any time.\n\n[Fix a Finding](command:quorate.fixFinding)",
+            "media": {
+              "image": "media/walkthrough/fix-finding.svg",
+              "altText": "A terminal showing quorate fix applying a code change with a diff preview."
+            },
+            "completionEvents": ["onCommand:quorate.fixFinding"]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs",

@@ -38,7 +38,7 @@ export interface CouncilReport {
   summary: string;
   findings: Finding[];
   providerResults: ProviderResult[];
-  metadata: { degraded: boolean };
+  metadata: { degraded: boolean; mergedBy?: string };
 }
 
 export interface ProviderConfig {
