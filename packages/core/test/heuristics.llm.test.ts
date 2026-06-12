@@ -212,6 +212,23 @@ describe("LLM heuristics — vulnerable fixtures (per-class)", () => {
   });
 });
 
+describe("LLM heuristics — benign UI prompts", () => {
+  it("does not treat VS Code InputBox prompt text as an LLM prompt-injection sink", () => {
+    const diff = `diff --git a/packages/vscode/src/extension.ts b/packages/vscode/src/extension.ts
+--- a/packages/vscode/src/extension.ts
++++ b/packages/vscode/src/extension.ts
+@@ -1,3 +1,7 @@
++vscode.window.showInputBox({
++  title,
++  value: fallback,
++  prompt: \`Couldn't list models from \${baseUrl}/models - type the model name\`
++});
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "ui-prompt", diff });
+    expect(result.findings.find((finding) => finding.title === "Untrusted input interpolated into prompt")).toBeUndefined();
+  });
+});
+
 describe("LLM heuristics — fixture table (file and line set)", () => {
   for (const { fixture, title, severity, expectedFile } of FIXTURE_CASES) {
     it(`${fixture} produces a ${severity} finding titled "${title}"`, () => {

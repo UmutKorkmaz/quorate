@@ -62,6 +62,12 @@ function removedLines(diff: string): DiffLine[] {
  *  `quorate-disable-line`, optionally followed by keyword(s) to scope it. */
 const SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
 
+function isTestLikePath(file?: string): boolean {
+  if (!file) return false;
+  return /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//.test(file) ||
+    /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(file);
+}
+
 /**
  * Drops findings on a line that carries an inline `quorate-ignore` marker —
  * either trailing on the same added line or on the added line directly above.
@@ -106,8 +112,9 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
 
+    const runPackRules = !isTestLikePath(line.file);
     for (const rule of PACK_HEURISTIC_RULES) {
-      if ((rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      if (runPackRules && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }
@@ -559,7 +566,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       // Match variables unambiguously named for LLM prompts. 'content' is intentionally
       // excluded because it is also used for React children, HTTP headers, and HTML
       // attributes — its presence alone does not indicate an AI prompt context.
-      /(prompt|systemPrompt|userPrompt)\s*[:=][^;\n]*\$\{/.test(text)
+      /\b(?:const|let|var)\s+(prompt|systemPrompt|userPrompt)\s*=[^;\n]*\$\{/.test(text)
     ) {
       findings.push({
         ...base,

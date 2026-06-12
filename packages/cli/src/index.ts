@@ -142,6 +142,15 @@ function printProviderTable(config: QuorateConfig): void {
 
 export type ProviderPresetRow = ProviderConfig & { local: boolean };
 
+export function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    const { hostname } = new URL(baseUrl);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]" || hostname.endsWith(".local");
+  } catch {
+    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl);
+  }
+}
+
 export function providerPresetRows(): ProviderPresetRow[] {
   return PROVIDER_PRESET_NAMES.map((id) => {
     const preset = PROVIDER_PRESETS[id];
@@ -149,7 +158,7 @@ export function providerPresetRows(): ProviderPresetRow[] {
     return {
       id,
       ...preset,
-      local: /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl)
+      local: isLocalBaseUrl(baseUrl)
     };
   });
 }
@@ -170,7 +179,12 @@ export function normalizeAddedProviderRoles(
   }
 
   const knownRoles = new Set(config.councils);
-  const unknownRoles = roles.filter((role) => !knownRoles.has(role));
+  const unknownRoles: string[] = [];
+  const keptRoles: string[] = [];
+  for (const role of roles) {
+    if (knownRoles.has(role)) keptRoles.push(role);
+    else unknownRoles.push(role);
+  }
   if (unknownRoles.length === 0) {
     return { provider, droppedPresetRoles: [] };
   }
@@ -182,7 +196,6 @@ export function normalizeAddedProviderRoles(
     );
   }
 
-  const keptRoles = roles.filter((role) => knownRoles.has(role));
   const normalized = { ...provider };
   if (keptRoles.length > 0) {
     normalized.roles = keptRoles;
@@ -438,6 +451,20 @@ export function buildProgram(): Command {
       }
 
       printProviderTable(config);
+    });
+
+  program
+    .command("roles")
+    .helpGroup("Setup:")
+    .description("List configured council roles.")
+    .option("--json", "Print machine-readable JSON")
+    .action((options: { json?: boolean }) => {
+      const roles = configFrom(program).councils ?? [];
+      if (options.json) {
+        console.log(JSON.stringify(roles, null, 2));
+        return;
+      }
+      for (const role of roles) console.log(role);
     });
 
   const providerCmd = program
