@@ -24,6 +24,12 @@ describe("readDiff", () => {
       "Invalid PR number: '12a'. Use a numeric PR id, e.g. /pr 123."
     );
   });
+
+  it("throws a clean error outside git when no explicit diff source is provided", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-cli-non-git-"));
+
+    expect(() => readDiff({}, dir)).toThrow(/No git repository found/);
+  });
 });
 
 describe("run", () => {

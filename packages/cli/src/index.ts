@@ -24,6 +24,7 @@ import {
   serializeConfig,
   shouldFailForReport,
   type CouncilReport,
+  type ProviderConfig,
   type QuorateConfig
 } from "@quorate/core";
 import { buildProvider } from "./provider-add.js";
@@ -137,6 +138,59 @@ function printProviderTable(config: QuorateConfig): void {
       ].join("\t")
     );
   }
+}
+
+export type ProviderPresetRow = ProviderConfig & { local: boolean };
+
+export function providerPresetRows(): ProviderPresetRow[] {
+  return PROVIDER_PRESET_NAMES.map((id) => {
+    const preset = PROVIDER_PRESETS[id];
+    const baseUrl = preset.baseUrl ?? "";
+    return {
+      id,
+      ...preset,
+      local: /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl)
+    };
+  });
+}
+
+export interface NormalizeAddedProviderRolesResult {
+  provider: ProviderConfig;
+  droppedPresetRoles: string[];
+}
+
+export function normalizeAddedProviderRoles(
+  provider: ProviderConfig,
+  config: QuorateConfig,
+  rolesWereProvided: boolean
+): NormalizeAddedProviderRolesResult {
+  const roles = provider.roles ?? [];
+  if (roles.length === 0) {
+    return { provider, droppedPresetRoles: [] };
+  }
+
+  const knownRoles = new Set(config.councils);
+  const unknownRoles = roles.filter((role) => !knownRoles.has(role));
+  if (unknownRoles.length === 0) {
+    return { provider, droppedPresetRoles: [] };
+  }
+
+  const availableRoles = config.councils.length > 0 ? config.councils.join(", ") : "(none)";
+  if (rolesWereProvided) {
+    throw new Error(
+      `Unknown role${unknownRoles.length === 1 ? "" : "s"}: ${unknownRoles.join(", ")}. Roles: ${availableRoles}.`
+    );
+  }
+
+  const keptRoles = roles.filter((role) => knownRoles.has(role));
+  const normalized = { ...provider };
+  if (keptRoles.length > 0) {
+    normalized.roles = keptRoles;
+  } else {
+    delete normalized.roles;
+  }
+
+  return { provider: normalized, droppedPresetRoles: unknownRoles };
 }
 
 /** Models for a preset name or a configured provider id (key read from apiKeyEnv). */
@@ -426,6 +480,8 @@ export function buildProgram(): Command {
       const config = existsSync(configPath)
         ? loadConfig(configPath, cwd)
         : createDefaultConfig(detectAvailableProviders());
+      const normalized = normalizeAddedProviderRoles(provider, config, typeof options.roles === "string");
+      provider = normalized.provider;
       const index = config.providers.findIndex((entry) => entry.id === id);
       if (index >= 0 && !options.force) {
         throw new Error(`Provider "${id}" already exists in ${configPath}. Use --force to replace it.`);
@@ -439,6 +495,9 @@ export function buildProgram(): Command {
 
       const detail = provider.type === "api" ? `api · ${provider.model}` : `cli · ${provider.command}`;
       console.log(`${index >= 0 ? "Replaced" : "Added"} provider "${id}" (${detail}) in ${configPath}`);
+      if (normalized.droppedPresetRoles.length > 0) {
+        console.log(`Skipped preset roles not in this config: ${normalized.droppedPresetRoles.join(", ")}.`);
+      }
       console.log(`Roles: ${provider.roles?.join(", ") ?? "(config default)"}.`);
       if (provider.apiKeyEnv) console.log(`Set ${provider.apiKeyEnv} in your environment before running.`);
       console.log("Restart quorate to load it; /route to see role assignments, /review to run.");
@@ -466,9 +525,15 @@ export function buildProgram(): Command {
   providerCmd
     .command("presets")
     .description("List the built-in API provider presets.")
-    .action(() => {
-      for (const name of PROVIDER_PRESET_NAMES) {
-        const preset = PROVIDER_PRESETS[name];
+    .option("--json", "Print machine-readable JSON")
+    .action((options: { json?: boolean }) => {
+      const rows = providerPresetRows();
+      if (options.json) {
+        console.log(JSON.stringify(rows, null, 2));
+        return;
+      }
+      for (const preset of rows) {
+        const name = preset.id;
         console.log(`  ${name.padEnd(11)} ${preset.baseUrl}  ${preset.model}`);
       }
       console.log("\nAdd one with: quorate provider add <id> --preset <name> [--model <model>]");

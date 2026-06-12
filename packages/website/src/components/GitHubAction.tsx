@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.7.1
+      - uses: UmutKorkmaz/quorate@v0.8.0
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`;
 

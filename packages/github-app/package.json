@@ -2,13 +2,14 @@
   "name": "@quorate/github-app",
   "version": "0.1.0",
   "description": "Quorate GitHub App — a multi-agent code review council on every PR, zero per-repo workflow setup.",
+  "private": true,
   "type": "module",
   "main": "./dist/server.js",
   "scripts": {
     "build": "node esbuild.config.mjs",
     "dev": "node --watch esbuild.config.mjs",
     "start": "node dist/server.js",
-    "test": "vitest run test",
+    "test": "cd ../.. && vitest run packages/github-app/test",
     "typecheck": "tsc -p tsconfig.check.json --noEmit"
   },
   "dependencies": {

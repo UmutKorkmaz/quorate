@@ -31296,6 +31296,15 @@ var PROVIDER_PRESETS = {
     apiKeyEnv: "GEMINI_API_KEY",
     roles: ["qa", "performance"],
     timeoutMs: 12e4
+  },
+  zai: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.z.ai/api/coding/paas/v4",
+    model: "glm-5.1",
+    apiKeyEnv: "ZAI_API_KEY",
+    roles: ["architect", "security", "performance"],
+    timeoutMs: 18e4
   }
 };
 var PROVIDER_PRESET_NAMES = Object.keys(PROVIDER_PRESETS);

@@ -4,6 +4,10 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "scripts"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,7 +16,8 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.json --force",
-    "test": "vitest run test"
+    "test": "cd ../.. && vitest run packages/core/test",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "yaml": "^2.8.1",

@@ -57,6 +57,29 @@ export function run(command: string, args: string[], cwd: string): string {
   return result.stdout;
 }
 
+function ensureGitWorkTree(cwd: string): void {
+  const result = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
+    cwd,
+    encoding: "utf8",
+    shell: false,
+    maxBuffer: 1024 * 1024
+  });
+
+  if (result.error) {
+    const err = result.error as NodeJS.ErrnoException;
+    if (err.code === "ENOENT") {
+      throw new Error("git not found on PATH. Install git or pass --diff <file> to review a saved diff.");
+    }
+    throw new Error(`git rev-parse failed: ${err.message}`);
+  }
+
+  if (result.status !== 0 || result.stdout.trim() !== "true") {
+    throw new Error(
+      "No git repository found. Run quorate from a git worktree, or pass --diff <file>, --base <ref>, --head <ref>, or --pr <number>."
+    );
+  }
+}
+
 export function readDiff(options: DiffOptions, cwd = process.cwd()): string {
   if (options.diff) {
     return readFileSync(resolve(cwd, options.diff), "utf8");
@@ -70,6 +93,8 @@ export function readDiff(options: DiffOptions, cwd = process.cwd()): string {
     }
     return run("gh", ["pr", "diff", options.pr], cwd);
   }
+
+  ensureGitWorkTree(cwd);
 
   if (options.base && options.head) {
     return run("git", ["diff", `${options.base}...${options.head}`, ...DIFF_PATHSPEC], cwd);

@@ -21,10 +21,34 @@ interface Preset {
   name: string;
   model: string;
   baseUrl: string;
-  local: boolean;
+  local?: boolean;
   keyEnv?: string;
+  roles?: string[];
 }
-const PRESETS: Preset[] = [
+interface PackCatalogItem {
+  id: string;
+  description?: string;
+  councils?: string[];
+  classes?: number;
+}
+
+const DEFAULT_ROLES = ["architect", "security", "qa", "performance", "maintainer"];
+const PRESET_KEY_ENVS: Record<string, string> = {
+  vllm: "VLLM_API_KEY",
+  "hf-router": "HF_TOKEN",
+  openrouter: "OPENROUTER_API_KEY",
+  openai: "OPENAI_API_KEY",
+  litellm: "LITELLM_API_KEY",
+  together: "TOGETHER_API_KEY",
+  groq: "GROQ_API_KEY",
+  fireworks: "FIREWORKS_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  gemini: "GEMINI_API_KEY",
+  zai: "ZAI_API_KEY"
+};
+
+const FALLBACK_PRESETS: Preset[] = [
   { name: "ollama", model: "qwen2.5-coder:7b", baseUrl: "http://localhost:11434/v1", local: true },
   { name: "lmstudio", model: "qwen2.5-coder-7b", baseUrl: "http://localhost:1234/v1", local: true },
   { name: "vllm", model: "Qwen/Qwen2.5-Coder-7B-Instruct", baseUrl: "http://localhost:8000/v1", local: true, keyEnv: "VLLM_API_KEY" },
@@ -39,8 +63,161 @@ const PRESETS: Preset[] = [
   { name: "fireworks", model: "accounts/fireworks/models/qwen2p5-coder-32b-instruct", baseUrl: "https://api.fireworks.ai/inference/v1", local: false, keyEnv: "FIREWORKS_API_KEY" },
   { name: "deepseek", model: "deepseek-chat", baseUrl: "https://api.deepseek.com", local: false, keyEnv: "DEEPSEEK_API_KEY" },
   { name: "mistral", model: "codestral-latest", baseUrl: "https://api.mistral.ai/v1", local: false, keyEnv: "MISTRAL_API_KEY" },
-  { name: "gemini", model: "gemini-2.0-flash", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", local: false, keyEnv: "GEMINI_API_KEY" }
+  { name: "gemini", model: "gemini-2.0-flash", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", local: false, keyEnv: "GEMINI_API_KEY" },
+  { name: "zai", model: "glm-5.1", baseUrl: "https://api.z.ai/api/coding/paas/v4", local: false, keyEnv: "ZAI_API_KEY" }
 ];
+const FALLBACK_PACKS: PackCatalogItem[] = [
+  { id: "solana", description: "Solana / Anchor security review council" },
+  { id: "evm", description: "EVM / Solidity security review council" },
+  { id: "iac", description: "Infrastructure-as-Code security review council" },
+  { id: "llm", description: "AI / LLM application security review council" },
+  { id: "move", description: "Move smart-contract security review council" },
+  { id: "ci", description: "CI/CD and supply-chain security review council" },
+  { id: "fintech", description: "Fintech / PCI-DSS payment security review council" },
+  { id: "web", description: "Web & API security review council" },
+  { id: "healthcare", description: "Healthcare / HIPAA security review council" },
+  { id: "mobile", description: "Mobile app security review council" },
+  { id: "accessibility", description: "Web/app accessibility review council" },
+  { id: "data-sql", description: "Data engineering and SQL pipeline safety review council" },
+  { id: "k8s", description: "Kubernetes workload hardening review council" },
+  { id: "privacy", description: "Data-protection and privacy lifecycle review council" },
+  { id: "mlops", description: "ML training and model-lifecycle safety review council" },
+  { id: "embedded", description: "Embedded C/C++ firmware safety review council" },
+  { id: "performance", description: "Performance, scalability and reliability review council" },
+  { id: "graphql", description: "GraphQL API security and design review council" }
+];
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(asString).filter((entry): entry is string => Boolean(entry)) : [];
+}
+
+function uniqueStrings(values: string[], fallback: string[] = []): string[] {
+  const out = [...new Set(values.map((entry) => entry.trim()).filter(Boolean))];
+  return out.length ? out : fallback;
+}
+
+function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    const { hostname } = new URL(baseUrl);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local");
+  } catch {
+    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl);
+  }
+}
+
+function normalizePreset(value: unknown, nameHint?: string): Preset | undefined {
+  const raw = asRecord(value);
+  if (!raw) return undefined;
+  const name = asString(raw.name) ?? asString(raw.id) ?? nameHint;
+  const model = asString(raw.model);
+  const baseUrl = asString(raw.baseUrl) ?? asString(raw.baseURL) ?? asString(raw.url);
+  if (!name || !model || !baseUrl) return undefined;
+  const keyEnv = asString(raw.keyEnv) ?? asString(raw.apiKeyEnv) ?? PRESET_KEY_ENVS[name];
+  return {
+    name,
+    model,
+    baseUrl,
+    keyEnv,
+    local: typeof raw.local === "boolean" ? raw.local : isLocalBaseUrl(baseUrl),
+    roles: stringList(raw.roles)
+  };
+}
+
+function normalizePresetCatalog(value: unknown): Preset[] {
+  if (Array.isArray(value)) return value.map((entry) => normalizePreset(entry)).filter((entry): entry is Preset => Boolean(entry));
+  const raw = asRecord(value);
+  if (!raw) return [];
+  if (Array.isArray(raw.presets)) return normalizePresetCatalog(raw.presets);
+  return Object.entries(raw)
+    .map(([name, entry]) => normalizePreset(entry, name))
+    .filter((entry): entry is Preset => Boolean(entry));
+}
+
+function parsePresetText(stdout: string): Preset[] {
+  return stdout
+    .split("\n")
+    .map((line) => line.match(/^\s*(\S+)\s+(https?:\/\/\S+)\s+(.+?)\s*$/))
+    .filter((match): match is RegExpMatchArray => Boolean(match))
+    .map((match) => {
+      const [, name, baseUrl, model] = match;
+      return { name, baseUrl, model, keyEnv: PRESET_KEY_ENVS[name], local: isLocalBaseUrl(baseUrl) };
+    });
+}
+
+function normalizePack(value: unknown, idHint?: string): PackCatalogItem | undefined {
+  const raw = asRecord(value);
+  if (!raw) return undefined;
+  const id = asString(raw.id) ?? idHint;
+  if (!id) return undefined;
+  return {
+    id,
+    description: asString(raw.description),
+    councils: stringList(raw.councils),
+    classes: typeof raw.classes === "number" ? raw.classes : undefined
+  };
+}
+
+function normalizePackCatalog(value: unknown): PackCatalogItem[] {
+  if (Array.isArray(value)) return value.map((entry) => normalizePack(entry)).filter((entry): entry is PackCatalogItem => Boolean(entry));
+  const raw = asRecord(value);
+  if (!raw) return [];
+  if (Array.isArray(raw.packs)) return normalizePackCatalog(raw.packs);
+  return Object.entries(raw)
+    .map(([id, entry]) => normalizePack(entry, id))
+    .filter((entry): entry is PackCatalogItem => Boolean(entry));
+}
+
+function parsePackText(stdout: string): PackCatalogItem[] {
+  return stdout
+    .split("\n")
+    .map((line) => line.match(/^\s{2,}([a-z0-9-]+)\s{2,}(.+?)(?:\s+\(\d+\s+classes\))?\s*$/i))
+    .filter((match): match is RegExpMatchArray => Boolean(match))
+    .map((match) => ({ id: match[1], description: match[2].trim() }));
+}
+
+function envNameFromId(id: string): string {
+  const normalized = id.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return `${normalized || "CUSTOM"}_API_KEY`;
+}
+
+function parseJsonOutput<T>(stdout: string): T | undefined {
+  try {
+    return JSON.parse(stdout.trim()) as T;
+  } catch {
+    const last = stdout.split("\n").map((line) => line.trim()).filter(Boolean).pop();
+    if (!last) return undefined;
+    try {
+      return JSON.parse(last) as T;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function normalizeModelList(value: unknown): string[] {
+  if (Array.isArray(value)) return uniqueStrings(value.map(asString).filter((entry): entry is string => Boolean(entry))).sort();
+  const raw = asRecord(value);
+  if (!raw) return [];
+  const models = stringList(raw.models);
+  if (models.length) return models.sort();
+  if (Array.isArray(raw.data)) {
+    return uniqueStrings(
+      raw.data.map((entry) => {
+        const item = asRecord(entry);
+        return item ? asString(item.id) ?? asString(item.name) : undefined;
+      }).filter((entry): entry is string => Boolean(entry))
+    ).sort();
+  }
+  return [];
+}
 
 /** Fetch model ids from an OpenAI-compatible `{baseUrl}/models` (or Ollama's /api/tags). */
 async function fetchModels(baseUrl: string, apiKey?: string): Promise<string[]> {
@@ -65,10 +242,7 @@ async function fetchModels(baseUrl: string, apiKey?: string): Promise<string[]> 
     clearTimeout(timer);
   }
 }
-const ROLES = ["architect", "security", "qa", "performance", "maintainer"];
 const secretKey = (env: string): string => `quorate.key.${env}`;
-/** Domain pack ids (mirrors @quorate/core PACK_IDS) for the setup picker. */
-const PACK_IDS = ["solana", "evm", "move", "iac", "llm", "ci", "fintech", "web", "healthcare", "mobile"];
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const council = new CouncilTree();
@@ -117,6 +291,46 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return (await runJson<ProviderConfig[]>(["providers"])) ?? [];
   }
 
+  async function runJsonWithEnv<T>(args: string[], env?: NodeJS.ProcessEnv): Promise<T | undefined> {
+    try {
+      const { stdout } = await runCli([...args, "--json"], { env });
+      return parseJsonOutput<T>(stdout);
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function listProviderPresets(): Promise<Preset[]> {
+    const fromJson = normalizePresetCatalog(await runJson<unknown>(["provider", "presets"]));
+    if (fromJson.length) return fromJson;
+    try {
+      const { stdout } = await runCli(["provider", "presets"]);
+      const parsed = parsePresetText(stdout);
+      if (parsed.length) return parsed;
+    } catch {
+      // Older or missing CLIs fall through to the baked-in compatibility list.
+    }
+    return FALLBACK_PRESETS;
+  }
+
+  async function listPacks(): Promise<PackCatalogItem[]> {
+    const fromJson = normalizePackCatalog(await runJson<unknown>(["packs"]));
+    if (fromJson.length) return fromJson;
+    try {
+      const { stdout } = await runCli(["packs"]);
+      const parsed = parsePackText(stdout);
+      if (parsed.length) return parsed;
+    } catch {
+      // Older or missing CLIs fall through to the baked-in compatibility list.
+    }
+    return FALLBACK_PACKS;
+  }
+
+  async function listCouncilRoles(): Promise<string[]> {
+    const doctor = await runJson<DoctorReport & { config: DoctorReport["config"] & { councils?: string[] } }>(["doctor"]);
+    return uniqueStrings(doctor?.config?.councils ?? [], DEFAULT_ROLES);
+  }
+
   async function reload(): Promise<void> {
     const { path: cliResolved, version } = await resolveCli(true);
     const ready = version !== null;
@@ -145,6 +359,56 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }
     return env;
+  }
+
+  async function promptForSecret(keyEnv: string, title: string): Promise<string | undefined> {
+    const existing = process.env[keyEnv] || (await context.secrets.get(secretKey(keyEnv))) || undefined;
+    if (existing) return existing;
+    const entered = await vscode.window.showInputBox({
+      title,
+      password: true,
+      prompt: "Stored in the OS keychain and injected at review time. Leave blank to use your shell environment."
+    });
+    if (entered) {
+      await context.secrets.store(secretKey(keyEnv), entered);
+      return entered;
+    }
+    return undefined;
+  }
+
+  async function modelsForPreset(preset: Preset, apiKey?: string): Promise<string[]> {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    if (preset.keyEnv && apiKey) env[preset.keyEnv] = apiKey;
+    const fromCli = normalizeModelList(await runJsonWithEnv<unknown>(["provider", "models", preset.name], env));
+    if (fromCli.length) return fromCli;
+    return fetchModels(preset.baseUrl, apiKey);
+  }
+
+  async function pickModel(title: string, baseUrl: string, fallback: string, models: string[]): Promise<string | undefined> {
+    if (models.length) {
+      const pick = await vscode.window.showQuickPick(
+        [...models.map((model) => ({ label: model, custom: false })), { label: "$(edit) Enter a custom model…", custom: true }],
+        { title: `${title} — ${models.length} available`, matchOnDescription: true }
+      );
+      if (!pick) return undefined;
+      return pick.custom ? vscode.window.showInputBox({ title, value: fallback }) : pick.label;
+    }
+    return vscode.window.showInputBox({
+      title,
+      value: fallback,
+      prompt: `Couldn't list models from ${baseUrl}/models — type the model name`
+    });
+  }
+
+  async function pickRoles(preferred: string[] = []): Promise<string[] | undefined> {
+    const roles = await listCouncilRoles();
+    const preferredInConfig = preferred.filter((role) => roles.includes(role));
+    const defaults = new Set(preferredInConfig.length ? preferredInConfig : roles);
+    const picked = await vscode.window.showQuickPick(
+      roles.map((role, index) => ({ label: role, picked: defaults.size ? defaults.has(role) : index === 0 })),
+      { title: "Roles for this provider", canPickMany: true }
+    );
+    return picked?.map((role) => role.label);
   }
 
   let lastReport: CouncilReport | undefined;
@@ -263,15 +527,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   async function addProviderFlow(): Promise<void> {
-    const items = PRESETS.map((p) => ({
-      label: `${p.local ? "$(vm)" : "$(cloud)"} ${p.name}`,
-      description: p.model,
-      detail: p.keyEnv ? `needs $${p.keyEnv}` : "no key required",
-      preset: p
-    }));
-    const picked = await vscode.window.showQuickPick(items, { title: "Add provider — pick a preset", matchOnDetail: true });
+    const presets = await listProviderPresets();
+    const items: Array<vscode.QuickPickItem & { itemType?: "custom" | "preset"; preset?: Preset }> = [
+      {
+        label: "$(edit) Custom OpenAI-compatible provider…",
+        detail: "Choose any provider id, model, base URL, API-key env var, and optional stored token.",
+        itemType: "custom"
+      },
+      { label: "", kind: vscode.QuickPickItemKind.Separator },
+      ...presets.map((preset) => ({
+        label: `${preset.local ? "$(vm)" : "$(cloud)"} ${preset.name}`,
+        description: preset.model,
+        detail: preset.keyEnv ? `${preset.baseUrl} · uses $${preset.keyEnv}` : preset.baseUrl,
+        itemType: "preset" as const,
+        preset
+      }))
+    ];
+    const picked = await vscode.window.showQuickPick(items, { title: "Add provider", matchOnDetail: true });
     if (!picked) return;
+    if (picked.itemType === "custom") {
+      await addCustomProviderFlow();
+      return;
+    }
     const preset = picked.preset;
+    if (!preset) return;
 
     const id = await vscode.window.showInputBox({ title: "Provider id", value: preset.name });
     if (!id) return;
@@ -279,50 +558,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Resolve a key (env or keychain) so the model list can be fetched for hosted providers.
     let key: string | undefined;
     if (preset.keyEnv) {
-      key = process.env[preset.keyEnv] || (await context.secrets.get(secretKey(preset.keyEnv))) || undefined;
-      if (!key) {
-        const entered = await vscode.window.showInputBox({
-          title: `$${preset.keyEnv} (optional — to list models)`,
-          password: true,
-          prompt: "Stored in the OS keychain. Leave blank to type the model name instead."
-        });
-        if (entered) {
-          key = entered;
-          await context.secrets.store(secretKey(preset.keyEnv), entered);
-        }
-      }
+      key = await promptForSecret(preset.keyEnv, `$${preset.keyEnv} (optional — to list models)`);
     }
 
     // Live model list (OpenAI-compatible /models), with a free-text fallback.
     const models = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Quorate — fetching ${preset.name} models…` },
-      () => fetchModels(preset.baseUrl, key)
+      () => modelsForPreset(preset, key)
     );
-    let model: string | undefined;
-    if (models.length) {
-      const pick = await vscode.window.showQuickPick(
-        [...models.map((m) => ({ label: m, custom: false })), { label: "$(edit) Enter a custom model…", custom: true }],
-        { title: `Model for ${id} — ${models.length} available`, matchOnDescription: true }
-      );
-      if (!pick) return;
-      model = pick.custom ? await vscode.window.showInputBox({ title: "Model", value: preset.model }) : pick.label;
-    } else {
-      model = await vscode.window.showInputBox({
-        title: `Model for ${id}`,
-        value: preset.model,
-        prompt: `Couldn't reach ${preset.baseUrl}/models — type the model name`
-      });
-    }
+    const model = await pickModel(`Model for ${id}`, preset.baseUrl, preset.model, models);
     if (!model) return;
 
-    const roles = await vscode.window.showQuickPick(
-      ROLES.map((role) => ({ label: role, picked: ["qa", "maintainer"].includes(role) })),
-      { title: "Roles for this provider", canPickMany: true }
-    );
+    const roles = await pickRoles(preset.roles);
     if (!roles) return;
+    if (roles.length === 0) {
+      void vscode.window.showWarningMessage("Quorate: pick at least one role (a provider with no roles never runs).");
+      return;
+    }
 
-    const args = ["provider", "add", id, "--preset", preset.name, "--force", "--model", model];
-    if (roles.length) args.push("--roles", roles.map((r) => r.label).join(","));
+    const args = ["provider", "add", id, "--preset", preset.name, "--force", "--model", model, "--no-pick", "--roles", roles.join(",")];
     const { code, stderr } = await runCli(args);
     if (code !== 0) {
       void vscode.window.showErrorMessage(`Quorate: provider add failed — ${stderr.trim().split("\n").pop()}`);
@@ -332,6 +586,70 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       preset.keyEnv && !(process.env[preset.keyEnv] || (await context.secrets.get(secretKey(preset.keyEnv))));
     void vscode.window.showInformationMessage(
       `Quorate: added "${id}" (${model}).${stillMissing ? ` Set $${preset.keyEnv} to use it.` : ""}`
+    );
+  }
+
+  async function addCustomProviderFlow(): Promise<void> {
+    const id = await vscode.window.showInputBox({
+      title: "Provider id",
+      placeHolder: "my-provider",
+      validateInput: (value) =>
+        /^[a-z0-9][a-z0-9_-]*$/i.test(value.trim()) ? undefined : "Start with a letter or digit; use letters, digits, dashes, or underscores."
+    });
+    if (!id) return;
+
+    const baseUrl = await vscode.window.showInputBox({
+      title: "OpenAI-compatible base URL",
+      placeHolder: "https://api.example.com/v1",
+      validateInput: (value) => {
+        try {
+          const url = new URL(value.trim());
+          return url.protocol === "http:" || url.protocol === "https:" ? undefined : "Use an http:// or https:// URL.";
+        } catch {
+          return "Enter a valid http:// or https:// URL.";
+        }
+      }
+    });
+    if (!baseUrl) return;
+
+    const apiKeyEnvInput = await vscode.window.showInputBox({
+      title: "API key env var",
+      value: isLocalBaseUrl(baseUrl) ? "" : envNameFromId(id),
+      prompt: "Leave blank for local providers or endpoints that do not require a bearer token.",
+      validateInput: (value) => {
+        const trimmed = value.trim();
+        return !trimmed || /^[A-Z_][A-Z0-9_]*$/.test(trimmed) ? undefined : "Use an environment variable name like MY_PROVIDER_API_KEY.";
+      }
+    });
+    if (apiKeyEnvInput === undefined) return;
+    const apiKeyEnv = apiKeyEnvInput.trim() || undefined;
+    const key = apiKeyEnv ? await promptForSecret(apiKeyEnv, `$${apiKeyEnv} token secret (optional)`) : undefined;
+
+    const models = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Quorate — fetching ${id} models…` },
+      () => fetchModels(baseUrl, key)
+    );
+    const model = await pickModel(`Model for ${id}`, baseUrl, "", models);
+    if (!model) return;
+
+    const roles = await pickRoles();
+    if (!roles) return;
+    if (roles.length === 0) {
+      void vscode.window.showWarningMessage("Quorate: pick at least one role (a provider with no roles never runs).");
+      return;
+    }
+
+    const args = ["provider", "add", id, "--type", "api", "--base-url", baseUrl, "--model", model, "--force", "--no-pick"];
+    if (apiKeyEnv) args.push("--api-key-env", apiKeyEnv);
+    if (roles.length) args.push("--roles", roles.join(","));
+    const { code, stderr } = await runCli(args);
+    if (code !== 0) {
+      void vscode.window.showErrorMessage(`Quorate: provider add failed — ${stderr.trim().split("\n").pop()}`);
+      return;
+    }
+    const stillMissing = apiKeyEnv && !(process.env[apiKeyEnv] || (await context.secrets.get(secretKey(apiKeyEnv))));
+    void vscode.window.showInformationMessage(
+      `Quorate: added "${id}" (${model}).${stillMissing ? ` Set $${apiKeyEnv} to use it.` : ""}`
     );
   }
 
@@ -376,19 +694,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("quorate.editRoles", async (node?: { provider?: ProviderConfig }) => {
       const provider = node?.provider;
       if (!provider) return;
+      const roles = await listCouncilRoles();
       const picked = await vscode.window.showQuickPick(
-        ROLES.map((role) => ({ label: role, picked: provider.roles?.includes(role) ?? false })),
+        roles.map((role) => ({ label: role, picked: provider.roles?.includes(role) ?? false })),
         { title: `Roles for ${provider.id}`, canPickMany: true }
       );
       if (!picked) return;
-      const roles = picked.map((p) => p.label).join(",");
-      if (!roles) {
+      const nextRoles = picked.map((p) => p.label).join(",");
+      if (!nextRoles) {
         void vscode.window.showWarningMessage("Quorate: pick at least one role (a provider with no roles never runs).");
         return;
       }
       // set-roles edits ONLY the roles field — never round-trips the full
       // provider through `provider add` (which could mangle exotic cli args).
-      const { code, stderr } = await runCli(["provider", "set-roles", provider.id, roles]);
+      const { code, stderr } = await runCli(["provider", "set-roles", provider.id, nextRoles]);
       if (code !== 0) {
         const reason = stderr.trim().split("\n").filter(Boolean).pop() ?? "unknown error";
         const message = /unknown command/i.test(stderr)
@@ -440,10 +759,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return;
       }
       const AUTO = "$(wand) Auto-detect from this repo";
+      const packs = await listPacks();
       const items: vscode.QuickPickItem[] = [
         { label: AUTO, detail: "quorate init --auto — scaffold the packs matching your files" },
         { label: "", kind: vscode.QuickPickItemKind.Separator },
-        ...PACK_IDS.map((id) => ({ label: id, description: "domain pack" }))
+        ...packs.map((pack) => ({
+          label: pack.id,
+          description: pack.classes ? `${pack.classes} classes` : "domain pack",
+          detail: pack.description ?? (pack.councils?.length ? `Councils: ${pack.councils.join(", ")}` : undefined)
+        }))
       ];
       const picked = await vscode.window.showQuickPick(items, {
         title: "Quorate — set up a domain pack",
