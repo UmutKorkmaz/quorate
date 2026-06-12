@@ -373,7 +373,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.8.0
+      - uses: UmutKorkmaz/quorate@v0.9.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -388,7 +388,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v0.8.0
+      - uses: UmutKorkmaz/quorate@v0.9.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:

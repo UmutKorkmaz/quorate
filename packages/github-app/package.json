@@ -16,8 +16,8 @@
     "@octokit/auth-app": "^7.2.2",
     "@octokit/rest": "^21.1.1",
     "@octokit/webhooks": "^13.9.1",
-    "@quorate/core": "0.8.0",
-    "@quorate/github-action": "0.8.0",
+    "@quorate/core": "0.9.0",
+    "@quorate/github-action": "0.9.0",
     "@types/express": "^5.0.6",
     "express": "^5.2.1"
   },
