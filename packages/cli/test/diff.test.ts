@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,9 +8,13 @@ describe("readDiff", () => {
   it("reads a diff from an explicit file path", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-cli-"));
     const diffPath = join(dir, "change.diff");
-    writeFileSync(diffPath, "diff --git a/a b/a\n", "utf8");
+    try {
+      writeFileSync(diffPath, "diff --git a/a b/a\n", "utf8");
 
-    expect(readDiff({ diff: diffPath })).toBe("diff --git a/a b/a\n");
+      expect(readDiff({ diff: diffPath })).toBe("diff --git a/a b/a\n");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("throws a validation error for a non-numeric pr without spawning gh", () => {
@@ -23,6 +27,16 @@ describe("readDiff", () => {
     expect(() => readDiff({ pr: "12a" })).toThrow(
       "Invalid PR number: '12a'. Use a numeric PR id, e.g. /pr 123."
     );
+  });
+
+  it("throws a clean error outside git when no explicit diff source is provided", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-cli-non-git-"));
+
+    try {
+      expect(() => readDiff({}, dir)).toThrow(/No git repository found/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

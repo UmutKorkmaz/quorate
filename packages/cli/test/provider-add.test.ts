@@ -1,5 +1,37 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createDefaultConfig, isLocalBaseUrl, loadConfig, serializeConfig } from "@quorate/core";
+import { buildProgram, normalizeAddedProviderRoles, providerPresetRows } from "../src/index.js";
 import { buildProvider } from "../src/provider-add.js";
+
+function writeConfig(dir: string, councils: string[]): void {
+  writeFileSync(
+    join(dir, ".quorate.yml"),
+    serializeConfig({
+      ...createDefaultConfig([]),
+      councils
+    }),
+    "utf8"
+  );
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function captureConsoleLog(): string[] {
+  const output: string[] = [];
+  vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+    output.push(String(message));
+  });
+  return output;
+}
+
+function muteConsoleLog(): void {
+  vi.spyOn(console, "log").mockImplementation(() => undefined);
+}
 
 describe("buildProvider", () => {
   it("expands a preset into a full api provider", () => {
@@ -40,6 +72,23 @@ describe("buildProvider", () => {
     expect(p.enabled).toBe(true);
   });
 
+  it("builds a generic OpenAI-compatible api provider from user flags without a preset", () => {
+    const p = buildProvider("custom-openai", {
+      baseUrl: "https://api.example.test/v1",
+      model: "vendor/model-code-review",
+      apiKeyEnv: "CUSTOM_OPENAI_KEY"
+    });
+
+    expect(p).toMatchObject({
+      id: "custom-openai",
+      type: "api",
+      baseUrl: "https://api.example.test/v1",
+      model: "vendor/model-code-review",
+      apiKeyEnv: "CUSTOM_OPENAI_KEY",
+      enabled: true
+    });
+  });
+
   it("builds a cli provider, defaulting command to the id and inputMode to stdin", () => {
     const p = buildProvider("crush", { type: "cli", args: "review --json" });
     expect(p).toMatchObject({ id: "crush", type: "cli", command: "crush", inputMode: "stdin" });
@@ -61,5 +110,153 @@ describe("buildProvider", () => {
   it("rejects an invalid id and an invalid type", () => {
     expect(() => buildProvider("bad id!", { preset: "ollama" })).toThrow(/Invalid provider id/);
     expect(() => buildProvider("x", { type: "weird", model: "m" })).toThrow(/Invalid --type/);
+  });
+
+  it("rejects a preset when none of its roles exist in the active config", () => {
+    const provider = buildProvider("router", { preset: "openrouter" });
+    const config = { ...createDefaultConfig([]), councils: ["maintainer"] };
+
+    expect(() => normalizeAddedProviderRoles(provider, config, false)).toThrow(
+      "Preset roles not in this config: architect, security. Choose roles with --roles. Roles: maintainer."
+    );
+  });
+
+  it("keeps known preset roles and reports only dropped roles", () => {
+    const provider = buildProvider("local", { preset: "ollama" });
+    const config = { ...createDefaultConfig([]), councils: ["qa", "maintainer"] };
+    const normalized = normalizeAddedProviderRoles(provider, config, false);
+
+    expect(normalized.droppedPresetRoles).toEqual(["performance"]);
+    expect(normalized.provider.roles).toEqual(["qa", "maintainer"]);
+  });
+
+  it("rejects explicitly requested roles that are not in the active config", () => {
+    const provider = buildProvider("router", { preset: "openrouter", roles: "security" });
+    const config = { ...createDefaultConfig([]), councils: ["maintainer"] };
+
+    expect(() => normalizeAddedProviderRoles(provider, config, true)).toThrow(
+      "Unknown role: security. Roles: maintainer."
+    );
+  });
+});
+
+describe("provider preset rows", () => {
+  it("returns JSON-serializable preset records with ids", () => {
+    const rows = providerPresetRows();
+
+    expect(rows.find((row) => row.id === "openai")).toMatchObject({
+      type: "api",
+      baseUrl: "https://api.openai.com/v1",
+      apiKeyEnv: "OPENAI_API_KEY"
+    });
+    expect(JSON.parse(JSON.stringify(rows))[0]).toHaveProperty("id");
+  });
+
+  it("classifies localhost, loopback, IPv6 loopback, and mDNS URLs as local", () => {
+    expect(isLocalBaseUrl("http://localhost:11434/v1")).toBe(true);
+    expect(isLocalBaseUrl("http://127.0.0.1:8000/v1")).toBe(true);
+    expect(isLocalBaseUrl("http://[::1]:8080/v1")).toBe(true);
+    expect(isLocalBaseUrl("http://my-dev.local:8000/v1")).toBe(true);
+    expect(isLocalBaseUrl("https://api.openai.com/v1")).toBe(false);
+  });
+});
+
+describe("provider command", () => {
+  it("prints machine-readable preset JSON with --json", async () => {
+    const output = captureConsoleLog();
+    const program = buildProgram();
+    program.exitOverride();
+    await program.parseAsync(["node", "quorate", "provider", "presets", "--json"], { from: "node" });
+
+    const rows = JSON.parse(output.join("\n")) as Array<{ id: string; baseUrl?: string; model?: string }>;
+    expect(rows.find((row) => row.id === "openai")).toMatchObject({
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o"
+    });
+  });
+
+  it("prints API base URL locality as JSON", async () => {
+    const output = captureConsoleLog();
+    const program = buildProgram();
+    program.exitOverride();
+    await program.parseAsync(["node", "quorate", "provider", "classify-url", "http://[::1]:8080/v1", "--json"], { from: "node" });
+
+    expect(JSON.parse(output.join("\n"))).toEqual({ baseUrl: "http://[::1]:8080/v1", local: true });
+  });
+
+  it("adds a generic api provider from explicit OpenAI-compatible flags", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-provider-add-"));
+    try {
+      writeConfig(dir, ["maintainer"]);
+      muteConsoleLog();
+      const program = buildProgram();
+      program.exitOverride();
+      await program.parseAsync(
+        [
+          "node",
+          "quorate",
+          "--cwd",
+          dir,
+          "provider",
+          "add",
+          "custom-openai",
+          "--base-url",
+          "https://api.example.test/v1",
+          "--model",
+          "vendor/model-code-review",
+          "--api-key-env",
+          "CUSTOM_OPENAI_KEY",
+          "--no-pick"
+        ],
+        { from: "node" }
+      );
+
+      const config = loadConfig(join(dir, ".quorate.yml"), dir);
+      expect(config.providers.find((provider) => provider.id === "custom-openai")).toMatchObject({
+        type: "api",
+        baseUrl: "https://api.example.test/v1",
+        model: "vendor/model-code-review",
+        apiKeyEnv: "CUSTOM_OPENAI_KEY"
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("prints configured council roles as JSON", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-roles-"));
+    try {
+      writeConfig(dir, ["security", "qa"]);
+      const output = captureConsoleLog();
+      const program = buildProgram();
+      program.exitOverride();
+      await program.parseAsync(["node", "quorate", "--cwd", dir, "roles", "--json"], { from: "node" });
+
+      expect(JSON.parse(output.join("\n"))).toEqual(["security", "qa"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not write a preset provider when no preset roles match the config", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-provider-preset-"));
+    try {
+      writeConfig(dir, ["maintainer"]);
+      muteConsoleLog();
+      const program = buildProgram();
+      program.exitOverride();
+      await expect(
+        program.parseAsync(
+          ["node", "quorate", "--cwd", dir, "provider", "add", "router", "--preset", "openrouter", "--no-pick"],
+          { from: "node" }
+        )
+      ).rejects.toThrow("Preset roles not in this config: architect, security. Choose roles with --roles. Roles: maintainer.");
+
+      const config = loadConfig(join(dir, ".quorate.yml"), dir);
+      expect(config.providers.find((provider) => provider.id === "router")).toBeUndefined();
+      expect(readFileSync(join(dir, ".quorate.yml"), "utf8")).not.toMatch(/id: router[\s\S]*roles:\n\s+- architect/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

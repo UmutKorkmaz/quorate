@@ -57,6 +57,20 @@ export function run(command: string, args: string[], cwd: string): string {
   return result.stdout;
 }
 
+function runGit(args: string[], cwd: string): string {
+  try {
+    return run("git", args, cwd);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/not a git repository|not a git work tree|outside repository|git diff --no-index/i.test(message)) {
+      throw new Error(
+        "No git repository found. Run quorate from a git worktree, or pass --diff <file>, --base <ref>, --head <ref>, or --pr <number>."
+      );
+    }
+    throw err;
+  }
+}
+
 export function readDiff(options: DiffOptions, cwd = process.cwd()): string {
   if (options.diff) {
     return readFileSync(resolve(cwd, options.diff), "utf8");
@@ -72,14 +86,14 @@ export function readDiff(options: DiffOptions, cwd = process.cwd()): string {
   }
 
   if (options.base && options.head) {
-    return run("git", ["diff", `${options.base}...${options.head}`, ...DIFF_PATHSPEC], cwd);
+    return runGit(["diff", `${options.base}...${options.head}`, ...DIFF_PATHSPEC], cwd);
   }
 
   if (options.base) {
-    return run("git", ["diff", options.base, ...DIFF_PATHSPEC], cwd);
+    return runGit(["diff", options.base, ...DIFF_PATHSPEC], cwd);
   }
 
-  const staged = run("git", ["diff", "--cached", ...DIFF_PATHSPEC], cwd);
-  const unstaged = run("git", ["diff", ...DIFF_PATHSPEC], cwd);
+  const staged = runGit(["diff", "--cached", ...DIFF_PATHSPEC], cwd);
+  const unstaged = runGit(["diff", ...DIFF_PATHSPEC], cwd);
   return [staged, unstaged].filter(Boolean).join("\n");
 }

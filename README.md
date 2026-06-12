@@ -306,16 +306,16 @@ and the name of the env var holding the key.
 | `gemini` | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.0-flash` | `GEMINI_API_KEY` |
 | `zai` (GLM) | `https://api.z.ai/api/coding/paas/v4` | `glm-5.1` | `ZAI_API_KEY` |
 
-Worked example — wire up Z.ai's GLM-5.1, then run the council on it:
+Optional example — this repo currently selects Z.ai's GLM-5.1 for hosted review:
 
 ```bash
 export ZAI_API_KEY=…                       # your key, never written to the file
 quorate provider add glm --preset zai      # writes the entry to .quorate.yml
-quorate review                             # GLM-5.1 reviews as architect/security/performance
+quorate review                             # runs the configured provider roles
 ```
 
-Swap `zai`/`glm-5.1` for any row above — the steps don't change. Your repo dogfoods
-this exact path: Quorate's own self-review runs GLM-5.1 in CI (see below).
+Swap `zai`/`glm-5.1` and the env var for your own provider, token, and model.
+GLM is this repo's selected example, not a Quorate requirement.
 
 ## Terminal & theming
 
@@ -373,7 +373,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.7.1
+      - uses: UmutKorkmaz/quorate@v0.8.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -388,7 +388,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v0.7.1
+      - uses: UmutKorkmaz/quorate@v0.8.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:

@@ -34,5 +34,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify committed action bundle
+        run: git diff --exit-code packages/github-action/dist/index.js
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Package VS Code extension
+        run: npm run package:vscode
+
       - name: Test
         run: npx vitest run

@@ -22,7 +22,7 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.json --force && node esbuild.config.mjs",
-    "test": "vitest run test",
+    "test": "cd ../.. && vitest run packages/cli/test",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

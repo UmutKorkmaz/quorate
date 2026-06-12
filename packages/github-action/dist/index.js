@@ -31296,6 +31296,15 @@ var PROVIDER_PRESETS = {
     apiKeyEnv: "GEMINI_API_KEY",
     roles: ["qa", "performance"],
     timeoutMs: 12e4
+  },
+  zai: {
+    type: "api",
+    enabled: true,
+    baseUrl: "https://api.z.ai/api/coding/paas/v4",
+    model: "glm-5.1",
+    apiKeyEnv: "ZAI_API_KEY",
+    roles: ["architect", "security", "performance"],
+    timeoutMs: 18e4
   }
 };
 var PROVIDER_PRESET_NAMES = Object.keys(PROVIDER_PRESETS);
@@ -47685,6 +47694,15 @@ function removedLines(diff) {
   return result;
 }
 var SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
+var TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
+var TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
+var CLI_SOURCE_RE = /(^|\/)packages\/cli\/src\//;
+var JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
+var PROMPT_INTERPOLATION_RE = /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
+function isTestLikePath(file2) {
+  if (!file2) return false;
+  return TEST_PATH_RE.test(file2) || TEST_FILE_RE.test(file2);
+}
 function applyInlineSuppressions(findings, lines) {
   const textByLoc = /* @__PURE__ */ new Map();
   for (const candidate of lines) {
@@ -47716,11 +47734,19 @@ function runHeuristicReview(request2, role = "maintainer") {
   const startedAt = Date.now();
   const findings = [];
   const lines = addedLines(request2.diff ?? "");
+  const testLikeByFile = /* @__PURE__ */ new Map();
   for (const line of lines) {
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
+    const fileKey = line.file ?? "";
+    let testLike = testLikeByFile.get(fileKey);
+    if (testLike === void 0) {
+      testLike = isTestLikePath(line.file);
+      testLikeByFile.set(fileKey, testLike);
+    }
     for (const rule of PACK_HEURISTIC_RULES) {
-      if ((rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      const skipTestHelperRule = testLike && rule.title === "Synchronous fs call in a request path";
+      if (!skipTestHelperRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }
@@ -47740,7 +47766,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "Added code appears to contain a hard-coded credential-like value."
       });
     }
-    if (/\bconsole\.log\s*\(/.test(text)) {
+    if (!CLI_SOURCE_RE.test(line.file ?? "") && /\bconsole\.log\s*\(/.test(text)) {
       findings.push({
         ...base,
         severity: "low",
@@ -47988,10 +48014,10 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "Using the :latest tag means the image pulled at deploy time may differ from the one tested. Pin images to a specific digest or immutable version tag for reproducible deployments."
       });
     }
-    if (/\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") && // Match variables unambiguously named for LLM prompts. 'content' is intentionally
+    if (JS_TS_FILE_RE.test(line.file ?? "") && // Match variables unambiguously named for LLM prompts. 'content' is intentionally
     // excluded because it is also used for React children, HTTP headers, and HTML
     // attributes — its presence alone does not indicate an AI prompt context.
-    /(prompt|systemPrompt|userPrompt)\s*[:=][^;\n]*\$\{/.test(text)) {
+    PROMPT_INTERPOLATION_RE.test(text)) {
       findings.push({
         ...base,
         severity: "medium",

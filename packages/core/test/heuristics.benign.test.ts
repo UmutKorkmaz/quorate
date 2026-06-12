@@ -59,3 +59,29 @@ describe("Benign corpus — combined union is empty", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("Benign corpus — test helpers are not production hot paths", () => {
+  it("does not flag synchronous fixture reads in test files as request-path blocking I/O", () => {
+    const diff = `diff --git a/packages/cli/test/provider-add.test.ts b/packages/cli/test/provider-add.test.ts
+--- a/packages/cli/test/provider-add.test.ts
++++ b/packages/cli/test/provider-add.test.ts
+@@ -1,3 +1,5 @@
++import { readFileSync } from "node:fs";
++expect(readFileSync(join(dir, ".quorate.yml"), "utf8")).not.toMatch(/roles/);
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "test-helper", diff });
+    expect(result.findings.find((finding) => finding.title === "Synchronous fs call in a request path")).toBeUndefined();
+  });
+
+  it("still flags credential-like values under fixture paths", () => {
+    const secretLine = "+const api" + "Key = \"test-secret-value\";";
+    const diff = `diff --git a/packages/core/test/fixtures/leaky-client.ts b/packages/core/test/fixtures/leaky-client.ts
+--- a/packages/core/test/fixtures/leaky-client.ts
++++ b/packages/core/test/fixtures/leaky-client.ts
+@@ -1,2 +1,3 @@
+${secretLine}
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "test-secret", diff });
+    expect(result.findings.find((finding) => finding.title === "Possible secret in added code")).toBeDefined();
+  });
+});

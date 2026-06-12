@@ -159,6 +159,15 @@ export const PROVIDER_PRESETS: Record<string, Omit<ProviderConfig, "id">> = {
 /** Preset names available to `quorate provider add --preset <name>`. */
 export const PROVIDER_PRESET_NAMES = Object.keys(PROVIDER_PRESETS);
 
+export function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    const hostname = new URL(baseUrl).hostname.replace(/^\[(.*)\]$/, "$1");
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local");
+  } catch {
+    return /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|[^/?#]+\.local)(?::|\/|$)/i.test(baseUrl);
+  }
+}
+
 export const defaultProviderCandidates: Array<
   Omit<ProviderConfig, "type" | "enabled"> & { aliases?: string[]; installHint?: string }
 > = [
