@@ -33,6 +33,8 @@ interface PackCatalogItem {
 }
 
 const DEFAULT_ROLES = ["architect", "security", "qa", "performance", "maintainer"];
+// Compatibility fallback for old or missing CLIs; the live CLI catalog is used
+// whenever available.
 const FALLBACK_PRESETS: Preset[] = [
   { name: "ollama", model: "qwen2.5-coder:7b", baseUrl: "http://localhost:11434/v1", local: true },
   { name: "lmstudio", model: "qwen2.5-coder-7b", baseUrl: "http://localhost:1234/v1", local: true },
@@ -91,8 +93,8 @@ function uniqueStrings(values: string[], fallback: string[] = []): string[] {
 
 function isLocalBaseUrl(baseUrl: string): boolean {
   try {
-    const { hostname } = new URL(baseUrl);
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]" || hostname.endsWith(".local");
+    const hostname = new URL(baseUrl).hostname.replace(/^\[(.*)\]$/, "$1");
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local");
   } catch {
     return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl);
   }
@@ -296,17 +298,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   async function listCouncilRoles(): Promise<string[]> {
     if (councilRoleCache) return councilRoleCache;
-    const fromRoles = uniqueStrings(stringList(await runJson<unknown>(["roles"])), []);
-    if (fromRoles.length) {
-      councilRoleCache = fromRoles;
-      return councilRoleCache;
-    }
-    const doctor = await runJson<DoctorReport & { config: DoctorReport["config"] & { councils?: string[] } }>(["doctor"]);
-    councilRoleCache = uniqueStrings(doctor?.config?.councils ?? [], DEFAULT_ROLES);
+    councilRoleCache = uniqueStrings(stringList(await runJson<unknown>(["roles"])), DEFAULT_ROLES);
     return councilRoleCache;
   }
 
   async function reload(): Promise<void> {
+    providerPresetCache = undefined;
+    packCatalogCache = undefined;
     const { path: cliResolved, version } = await resolveCli(true);
     const ready = version !== null;
     setContext("quorate.cliReady", ready);
@@ -360,7 +358,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return normalizeModelList(await runJsonWithEnv<unknown>(["provider", "models", preset.name], env));
   }
 
-  async function pickModel(title: string, baseUrl: string, fallback: string, models: string[]): Promise<string | undefined> {
+  async function pickModel(title: string, fallback: string, models: string[]): Promise<string | undefined> {
     if (models.length) {
       const pick = await vscode.window.showQuickPick(
         [...models.map((model) => ({ label: model, custom: false })), { label: "$(edit) Enter a custom model…", custom: true }],
@@ -372,7 +370,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return vscode.window.showInputBox({
       title,
       value: fallback,
-      prompt: `Couldn't list models from ${baseUrl}/models — type the model name`
+      prompt: "Couldn't list models automatically. Type the model name."
     });
   }
 
@@ -544,7 +542,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { location: vscode.ProgressLocation.Notification, title: `Quorate — fetching ${preset.name} models…` },
       () => modelsForPreset(preset, key)
     );
-    const model = await pickModel(`Model for ${id}`, preset.baseUrl, preset.model, models);
+    const model = await pickModel(`Model for ${id}`, preset.model, models);
     if (!model) return;
 
     const roles = await pickRoles(preset.roles);
@@ -607,7 +605,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { location: vscode.ProgressLocation.Notification, title: `Quorate — fetching ${id} models…` },
       () => fetchModels(baseUrl, key)
     );
-    const model = await pickModel(`Model for ${id}`, baseUrl, "", models);
+    const model = await pickModel(`Model for ${id}`, "", models);
     if (!model) return;
 
     const roles = await pickRoles();

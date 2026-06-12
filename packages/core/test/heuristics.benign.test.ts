@@ -72,4 +72,16 @@ describe("Benign corpus — test helpers are not production hot paths", () => {
     const result = runHeuristicReview({ mode: "review", subject: "test-helper", diff });
     expect(result.findings.find((finding) => finding.title === "Synchronous fs call in a request path")).toBeUndefined();
   });
+
+  it("still flags credential-like values under fixture paths", () => {
+    const secretLine = "+const api" + "Key = \"test-secret-value\";";
+    const diff = `diff --git a/packages/core/test/fixtures/leaky-client.ts b/packages/core/test/fixtures/leaky-client.ts
+--- a/packages/core/test/fixtures/leaky-client.ts
++++ b/packages/core/test/fixtures/leaky-client.ts
+@@ -1,2 +1,3 @@
+${secretLine}
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "test-secret", diff });
+    expect(result.findings.find((finding) => finding.title === "Possible secret in added code")).toBeDefined();
+  });
 });
