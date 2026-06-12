@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultConfig, isLocalBaseUrl, loadConfig, serializeConfig } from "@quorate/core";
 import { buildProgram, normalizeAddedProviderRoles, providerPresetRows } from "../src/index.js";
 import { buildProvider } from "../src/provider-add.js";
@@ -15,6 +15,22 @@ function writeConfig(dir: string, councils: string[]): void {
     }),
     "utf8"
   );
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function captureConsoleLog(): string[] {
+  const output: string[] = [];
+  vi.spyOn(console, "log").mockImplementation((message?: unknown) => {
+    output.push(String(message));
+  });
+  return output;
+}
+
+function muteConsoleLog(): void {
+  vi.spyOn(console, "log").mockImplementation(() => undefined);
 }
 
 describe("buildProvider", () => {
@@ -147,18 +163,10 @@ describe("provider preset rows", () => {
 
 describe("provider command", () => {
   it("prints machine-readable preset JSON with --json", async () => {
-    const output: string[] = [];
-    const originalLog = console.log;
-    console.log = (message?: unknown) => {
-      output.push(String(message));
-    };
-    try {
-      const program = buildProgram();
-      program.exitOverride();
-      await program.parseAsync(["node", "quorate", "provider", "presets", "--json"], { from: "node" });
-    } finally {
-      console.log = originalLog;
-    }
+    const output = captureConsoleLog();
+    const program = buildProgram();
+    program.exitOverride();
+    await program.parseAsync(["node", "quorate", "provider", "presets", "--json"], { from: "node" });
 
     const rows = JSON.parse(output.join("\n")) as Array<{ id: string; baseUrl?: string; model?: string }>;
     expect(rows.find((row) => row.id === "openai")).toMatchObject({
@@ -168,18 +176,10 @@ describe("provider command", () => {
   });
 
   it("prints API base URL locality as JSON", async () => {
-    const output: string[] = [];
-    const originalLog = console.log;
-    console.log = (message?: unknown) => {
-      output.push(String(message));
-    };
-    try {
-      const program = buildProgram();
-      program.exitOverride();
-      await program.parseAsync(["node", "quorate", "provider", "classify-url", "http://[::1]:8080/v1", "--json"], { from: "node" });
-    } finally {
-      console.log = originalLog;
-    }
+    const output = captureConsoleLog();
+    const program = buildProgram();
+    program.exitOverride();
+    await program.parseAsync(["node", "quorate", "provider", "classify-url", "http://[::1]:8080/v1", "--json"], { from: "node" });
 
     expect(JSON.parse(output.join("\n"))).toEqual({ baseUrl: "http://[::1]:8080/v1", local: true });
   });
@@ -188,33 +188,28 @@ describe("provider command", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-provider-add-"));
     try {
       writeConfig(dir, ["maintainer"]);
-      const originalLog = console.log;
-      console.log = () => undefined;
-      try {
-        const program = buildProgram();
-        program.exitOverride();
-        await program.parseAsync(
-          [
-            "node",
-            "quorate",
-            "--cwd",
-            dir,
-            "provider",
-            "add",
-            "custom-openai",
-            "--base-url",
-            "https://api.example.test/v1",
-            "--model",
-            "vendor/model-code-review",
-            "--api-key-env",
-            "CUSTOM_OPENAI_KEY",
-            "--no-pick"
-          ],
-          { from: "node" }
-        );
-      } finally {
-        console.log = originalLog;
-      }
+      muteConsoleLog();
+      const program = buildProgram();
+      program.exitOverride();
+      await program.parseAsync(
+        [
+          "node",
+          "quorate",
+          "--cwd",
+          dir,
+          "provider",
+          "add",
+          "custom-openai",
+          "--base-url",
+          "https://api.example.test/v1",
+          "--model",
+          "vendor/model-code-review",
+          "--api-key-env",
+          "CUSTOM_OPENAI_KEY",
+          "--no-pick"
+        ],
+        { from: "node" }
+      );
 
       const config = loadConfig(join(dir, ".quorate.yml"), dir);
       expect(config.providers.find((provider) => provider.id === "custom-openai")).toMatchObject({
@@ -232,18 +227,10 @@ describe("provider command", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-roles-"));
     try {
       writeConfig(dir, ["security", "qa"]);
-      const output: string[] = [];
-      const originalLog = console.log;
-      console.log = (message?: unknown) => {
-        output.push(String(message));
-      };
-      try {
-        const program = buildProgram();
-        program.exitOverride();
-        await program.parseAsync(["node", "quorate", "--cwd", dir, "roles", "--json"], { from: "node" });
-      } finally {
-        console.log = originalLog;
-      }
+      const output = captureConsoleLog();
+      const program = buildProgram();
+      program.exitOverride();
+      await program.parseAsync(["node", "quorate", "--cwd", dir, "roles", "--json"], { from: "node" });
 
       expect(JSON.parse(output.join("\n"))).toEqual(["security", "qa"]);
     } finally {
@@ -255,20 +242,15 @@ describe("provider command", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-provider-preset-"));
     try {
       writeConfig(dir, ["maintainer"]);
-      const originalLog = console.log;
-      console.log = () => undefined;
-      try {
-        const program = buildProgram();
-        program.exitOverride();
-        await expect(
-          program.parseAsync(
-            ["node", "quorate", "--cwd", dir, "provider", "add", "router", "--preset", "openrouter", "--no-pick"],
-            { from: "node" }
-          )
-        ).rejects.toThrow("Preset roles not in this config: architect, security. Choose roles with --roles. Roles: maintainer.");
-      } finally {
-        console.log = originalLog;
-      }
+      muteConsoleLog();
+      const program = buildProgram();
+      program.exitOverride();
+      await expect(
+        program.parseAsync(
+          ["node", "quorate", "--cwd", dir, "provider", "add", "router", "--preset", "openrouter", "--no-pick"],
+          { from: "node" }
+        )
+      ).rejects.toThrow("Preset roles not in this config: architect, security. Choose roles with --roles. Roles: maintainer.");
 
       const config = loadConfig(join(dir, ".quorate.yml"), dir);
       expect(config.providers.find((provider) => provider.id === "router")).toBeUndefined();

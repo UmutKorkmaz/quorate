@@ -208,13 +208,17 @@ async function fetchModels(baseUrl: string, apiKey?: string): Promise<string[]> 
 const secretKey = (env: string): string => `quorate.key.${env}`;
 
 function messageTail(stderr: string, fallback = "unknown error"): string {
-  const tail = stderr.trim().split("\n").filter(Boolean).pop() ?? fallback;
-  return tail
-    .replace(/\b(?:sk|sk-ant|AIza|pk_|key-|tkn_|ghp_|github_pat_|glpat-|xox[baprs]-|hf_)[A-Za-z0-9._-]{8,}\b/g, "[redacted]")
+  const redacted = stderr
+    .replace(/\b(?:sk|sk-ant|AIza|pk_|key-|tkn_|ghp_|github_pat_|glpat-|xox[baprs]-|hf_|AKIA|ASIA|SG\.|dop_v1_)[A-Za-z0-9._-]{8,}\b/g, "[redacted]")
+    .replace(/\bSK[0-9a-fA-F]{32}\b/g, "[redacted]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{20,}\b/g, "Bearer [redacted]")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[redacted]")
+    .replace(/(["']?(?:api[_-]?key|access[_-]?key|secret|token|password|client_secret)["']?\s*[:=]\s*["']?)[^"',\s}]{8,}/gi, "$1[redacted]")
     .replace(/\b[A-Z_][A-Z0-9_]*=(["'])?[^"'\s]+(["'])?/g, (match) => {
       const name = match.split("=")[0];
       return /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(name) ? `${name}=[redacted]` : match;
     });
+  return redacted.trim().split("\n").filter(Boolean).pop() ?? fallback;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {

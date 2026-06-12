@@ -63,7 +63,7 @@ function removedLines(diff: string): DiffLine[] {
 const SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
 const TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
 const TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
-const CLI_SOURCE_RE = /(^|\/)(packages\/cli\/src|scripts)\//;
+const CLI_SOURCE_RE = /(^|\/)packages\/cli\/src\//;
 const JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
 const PROMPT_INTERPOLATION_RE =
   /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;

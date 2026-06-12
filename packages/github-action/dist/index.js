@@ -47696,7 +47696,7 @@ function removedLines(diff) {
 var SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
 var TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
 var TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
-var CLI_SOURCE_RE = /(^|\/)(packages\/cli\/src|scripts)\//;
+var CLI_SOURCE_RE = /(^|\/)packages\/cli\/src\//;
 var JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
 var PROMPT_INTERPOLATION_RE = /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
 function isTestLikePath(file2) {
