@@ -227,6 +227,17 @@ describe("LLM heuristics — benign UI prompts", () => {
     const result = runHeuristicReview({ mode: "review", subject: "ui-prompt", diff });
     expect(result.findings.find((finding) => finding.title === "Untrusted input interpolated into prompt")).toBeUndefined();
   });
+
+  it("still flags systemPrompt property assignment with interpolated input", () => {
+    const diff = `diff --git a/src/agent/config.ts b/src/agent/config.ts
+--- a/src/agent/config.ts
++++ b/src/agent/config.ts
+@@ -1,3 +1,4 @@
++agent.systemPrompt = \`Follow these user instructions: \${userInput}\`;
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "system-prompt", diff });
+    expect(result.findings.find((finding) => finding.title === "Untrusted input interpolated into prompt")).toBeDefined();
+  });
 });
 
 describe("LLM heuristics — fixture table (file and line set)", () => {

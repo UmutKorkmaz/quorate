@@ -200,7 +200,7 @@ export function normalizeAddedProviderRoles(
   if (keptRoles.length > 0) {
     normalized.roles = keptRoles;
   } else {
-    delete normalized.roles;
+    normalized.roles = [];
   }
 
   return { provider: normalized, droppedPresetRoles: unknownRoles };

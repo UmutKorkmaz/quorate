@@ -102,7 +102,7 @@ describe("buildProvider", () => {
     const normalized = normalizeAddedProviderRoles(provider, config, false);
 
     expect(normalized.droppedPresetRoles).toEqual(["architect", "security"]);
-    expect(normalized.provider.roles).toBeUndefined();
+    expect(normalized.provider.roles).toEqual([]);
   });
 
   it("keeps known preset roles and reports only dropped roles", () => {

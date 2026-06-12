@@ -33,21 +33,6 @@ interface PackCatalogItem {
 }
 
 const DEFAULT_ROLES = ["architect", "security", "qa", "performance", "maintainer"];
-const PRESET_KEY_ENVS: Record<string, string> = {
-  vllm: "VLLM_API_KEY",
-  "hf-router": "HF_TOKEN",
-  openrouter: "OPENROUTER_API_KEY",
-  openai: "OPENAI_API_KEY",
-  litellm: "LITELLM_API_KEY",
-  together: "TOGETHER_API_KEY",
-  groq: "GROQ_API_KEY",
-  fireworks: "FIREWORKS_API_KEY",
-  deepseek: "DEEPSEEK_API_KEY",
-  mistral: "MISTRAL_API_KEY",
-  gemini: "GEMINI_API_KEY",
-  zai: "ZAI_API_KEY"
-};
-
 const FALLBACK_PRESETS: Preset[] = [
   { name: "ollama", model: "qwen2.5-coder:7b", baseUrl: "http://localhost:11434/v1", local: true },
   { name: "lmstudio", model: "qwen2.5-coder-7b", baseUrl: "http://localhost:1234/v1", local: true },
@@ -120,7 +105,7 @@ function normalizePreset(value: unknown, nameHint?: string): Preset | undefined 
   const model = asString(raw.model);
   const baseUrl = asString(raw.baseUrl) ?? asString(raw.baseURL) ?? asString(raw.url);
   if (!name || !model || !baseUrl) return undefined;
-  const keyEnv = asString(raw.keyEnv) ?? asString(raw.apiKeyEnv) ?? PRESET_KEY_ENVS[name];
+  const keyEnv = asString(raw.keyEnv) ?? asString(raw.apiKeyEnv);
   return {
     name,
     model,
@@ -228,7 +213,7 @@ const secretKey = (env: string): string => `quorate.key.${env}`;
 function messageTail(stderr: string, fallback = "unknown error"): string {
   const tail = stderr.trim().split("\n").filter(Boolean).pop() ?? fallback;
   return tail
-    .replace(/\b(?:sk|sk-ant|AIza)[A-Za-z0-9._-]{8,}\b/g, "[redacted]")
+    .replace(/\b(?:sk|sk-ant|AIza|pk_|key-|tkn_|ghp_|github_pat_|glpat-|xox[baprs]-|hf_)[A-Za-z0-9._-]{8,}\b/g, "[redacted]")
     .replace(/\b[A-Z_][A-Z0-9_]*=(["'])?[^"'\s]+(["'])?/g, (match) => {
       const name = match.split("=")[0];
       return /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(name) ? `${name}=[redacted]` : match;

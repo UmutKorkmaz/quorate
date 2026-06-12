@@ -10,9 +10,9 @@ import {
   type ShellState
 } from "../src/shell.js";
 
-const riskyDiff = `diff --git a/src/example.test.ts b/src/example.test.ts
---- a/src/example.test.ts
-+++ b/src/example.test.ts
+const riskyDiff = `diff --git a/src/example.ts b/src/example.ts
+--- a/src/example.ts
++++ b/src/example.ts
 @@ -1,3 +1,5 @@
 +const apiKey = "sk-example-secret-value";
 +test.only("focused", () => {});

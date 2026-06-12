@@ -47694,9 +47694,11 @@ function removedLines(diff) {
   return result;
 }
 var SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
+var TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
+var TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
 function isTestLikePath(file2) {
   if (!file2) return false;
-  return /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//.test(file2) || /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(file2);
+  return TEST_PATH_RE.test(file2) || TEST_FILE_RE.test(file2);
 }
 function applyInlineSuppressions(findings, lines) {
   const textByLoc = /* @__PURE__ */ new Map();
@@ -47732,7 +47734,8 @@ function runHeuristicReview(request2, role = "maintainer") {
   for (const line of lines) {
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
-    const runPackRules = !isTestLikePath(line.file);
+    const testLike = isTestLikePath(line.file);
+    const runPackRules = !testLike;
     for (const rule of PACK_HEURISTIC_RULES) {
       if (runPackRules && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
@@ -47746,6 +47749,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "Focused test calls can silently skip most of the suite in CI."
       });
     }
+    if (testLike) continue;
     if (/\b(api[_-]?key|secret|password|token)\b\s*[:=]\s*['"][^'"]{8,}/i.test(text)) {
       findings.push({
         ...base,
@@ -48005,7 +48009,7 @@ function runHeuristicReview(request2, role = "maintainer") {
     if (/\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") && // Match variables unambiguously named for LLM prompts. 'content' is intentionally
     // excluded because it is also used for React children, HTTP headers, and HTML
     // attributes — its presence alone does not indicate an AI prompt context.
-    /\b(?:const|let|var)\s+(prompt|systemPrompt|userPrompt)\s*=[^;\n]*\$\{/.test(text)) {
+    /(?:\b(?:const|let|var)\s+(prompt|systemPrompt|userPrompt)\s*=|\b(?:systemPrompt|userPrompt)\s*[:=]|\.(?:systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/.test(text)) {
       findings.push({
         ...base,
         severity: "medium",

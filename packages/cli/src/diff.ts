@@ -57,26 +57,17 @@ export function run(command: string, args: string[], cwd: string): string {
   return result.stdout;
 }
 
-function ensureGitWorkTree(cwd: string): void {
-  const result = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
-    cwd,
-    encoding: "utf8",
-    shell: false,
-    maxBuffer: 1024 * 1024
-  });
-
-  if (result.error) {
-    const err = result.error as NodeJS.ErrnoException;
-    if (err.code === "ENOENT") {
-      throw new Error("git not found on PATH. Install git or pass --diff <file> to review a saved diff.");
+function runGit(args: string[], cwd: string): string {
+  try {
+    return run("git", args, cwd);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/not a git repository|not a git work tree|outside repository|git diff --no-index/i.test(message)) {
+      throw new Error(
+        "No git repository found. Run quorate from a git worktree, or pass --diff <file>, --base <ref>, --head <ref>, or --pr <number>."
+      );
     }
-    throw new Error(`git rev-parse failed: ${err.message}`);
-  }
-
-  if (result.status !== 0 || result.stdout.trim() !== "true") {
-    throw new Error(
-      "No git repository found. Run quorate from a git worktree, or pass --diff <file>, --base <ref>, --head <ref>, or --pr <number>."
-    );
+    throw err;
   }
 }
 
@@ -94,17 +85,15 @@ export function readDiff(options: DiffOptions, cwd = process.cwd()): string {
     return run("gh", ["pr", "diff", options.pr], cwd);
   }
 
-  ensureGitWorkTree(cwd);
-
   if (options.base && options.head) {
-    return run("git", ["diff", `${options.base}...${options.head}`, ...DIFF_PATHSPEC], cwd);
+    return runGit(["diff", `${options.base}...${options.head}`, ...DIFF_PATHSPEC], cwd);
   }
 
   if (options.base) {
-    return run("git", ["diff", options.base, ...DIFF_PATHSPEC], cwd);
+    return runGit(["diff", options.base, ...DIFF_PATHSPEC], cwd);
   }
 
-  const staged = run("git", ["diff", "--cached", ...DIFF_PATHSPEC], cwd);
-  const unstaged = run("git", ["diff", ...DIFF_PATHSPEC], cwd);
+  const staged = runGit(["diff", "--cached", ...DIFF_PATHSPEC], cwd);
+  const unstaged = runGit(["diff", ...DIFF_PATHSPEC], cwd);
   return [staged, unstaged].filter(Boolean).join("\n");
 }

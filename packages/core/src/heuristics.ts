@@ -61,11 +61,12 @@ function removedLines(diff: string): DiffLine[] {
 /** Inline suppression marker: `quorate-ignore`, `quorate-ignore-line`,
  *  `quorate-disable-line`, optionally followed by keyword(s) to scope it. */
 const SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
+const TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
+const TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
 
 function isTestLikePath(file?: string): boolean {
   if (!file) return false;
-  return /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//.test(file) ||
-    /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(file);
+  return TEST_PATH_RE.test(file) || TEST_FILE_RE.test(file);
 }
 
 /**
@@ -112,7 +113,8 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
 
-    const runPackRules = !isTestLikePath(line.file);
+    const testLike = isTestLikePath(line.file);
+    const runPackRules = !testLike;
     for (const rule of PACK_HEURISTIC_RULES) {
       if (runPackRules && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
@@ -127,6 +129,8 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
         body: "Focused test calls can silently skip most of the suite in CI."
       });
     }
+
+    if (testLike) continue;
 
     if (/\b(api[_-]?key|secret|password|token)\b\s*[:=]\s*['"][^'"]{8,}/i.test(text)) {
       findings.push({
@@ -566,7 +570,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       // Match variables unambiguously named for LLM prompts. 'content' is intentionally
       // excluded because it is also used for React children, HTTP headers, and HTML
       // attributes — its presence alone does not indicate an AI prompt context.
-      /\b(?:const|let|var)\s+(prompt|systemPrompt|userPrompt)\s*=[^;\n]*\$\{/.test(text)
+      /(?:\b(?:const|let|var)\s+(prompt|systemPrompt|userPrompt)\s*=|\b(?:systemPrompt|userPrompt)\s*[:=]|\.(?:systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/.test(text)
     ) {
       findings.push({
         ...base,
