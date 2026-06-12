@@ -124,9 +124,9 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       testLike = isTestLikePath(line.file);
       testLikeByFile.set(fileKey, testLike);
     }
-    const runPackRules = !testLike;
     for (const rule of PACK_HEURISTIC_RULES) {
-      if (runPackRules && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      const skipTestHelperRule = testLike && rule.title === "Synchronous fs call in a request path";
+      if (!skipTestHelperRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }

@@ -164,7 +164,7 @@ export function isLocalBaseUrl(baseUrl: string): boolean {
     const hostname = new URL(baseUrl).hostname.replace(/^\[(.*)\]$/, "$1");
     return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local");
   } catch {
-    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl);
+    return /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|[^/?#]+\.local)(?::|\/|$)/i.test(baseUrl);
   }
 }
 

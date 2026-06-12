@@ -31,10 +31,6 @@ interface PackCatalogItem {
   councils?: string[];
   classes?: number;
 }
-interface UrlClassification {
-  baseUrl?: string;
-  local?: boolean;
-}
 
 const DEFAULT_ROLES = ["architect", "security", "qa", "performance", "maintainer"];
 // Compatibility fallback for old or missing CLIs; the live CLI catalog is used
@@ -208,16 +204,15 @@ async function fetchModels(baseUrl: string, apiKey?: string): Promise<string[]> 
 const secretKey = (env: string): string => `quorate.key.${env}`;
 
 function messageTail(stderr: string, fallback = "unknown error"): string {
-  const redacted = stderr
+  const trimmed = stderr.trim();
+  if (!trimmed) return fallback;
+  const redacted = trimmed
     .replace(/\b(?:sk|sk-ant|AIza|pk_|key-|tkn_|ghp_|github_pat_|glpat-|xox[baprs]-|hf_|AKIA|ASIA|SG\.|dop_v1_)[A-Za-z0-9._-]{8,}\b/g, "[redacted]")
     .replace(/\bSK[0-9a-fA-F]{32}\b/g, "[redacted]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{20,}\b/g, "Bearer [redacted]")
     .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[redacted]")
     .replace(/(["']?(?:api[_-]?key|access[_-]?key|secret|token|password|client_secret)["']?\s*[:=]\s*["']?)[^"',\s}]{8,}/gi, "$1[redacted]")
-    .replace(/\b[A-Z_][A-Z0-9_]*=(["'])?[^"'\s]+(["'])?/g, (match) => {
-      const name = match.split("=")[0];
-      return /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(name) ? `${name}=[redacted]` : match;
-    });
+    .replace(/\b([A-Z_][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)=(?:"[^"]*"|'[^']*'|[^\s]+)/g, "$1=[redacted]");
   return redacted.trim().split("\n").filter(Boolean).pop() ?? fallback;
 }
 
@@ -301,8 +296,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return councilRoleCache;
   }
 
-  async function isLocalProviderBaseUrl(baseUrl: string): Promise<boolean> {
-    return (await runJson<UrlClassification>(["provider", "classify-url", baseUrl]))?.local ?? false;
+  function isLocalProviderBaseUrl(baseUrl: string): boolean {
+    return /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|[^/?#]+\.local)(?::|\/|$)/i.test(baseUrl.trim());
   }
 
   async function reload(): Promise<void> {
@@ -590,7 +585,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     });
     if (!baseUrl) return;
-    const baseUrlIsLocal = await isLocalProviderBaseUrl(baseUrl);
+    const baseUrlIsLocal = isLocalProviderBaseUrl(baseUrl);
 
     const apiKeyEnvInput = await vscode.window.showInputBox({
       title: "API key env var",
