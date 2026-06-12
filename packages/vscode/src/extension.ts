@@ -403,7 +403,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   async function pickRoles(preferred: string[] = []): Promise<string[] | undefined> {
     const roles = await listCouncilRoles();
     if (!roles.length) return undefined;
-    const preferredInConfig = preferred.filter((role) => roles.includes(role));
+    const roleSet = new Set(roles);
+    const preferredInConfig = preferred.filter((role) => roleSet.has(role));
     const defaults = new Set(preferredInConfig.length ? preferredInConfig : [roles[0]]);
     const picked = await vscode.window.showQuickPick(
       roles.map((role, index) => ({ label: role, picked: defaults.size ? defaults.has(role) : index === 0 })),
@@ -696,8 +697,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       const provider = node?.provider;
       if (!provider) return;
       const roles = await listCouncilRoles();
+      const providerRoles = new Set(provider.roles ?? []);
       const picked = await vscode.window.showQuickPick(
-        roles.map((role) => ({ label: role, picked: provider.roles?.includes(role) ?? false })),
+        roles.map((role) => ({ label: role, picked: providerRoles.has(role) })),
         { title: `Roles for ${provider.id}`, canPickMany: true }
       );
       if (!picked) return;
