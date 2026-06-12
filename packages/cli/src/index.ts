@@ -11,6 +11,7 @@ import {
   detectPacks,
   fetchProviderModels,
   findConfigPath,
+  isLocalBaseUrl,
   isEmptyReviewDiff,
   loadConfig,
   PACK_COVERAGE,
@@ -142,15 +143,6 @@ function printProviderTable(config: QuorateConfig): void {
 
 export type ProviderPresetRow = ProviderConfig & { local: boolean };
 
-export function isLocalBaseUrl(baseUrl: string): boolean {
-  try {
-    const hostname = new URL(baseUrl).hostname.replace(/^\[(.*)\]$/, "$1");
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local");
-  } catch {
-    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl);
-  }
-}
-
 export function providerPresetRows(): ProviderPresetRow[] {
   return PROVIDER_PRESET_NAMES.map((id) => {
     const preset = PROVIDER_PRESETS[id];
@@ -200,7 +192,9 @@ export function normalizeAddedProviderRoles(
   if (keptRoles.length > 0) {
     normalized.roles = keptRoles;
   } else {
-    normalized.roles = [];
+    throw new Error(
+      `Preset roles not in this config: ${unknownRoles.join(", ")}. Choose roles with --roles. Roles: ${availableRoles}.`
+    );
   }
 
   return { provider: normalized, droppedPresetRoles: unknownRoles };
@@ -547,6 +541,19 @@ export function buildProgram(): Command {
       const providers = config.providers.filter((entry) => entry.id !== id);
       writeFileSync(configPath, serializeConfig({ ...config, providers }), "utf8");
       console.log(`Removed provider "${id}" from ${configPath}.`);
+    });
+
+  providerCmd
+    .command("classify-url <baseUrl>")
+    .description("Classify an OpenAI-compatible API base URL as local or hosted.")
+    .option("--json", "Print machine-readable JSON")
+    .action((baseUrl: string, options: { json?: boolean }) => {
+      const row = { baseUrl, local: isLocalBaseUrl(baseUrl) };
+      if (options.json) {
+        console.log(JSON.stringify(row, null, 2));
+        return;
+      }
+      console.log(row.local ? "local" : "hosted");
     });
 
   providerCmd

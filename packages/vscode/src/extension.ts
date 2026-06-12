@@ -31,6 +31,10 @@ interface PackCatalogItem {
   councils?: string[];
   classes?: number;
 }
+interface UrlClassification {
+  baseUrl?: string;
+  local?: boolean;
+}
 
 const DEFAULT_ROLES = ["architect", "security", "qa", "performance", "maintainer"];
 // Compatibility fallback for old or missing CLIs; the live CLI catalog is used
@@ -91,15 +95,6 @@ function uniqueStrings(values: string[], fallback: string[] = []): string[] {
   return out.length ? out : fallback;
 }
 
-function isLocalBaseUrl(baseUrl: string): boolean {
-  try {
-    const hostname = new URL(baseUrl).hostname.replace(/^\[(.*)\]$/, "$1");
-    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".local");
-  } catch {
-    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(baseUrl);
-  }
-}
-
 function normalizePreset(value: unknown, nameHint?: string): Preset | undefined {
   const raw = asRecord(value);
   if (!raw) return undefined;
@@ -113,7 +108,7 @@ function normalizePreset(value: unknown, nameHint?: string): Preset | undefined 
     model,
     baseUrl,
     keyEnv,
-    local: typeof raw.local === "boolean" ? raw.local : isLocalBaseUrl(baseUrl),
+    local: typeof raw.local === "boolean" ? raw.local : false,
     roles: stringList(raw.roles)
   };
 }
@@ -300,6 +295,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (councilRoleCache) return councilRoleCache;
     councilRoleCache = uniqueStrings(stringList(await runJson<unknown>(["roles"])), DEFAULT_ROLES);
     return councilRoleCache;
+  }
+
+  async function isLocalProviderBaseUrl(baseUrl: string): Promise<boolean> {
+    return (await runJson<UrlClassification>(["provider", "classify-url", baseUrl]))?.local ?? false;
   }
 
   async function reload(): Promise<void> {
@@ -587,10 +586,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     });
     if (!baseUrl) return;
+    const baseUrlIsLocal = await isLocalProviderBaseUrl(baseUrl);
 
     const apiKeyEnvInput = await vscode.window.showInputBox({
       title: "API key env var",
-      value: isLocalBaseUrl(baseUrl) ? "" : envNameFromId(id),
+      value: baseUrlIsLocal ? "" : envNameFromId(id),
       prompt: "Leave blank for local providers or endpoints that do not require a bearer token.",
       validateInput: (value) => {
         const trimmed = value.trim();

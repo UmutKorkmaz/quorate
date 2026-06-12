@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createDefaultConfig, loadConfig, serializeConfig } from "@quorate/core";
-import { buildProgram, isLocalBaseUrl, normalizeAddedProviderRoles, providerPresetRows } from "../src/index.js";
+import { createDefaultConfig, isLocalBaseUrl, loadConfig, serializeConfig } from "@quorate/core";
+import { buildProgram, normalizeAddedProviderRoles, providerPresetRows } from "../src/index.js";
 import { buildProvider } from "../src/provider-add.js";
 
 function writeConfig(dir: string, councils: string[]): void {
@@ -96,13 +96,13 @@ describe("buildProvider", () => {
     expect(() => buildProvider("x", { type: "weird", model: "m" })).toThrow(/Invalid --type/);
   });
 
-  it("drops preset roles that are not in the active config", () => {
+  it("rejects a preset when none of its roles exist in the active config", () => {
     const provider = buildProvider("router", { preset: "openrouter" });
     const config = { ...createDefaultConfig([]), councils: ["maintainer"] };
-    const normalized = normalizeAddedProviderRoles(provider, config, false);
 
-    expect(normalized.droppedPresetRoles).toEqual(["architect", "security"]);
-    expect(normalized.provider.roles).toEqual([]);
+    expect(() => normalizeAddedProviderRoles(provider, config, false)).toThrow(
+      "Preset roles not in this config: architect, security. Choose roles with --roles. Roles: maintainer."
+    );
   });
 
   it("keeps known preset roles and reports only dropped roles", () => {
@@ -165,6 +165,23 @@ describe("provider command", () => {
       baseUrl: "https://api.openai.com/v1",
       model: "gpt-4o"
     });
+  });
+
+  it("prints API base URL locality as JSON", async () => {
+    const output: string[] = [];
+    const originalLog = console.log;
+    console.log = (message?: unknown) => {
+      output.push(String(message));
+    };
+    try {
+      const program = buildProgram();
+      program.exitOverride();
+      await program.parseAsync(["node", "quorate", "provider", "classify-url", "http://[::1]:8080/v1", "--json"], { from: "node" });
+    } finally {
+      console.log = originalLog;
+    }
+
+    expect(JSON.parse(output.join("\n"))).toEqual({ baseUrl: "http://[::1]:8080/v1", local: true });
   });
 
   it("adds a generic api provider from explicit OpenAI-compatible flags", async () => {
@@ -234,29 +251,27 @@ describe("provider command", () => {
     }
   });
 
-  it("does not attach unknown preset roles to the written config", async () => {
+  it("does not write a preset provider when no preset roles match the config", async () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-provider-preset-"));
     try {
       writeConfig(dir, ["maintainer"]);
-      const output: string[] = [];
       const originalLog = console.log;
-      console.log = (message?: unknown) => {
-        output.push(String(message));
-      };
+      console.log = () => undefined;
       try {
         const program = buildProgram();
         program.exitOverride();
-        await program.parseAsync(
-          ["node", "quorate", "--cwd", dir, "provider", "add", "router", "--preset", "openrouter", "--no-pick"],
-          { from: "node" }
-        );
+        await expect(
+          program.parseAsync(
+            ["node", "quorate", "--cwd", dir, "provider", "add", "router", "--preset", "openrouter", "--no-pick"],
+            { from: "node" }
+          )
+        ).rejects.toThrow("Preset roles not in this config: architect, security. Choose roles with --roles. Roles: maintainer.");
       } finally {
         console.log = originalLog;
       }
 
       const config = loadConfig(join(dir, ".quorate.yml"), dir);
-      expect(config.providers.find((provider) => provider.id === "router")?.roles).toEqual([]);
-      expect(output.join("\n")).toContain("Skipped preset roles not in this config: architect, security.");
+      expect(config.providers.find((provider) => provider.id === "router")).toBeUndefined();
       expect(readFileSync(join(dir, ".quorate.yml"), "utf8")).not.toMatch(/id: router[\s\S]*roles:\n\s+- architect/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
