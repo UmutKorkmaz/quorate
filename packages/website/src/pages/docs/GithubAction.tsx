@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.7.1
+      - uses: UmutKorkmaz/quorate@v0.8.0
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
 
@@ -167,7 +167,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.7.1
+- uses: UmutKorkmaz/quorate@v0.8.0
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:
@@ -181,11 +181,13 @@ providers:
         <Link to="/docs/config">gateway reference table</Link> for the common ones.
       </p>
       <p>
-        This repository dogfoods that path: its self-review runs <strong>Z.ai&apos;s GLM-5.1</strong>{" "}
-        on GitHub-hosted runners, with the heuristic as the always-on baseline. The provider in the
-        base-branch <InlineCode>.quorate.yml</InlineCode> and the secret wired into the step:
+        Optional example from this repository: its CI currently selects{" "}
+        <strong>Z.ai&apos;s GLM-5.1</strong> as a hosted <InlineCode>api</InlineCode> provider, with the
+        heuristic as the always-on baseline. Replace the id, endpoint, model, roles, and secret with
+        your own provider if you prefer.
       </p>
       <CodeBlock language="yaml">{`# .quorate.yml (base branch)
+providers:
   - id: glm
     type: api
     enabled: true
@@ -194,7 +196,7 @@ providers:
     apiKeyEnv: GLM_API_KEY
     roles: [architect, security, performance]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.7.1
+- uses: UmutKorkmaz/quorate@v0.8.0
   env:
     GLM_API_KEY: \${{ secrets.GLM_API_KEY }}
   with:
@@ -202,9 +204,10 @@ providers:
       <p>
         The <InlineCode>apiKeyEnv</InlineCode> name is your choice — it just has to match the env var
         the workflow exposes from <InlineCode>secrets</InlineCode>. With the default{" "}
-        <InlineCode>runner-mode: auto</InlineCode>, GitHub-hosted runs keep exactly the{" "}
-        <InlineCode>api</InlineCode> providers (+ heuristic), so GLM is the real reviewer with no extra
-        flags. See <Link to="/docs/providers">Providers</Link> and{" "}
+        <InlineCode>runner-mode: auto</InlineCode>, GitHub-hosted runs keep the configured{" "}
+        <InlineCode>api</InlineCode> providers (+ heuristic), so your selected hosted provider is the
+        real reviewer with no extra flags. GLM is only this repo&apos;s example. See{" "}
+        <Link to="/docs/providers">Providers</Link> and{" "}
         <Link to="/docs/config">Configuration</Link>.
       </p>
 

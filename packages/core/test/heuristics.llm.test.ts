@@ -212,6 +212,62 @@ describe("LLM heuristics — vulnerable fixtures (per-class)", () => {
   });
 });
 
+describe("LLM heuristics — benign UI prompts", () => {
+  it("does not treat static VS Code InputBox prompt text as an LLM prompt-injection sink", () => {
+    const diff = `diff --git a/packages/vscode/src/extension.ts b/packages/vscode/src/extension.ts
+--- a/packages/vscode/src/extension.ts
++++ b/packages/vscode/src/extension.ts
+@@ -1,3 +1,7 @@
++vscode.window.showInputBox({
++  title,
++  value: fallback,
++  prompt: "Type the model name"
++});
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "ui-prompt", diff });
+    expect(result.findings.find((finding) => finding.title === "Untrusted input interpolated into prompt")).toBeUndefined();
+  });
+
+  it("still flags bare prompt assignment with interpolated input", () => {
+    const interpolation = "$" + "{userInput}";
+    const promptLine = "+prompt = `Follow these user instructions: " + interpolation + "`;";
+    const diff = `diff --git a/src/agent/config.ts b/src/agent/config.ts
+--- a/src/agent/config.ts
++++ b/src/agent/config.ts
+@@ -1,3 +1,4 @@
+${promptLine}
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "prompt-assignment", diff });
+    expect(result.findings.find((finding) => finding.title === "Untrusted input interpolated into prompt")).toBeDefined();
+  });
+
+  it("still flags prompt object properties with interpolated input", () => {
+    const interpolation = "$" + "{userInput}";
+    const promptLine = "+const request = { prompt: `Review this user text: " + interpolation + "` };";
+    const diff = `diff --git a/src/agent/config.ts b/src/agent/config.ts
+--- a/src/agent/config.ts
++++ b/src/agent/config.ts
+@@ -1,3 +1,4 @@
+${promptLine}
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "prompt-property", diff });
+    expect(result.findings.find((finding) => finding.title === "Untrusted input interpolated into prompt")).toBeDefined();
+  });
+
+  it("still flags systemPrompt property assignment with interpolated input", () => {
+    const interpolation = "$" + "{userInput}";
+    const promptLine = "+agent.systemPrompt = `Follow these user instructions: " + interpolation + "`;";
+    const diff = `diff --git a/src/agent/config.ts b/src/agent/config.ts
+--- a/src/agent/config.ts
++++ b/src/agent/config.ts
+@@ -1,3 +1,4 @@
+${promptLine}
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "system-prompt", diff });
+    expect(result.findings.find((finding) => finding.title === "Untrusted input interpolated into prompt")).toBeDefined();
+  });
+});
+
 describe("LLM heuristics — fixture table (file and line set)", () => {
   for (const { fixture, title, severity, expectedFile } of FIXTURE_CASES) {
     it(`${fixture} produces a ${severity} finding titled "${title}"`, () => {

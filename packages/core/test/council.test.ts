@@ -3,9 +3,9 @@ import { clusterFindings, runCouncil, sortFindings } from "../src/council.js";
 import { renderMarkdownReport, shouldFailForThreshold } from "../src/render.js";
 import type { Finding } from "../src/types.js";
 
-const riskyDiff = `diff --git a/src/example.test.ts b/src/example.test.ts
---- a/src/example.test.ts
-+++ b/src/example.test.ts
+const riskyDiff = `diff --git a/src/example.ts b/src/example.ts
+--- a/src/example.ts
++++ b/src/example.ts
 @@ -1,3 +1,5 @@
 +const apiKey = "sk-example-secret-value";
 +test.only("focused", () => {});

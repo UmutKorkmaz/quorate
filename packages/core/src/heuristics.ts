@@ -61,6 +61,17 @@ function removedLines(diff: string): DiffLine[] {
 /** Inline suppression marker: `quorate-ignore`, `quorate-ignore-line`,
  *  `quorate-disable-line`, optionally followed by keyword(s) to scope it. */
 const SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+))?/i;
+const TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
+const TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
+const CLI_SOURCE_RE = /(^|\/)packages\/cli\/src\//;
+const JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
+const PROMPT_INTERPOLATION_RE =
+  /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
+
+function isTestLikePath(file?: string): boolean {
+  if (!file) return false;
+  return TEST_PATH_RE.test(file) || TEST_FILE_RE.test(file);
+}
 
 /**
  * Drops findings on a line that carries an inline `quorate-ignore` marker —
@@ -101,13 +112,21 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
   const startedAt = Date.now();
   const findings: Finding[] = [];
   const lines = addedLines(request.diff ?? "");
+  const testLikeByFile = new Map<string, boolean>();
 
   for (const line of lines) {
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
 
+    const fileKey = line.file ?? "";
+    let testLike = testLikeByFile.get(fileKey);
+    if (testLike === undefined) {
+      testLike = isTestLikePath(line.file);
+      testLikeByFile.set(fileKey, testLike);
+    }
     for (const rule of PACK_HEURISTIC_RULES) {
-      if ((rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      const skipTestHelperRule = testLike && rule.title === "Synchronous fs call in a request path";
+      if (!skipTestHelperRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }
@@ -130,7 +149,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       });
     }
 
-    if (/\bconsole\.log\s*\(/.test(text)) {
+    if (!CLI_SOURCE_RE.test(line.file ?? "") && /\bconsole\.log\s*\(/.test(text)) {
       findings.push({
         ...base,
         severity: "low",
@@ -555,11 +574,11 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
     // ── LLM / AI-app checks — JS/TS files only ───────────────────────────────
 
     if (
-      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      JS_TS_FILE_RE.test(line.file ?? "") &&
       // Match variables unambiguously named for LLM prompts. 'content' is intentionally
       // excluded because it is also used for React children, HTTP headers, and HTML
       // attributes — its presence alone does not indicate an AI prompt context.
-      /(prompt|systemPrompt|userPrompt)\s*[:=][^;\n]*\$\{/.test(text)
+      PROMPT_INTERPOLATION_RE.test(text)
     ) {
       findings.push({
         ...base,
