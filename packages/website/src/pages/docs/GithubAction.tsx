@@ -187,6 +187,7 @@ providers:
         your own provider if you prefer.
       </p>
       <CodeBlock language="yaml">{`# .quorate.yml (base branch)
+providers:
   - id: glm
     type: api
     enabled: true
