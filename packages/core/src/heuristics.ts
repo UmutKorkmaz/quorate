@@ -64,6 +64,13 @@ const SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-
 const TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
 const TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
 const CLI_SOURCE_RE = /(^|\/)packages\/cli\/src\//;
+// Code that runs as a short-lived, single-shot process (a CLI invocation, a
+// build script, a one-off task, a config/build file) rather than a long-lived
+// server request path. Synchronous fs there never stalls concurrent requests,
+// so the "request path" performance rule is a false positive in these contexts.
+const NON_REQUEST_PATH_RE = /(^|\/)(cli|bin|scripts?|tools?|tasks?)(\/|$)/i;
+const CONFIG_BUILD_FILE_RE =
+  /(^|\/)[^/]*\.config\.[cm]?[jt]s$|(^|\/)(esbuild|rollup|webpack|vite|vitest|jest)\.[^/]*$/i;
 const JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
 const PROMPT_INTERPOLATION_RE =
   /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
@@ -71,6 +78,18 @@ const PROMPT_INTERPOLATION_RE =
 function isTestLikePath(file?: string): boolean {
   if (!file) return false;
   return TEST_PATH_RE.test(file) || TEST_FILE_RE.test(file);
+}
+
+/**
+ * True for files that are not a long-lived server request path — CLI commands,
+ * bin/scripts/tools/tasks, and config/build files. Synchronous fs there is the
+ * normal, correct idiom, so the "Synchronous fs call in a request path" rule
+ * must not fire on it (mirrors how CLI source is exempt from the console.log
+ * rule). Server paths (routes/handlers/controllers/api/server) are unaffected.
+ */
+function isNonRequestPath(file?: string): boolean {
+  if (!file) return false;
+  return NON_REQUEST_PATH_RE.test(file) || CONFIG_BUILD_FILE_RE.test(file);
 }
 
 /**
@@ -125,8 +144,13 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       testLikeByFile.set(fileKey, testLike);
     }
     for (const rule of PACK_HEURISTIC_RULES) {
-      const skipTestHelperRule = testLike && rule.title === "Synchronous fs call in a request path";
-      if (!skipTestHelperRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      // The "Synchronous fs call in a request path" rule only applies to
+      // long-lived server code; in test helpers and short-lived processes
+      // (CLI/scripts/config) sync fs is the correct idiom, so skip it there.
+      const skipRequestPathFsRule =
+        rule.title === "Synchronous fs call in a request path" &&
+        (testLike || isNonRequestPath(line.file));
+      if (!skipRequestPathFsRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }

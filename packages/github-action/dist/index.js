@@ -47645,11 +47645,17 @@ var SUPPRESS_RE = /quorate-(?:ignore|disable)(?:-(?:next-)?line)?(?:\s+([\w ,-]+
 var TEST_PATH_RE = /(^|\/)(test|tests|__tests__|fixtures|mocks|__mocks__)\//;
 var TEST_FILE_RE = /(?:^|[./-])(test|spec|fixture|mock)\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/;
 var CLI_SOURCE_RE = /(^|\/)packages\/cli\/src\//;
+var NON_REQUEST_PATH_RE = /(^|\/)(cli|bin|scripts?|tools?|tasks?)(\/|$)/i;
+var CONFIG_BUILD_FILE_RE = /(^|\/)[^/]*\.config\.[cm]?[jt]s$|(^|\/)(esbuild|rollup|webpack|vite|vitest|jest)\.[^/]*$/i;
 var JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
 var PROMPT_INTERPOLATION_RE = /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
 function isTestLikePath(file2) {
   if (!file2) return false;
   return TEST_PATH_RE.test(file2) || TEST_FILE_RE.test(file2);
+}
+function isNonRequestPath(file2) {
+  if (!file2) return false;
+  return NON_REQUEST_PATH_RE.test(file2) || CONFIG_BUILD_FILE_RE.test(file2);
 }
 function applyInlineSuppressions(findings, lines) {
   const textByLoc = /* @__PURE__ */ new Map();
@@ -47693,8 +47699,8 @@ function runHeuristicReview(request2, role = "maintainer") {
       testLikeByFile.set(fileKey, testLike);
     }
     for (const rule of PACK_HEURISTIC_RULES) {
-      const skipTestHelperRule = testLike && rule.title === "Synchronous fs call in a request path";
-      if (!skipTestHelperRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      const skipRequestPathFsRule = rule.title === "Synchronous fs call in a request path" && (testLike || isNonRequestPath(line.file));
+      if (!skipRequestPathFsRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }
