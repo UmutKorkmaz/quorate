@@ -45,6 +45,11 @@ export function renderMarkdownReport(
     // When degraded, the blockquote already carries the full summary, so the
     // plain paragraph is dropped to avoid printing it twice.
     report.metadata.degraded ? `> ⚠ Degraded: ${report.summary}` : report.summary,
+    // Explain a quiet report: "No findings" after a baseline run must be
+    // distinguishable from a genuinely clean run.
+    report.metadata.baselinedFindings
+      ? `\n_(${report.metadata.baselinedFindings} finding${report.metadata.baselinedFindings === 1 ? "" : "s"} suppressed by the committed baseline)_`
+      : undefined,
     hasSummary ? "" : undefined,
     hasSummary ? "## Summary" : undefined,
     hasSummary ? "" : undefined,
