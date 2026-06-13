@@ -319,3 +319,56 @@ describe("runAction", () => {
     expect(outputs.verdict).toBeDefined();
   });
 });
+
+describe("runAction baseline fail-secure", () => {
+  function octokitWithBaselineContent(content: string | null) {
+    const rest = {
+      repos: {
+        getContent: async ({ path }: { path: string }) => {
+          if (path === ".quorate.baseline.json" && content !== null) {
+            return {
+              data: { type: "file", encoding: "base64", content: Buffer.from(content, "utf8").toString("base64") }
+            };
+          }
+          const error = new Error("Not Found") as Error & { status: number };
+          error.status = 404;
+          throw error;
+        }
+      },
+      pulls: {
+        listFiles: { id: "listFiles" },
+        listReviewComments: { id: "listReviewComments" },
+        createReview: async () => undefined
+      },
+      issues: {
+        listComments: { id: "listComments" },
+        createComment: async () => undefined,
+        updateComment: async () => undefined
+      }
+    };
+    const paginate = async <T>(endpoint: unknown): Promise<T[]> => {
+      if (endpoint === rest.pulls.listFiles) {
+        return [{ filename: "src/app.ts", status: "modified", patch: "@@ -1 +1 @@\n-old\n+new" }] as unknown as T[];
+      }
+      return [] as T[];
+    };
+    return { rest, paginate };
+  }
+
+  it("warns and gates on all findings (does not throw or setFailed) when the base baseline is malformed", async () => {
+    const warnings: string[] = [];
+    const octokit = octokitWithBaselineContent("not json");
+    const { deps, failed } = makeDeps({
+      getInput: (name) =>
+        ({ "github-token": "token-123", "post-comment": "false", baseline: "true" } as Record<string, string>)[name],
+      getOctokit: () => octokit as never,
+      warning: (m) => warnings.push(m)
+    });
+
+    await expect(runAction(deps)).resolves.toBeUndefined();
+    expect(warnings.join(" ")).toMatch(/Could not apply the committed baseline/i);
+    // A malformed baseline must never *crash* the gate; setFailed is only ever
+    // about the verdict, never an unhandled baseline error.
+    expect(failed.every((m) => /verdict/i.test(m))).toBe(true);
+  });
+});

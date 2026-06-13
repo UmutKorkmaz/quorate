@@ -26,6 +26,12 @@ one → earn trust → control cost → improve precision → extend reach.
     (includes line number, for comment dedup). Migrate it onto `fingerprintFinding` during
     suppression/export (M2) so all four identity consumers share one scheme.
 
+- **M1 · Baseline mode — DONE** (`packages/core/src/baseline.ts`, CLI `quorate baseline` +
+  `review --baseline`, Action `baseline:` input). Gates only on findings absent from a committed
+  `.quorate.baseline.json` (root, not `.quorate/` which is gitignored); verdict is recomputed on
+  the kept set with the degraded→warn override preserved; the Action reads the baseline from the
+  **base ref**, never the PR head. 22 tests (core + CLI + Action). Keys off K0's `fingerprintFinding`.
+
 ## Two keystones (build these first — they unblock half the list)
 
 ### K1. Canonical finding fingerprint — `fingerprintFinding()` in core

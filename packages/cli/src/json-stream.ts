@@ -74,13 +74,18 @@ export function finalizeJsonStream(report: CouncilReport, sink: JsonStreamSink):
 export async function runCouncilWithJsonStream(
   request: CouncilRequest,
   config: QuorateConfig,
-  sink: JsonStreamSink
+  sink: JsonStreamSink,
+  transformReport?: (report: CouncilReport) => CouncilReport
 ): Promise<CouncilReport> {
   // Opt-in chunk passthrough for streaming UIs (e.g. the VS Code extension).
   const includeChunks = ["1", "true", "yes"].includes((process.env.QUORATE_JSON_CHUNKS ?? "").toLowerCase());
-  const report = await runCouncil(request, config, {
+  const raw = await runCouncil(request, config, {
     onEvent: (event) => handleCouncilEvent(event, sink, includeChunks)
   });
+  // The per-lane events above are the raw run; the authoritative final report
+  // line reflects any post-run transform (e.g. baseline filtering) so stdout,
+  // the returned value, and the gate all agree.
+  const report = transformReport ? transformReport(raw) : raw;
   finalizeJsonStream(report, sink);
   return report;
 }

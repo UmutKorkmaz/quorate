@@ -135,6 +135,11 @@ export interface CouncilReport {
      * flake comparison, and CI artifact correlation. See `computeReviewId`.
      */
     reviewId?: string;
+    /**
+     * Number of findings suppressed because they matched the committed
+     * baseline. Set only when a baseline was applied. See `applyBaseline`.
+     */
+    baselinedFindings?: number;
   };
 }
 
