@@ -110,6 +110,26 @@ jobs:
           </tr>
           <tr>
             <td>
+              <code>baseline</code>
+            </td>
+            <td>
+              <InlineCode>false</InlineCode>
+            </td>
+            <td>
+              Gate only on findings absent from a committed baseline (read from the base branch).
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <code>baseline-path</code>
+            </td>
+            <td>
+              <InlineCode>.quorate.baseline.json</InlineCode>
+            </td>
+            <td>Path to the committed baseline file, read from the base branch.</td>
+          </tr>
+          <tr>
+            <td>
               <code>mode</code>
             </td>
             <td>
@@ -119,6 +139,24 @@ jobs:
           </tr>
         </tbody>
       </table>
+
+      <h2>Adopt on an existing repo: baseline mode</h2>
+      <p>
+        A mature codebase will surface findings the team hasn&apos;t triaged yet. Rather than turn the
+        gate off, record them as an accepted <strong>baseline</strong> and let the gate fail only on{" "}
+        <em>new</em> findings:
+      </p>
+      <CodeBlock language="bash">{`quorate review --base origin/main --head HEAD   # produce a report
+quorate baseline                                # write .quorate.baseline.json
+git add .quorate.baseline.json && git commit -m "chore: quorate baseline"`}</CodeBlock>
+      <p>
+        Then set <InlineCode>baseline: true</InlineCode> on the Action (or pass{" "}
+        <InlineCode>--baseline</InlineCode> to the CLI). Quorate reads the baseline from the{" "}
+        <strong>base branch</strong>, never the PR head, so a pull request can&apos;t baseline away its
+        own new findings. A baselined critical that resurfaces is suppressed and the verdict is
+        recomputed on what remains; refresh anytime with{" "}
+        <InlineCode>quorate baseline --update</InlineCode>.
+      </p>
 
       <h2>Outputs</h2>
       <ul>

@@ -57,6 +57,17 @@ inputs:
     description: Maximum number of inline review comments to post per run.
     required: false
     default: "10"
+  baseline:
+    description: >-
+      Gate only on findings absent from a committed baseline. Reads the baseline
+      from the base branch (never the PR head), so legacy issues recorded with
+      `quorate baseline` don't block adoption — only new findings can fail the gate.
+    required: false
+    default: "false"
+  baseline-path:
+    description: Path to the committed baseline file (read from the base branch).
+    required: false
+    default: .quorate.baseline.json
 outputs:
   verdict:
     description: Final Quorate verdict.
