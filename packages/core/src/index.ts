@@ -4,6 +4,7 @@ export * from "./cli-provider.js";
 export * from "./config.js";
 export * from "./council.js";
 export * from "./heuristics.js";
+export * from "./identity.js";
 export * from "./merge.js";
 export * from "./models.js";
 export * from "./pack-heuristics.js";

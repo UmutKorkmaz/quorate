@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { runApiProvider } from "./api-provider.js";
 import { runCliProvider } from "./cli-provider.js";
 import { runHeuristicReview } from "./heuristics.js";
+import { computeReviewId, fingerprintFinding } from "./identity.js";
 import { createDefaultConfig } from "./providers.js";
 import { mergeWithMaster } from "./merge.js";
 import { areSameFinding } from "./similarity.js";
@@ -319,7 +320,10 @@ export async function runCouncil(
     }
   }
 
-  const findings = sortFindings(clusterFindings(workingFindings));
+  const findings = sortFindings(clusterFindings(workingFindings)).map((finding) => ({
+    ...finding,
+    fingerprint: fingerprintFinding(finding)
+  }));
   const baseVerdict = verdictFor(findings, providerResults);
 
   const realOk = providerResults.filter(
@@ -361,7 +365,14 @@ export async function runCouncil(
       requestedProviders,
       ranProviders,
       degraded,
-      mergedBy
+      mergedBy,
+      reviewId: computeReviewId({
+        mode: request.mode,
+        subject: request.subject,
+        diff: request.diff,
+        providerIds: lanes.map((lane) => lane.provider.id),
+        councils: config.councils
+      })
     }
   };
 

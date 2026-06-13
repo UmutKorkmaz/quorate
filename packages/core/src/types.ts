@@ -92,6 +92,12 @@ export interface Finding {
   agreedBy?: string[];
   /** Confidence in the finding, 0..1, derived from agreement and severity. */
   confidence?: number;
+  /**
+   * Stable content-derived instance identity (severity + file + normalized
+   * title), stamped by the council. Used for baseline matching, suppression,
+   * and inline-comment markers. See `fingerprintFinding` in identity.ts.
+   */
+  fingerprint?: string;
 }
 
 export type ProviderRunStatus = "ok" | "error" | "skipped" | "interrupted";
@@ -123,6 +129,12 @@ export interface CouncilReport {
     degraded: boolean;
     /** Set when a master agent successfully merged duplicate findings. */
     mergedBy?: string;
+    /**
+     * Stable content-derived identity of this run: same diff + providers +
+     * councils always produce the same id. Foundation for review history,
+     * flake comparison, and CI artifact correlation. See `computeReviewId`.
+     */
+    reviewId?: string;
   };
 }
 
