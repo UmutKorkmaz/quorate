@@ -26909,6 +26909,7 @@ __export(index_exports, {
   changedFilesFromDiff: () => changedFilesFromDiff,
   loadBaseBaseline: () => loadBaseBaseline,
   loadBaseConfig: () => loadBaseConfig,
+  loadBasePolicy: () => loadBasePolicy,
   normalizeInput: () => normalizeInput,
   parseBoolean: () => parseBoolean,
   resolveBaseRef: () => resolveBaseRef,
@@ -31508,6 +31509,7 @@ Provider: ${provider.id}${diffSection}`;
 
 // ../core/src/types.ts
 var severities = ["critical", "high", "medium", "low", "info"];
+var verdicts = ["pass", "warn", "fail"];
 
 // ../core/src/cli-provider.ts
 async function runCommand(command, args, input, options) {
@@ -49629,8 +49631,10 @@ function detectPacks(signals) {
   return PACK_IDS.filter((id) => matched.has(id));
 }
 
-// ../core/src/render.ts
-var reportCommentMarker = "<!-- quorate-report -->";
+// ../core/src/policy.ts
+var import_yaml2 = __toESM(require_dist2(), 1);
+var POLICY_VERSION = 1;
+var DEFAULT_POLICY_PATH = ".quorate/policy.yml";
 var severityWeight2 = {
   critical: 5,
   high: 4,
@@ -49638,6 +49642,110 @@ var severityWeight2 = {
   low: 2,
   info: 1
 };
+var severitySchema2 = external_exports.enum(severities);
+var policyYamlSchema = external_exports.object({
+  version: external_exports.number().int().optional(),
+  merge_gate: external_exports.object({
+    enabled: external_exports.boolean().optional(),
+    block_on_verdict: external_exports.array(external_exports.enum(verdicts)).optional(),
+    allow_warn_merge: external_exports.boolean().optional()
+  }).optional(),
+  verdict: external_exports.object({
+    fail_on: external_exports.union([severitySchema2, external_exports.literal("never")]).optional(),
+    fail_on_degraded: external_exports.boolean().optional()
+  }).optional(),
+  agreement: external_exports.object({
+    min_agreement: external_exports.number().int().positive().optional(),
+    gate_severity: severitySchema2.optional()
+  }).optional(),
+  roles_required: external_exports.array(external_exports.string().min(1)).optional(),
+  providers: external_exports.object({ min_real_providers: external_exports.number().int().nonnegative().optional() }).optional()
+});
+function parsePolicyObject(data) {
+  const parsed = policyYamlSchema.safeParse(data ?? {});
+  if (!parsed.success) {
+    throw new Error(`Invalid policy: ${parsed.error.issues[0]?.message ?? "schema mismatch"}.`);
+  }
+  const p = parsed.data;
+  if (p.version !== void 0 && p.version !== POLICY_VERSION) {
+    throw new Error(`Unsupported policy version ${p.version} (expected ${POLICY_VERSION}).`);
+  }
+  const agreement = p.agreement;
+  return {
+    enabled: p.merge_gate?.enabled ?? true,
+    blockOnVerdict: p.merge_gate?.block_on_verdict ?? ["fail"],
+    allowWarnMerge: p.merge_gate?.allow_warn_merge ?? false,
+    failOn: p.verdict?.fail_on ?? "high",
+    failOnDegraded: p.verdict?.fail_on_degraded ?? true,
+    gate: agreement ? { severity: agreement.gate_severity ?? "high", minAgreement: agreement.min_agreement ?? 2 } : void 0,
+    rolesRequired: p.roles_required ?? [],
+    minRealProviders: p.providers?.min_real_providers ?? 1
+  };
+}
+function parsePolicyYaml(source) {
+  let data;
+  try {
+    data = import_yaml2.default.parse(source) ?? {};
+  } catch {
+    throw new Error("Invalid policy file: not valid YAML.");
+  }
+  return parsePolicyObject(data);
+}
+function githubConfigToPolicy(github) {
+  return {
+    enabled: true,
+    blockOnVerdict: [],
+    allowWarnMerge: true,
+    failOn: github.failOn,
+    failOnDegraded: github.failOnDegraded ?? false,
+    gate: github.gate,
+    rolesRequired: [],
+    minRealProviders: 0
+  };
+}
+function resolvePolicy(config2, options) {
+  const base = options?.policy ?? githubConfigToPolicy(config2.github);
+  return options?.failOn ? { ...base, failOn: options.failOn } : base;
+}
+function exceedsThreshold(report, failOn) {
+  if (failOn === "never") return false;
+  return report.findings.some((finding) => severityWeight2[finding.severity] >= severityWeight2[failOn]);
+}
+function agreementGateTrips(report, gate) {
+  const gateWeight = severityWeight2[gate.severity];
+  return report.findings.some(
+    (finding) => severityWeight2[finding.severity] >= gateWeight && (finding.agreement ?? 1) >= gate.minAgreement
+  );
+}
+function requiredRolesMissing(report, rolesRequired) {
+  const satisfied = new Set(
+    report.providerResults.filter((result) => result.status === "ok").map((result) => result.role)
+  );
+  return rolesRequired.filter((role) => !satisfied.has(role));
+}
+function realProviderOkCount(report) {
+  const ids = new Set(
+    report.providerResults.filter((r) => (r.providerType === "cli" || r.providerType === "api") && r.status === "ok").map((r) => r.providerId)
+  );
+  return ids.size;
+}
+function verdictBlocks(verdict, policy) {
+  if (verdict === "warn" && policy.allowWarnMerge) return false;
+  return policy.blockOnVerdict.includes(verdict);
+}
+function shouldFailForPolicy(report, policy) {
+  if (!policy.enabled) return false;
+  if (exceedsThreshold(report, policy.failOn)) return true;
+  if (policy.failOnDegraded && report.metadata.degraded) return true;
+  if (policy.gate && agreementGateTrips(report, policy.gate)) return true;
+  if (verdictBlocks(report.verdict, policy)) return true;
+  if (requiredRolesMissing(report, policy.rolesRequired).length > 0) return true;
+  if (policy.minRealProviders > 0 && realProviderOkCount(report) < policy.minRealProviders) return true;
+  return false;
+}
+
+// ../core/src/render.ts
+var reportCommentMarker = "<!-- quorate-report -->";
 function locationFor(finding) {
   if (!finding.file) return "";
   return finding.line ? `${finding.file}:${finding.line}` : finding.file;
@@ -49702,24 +49810,6 @@ _(${report.metadata.baselinedFindings} finding${report.metadata.baselinedFinding
   lines.push("", `Generated: ${report.metadata.generatedAt}`);
   return `${lines.join("\n")}
 `;
-}
-function shouldFailForThreshold(report, threshold) {
-  if (threshold === "never") return false;
-  return report.findings.some((finding) => severityWeight2[finding.severity] >= severityWeight2[threshold]);
-}
-function shouldFailForReport(report, github) {
-  if (shouldFailForThreshold(report, github.failOn)) return true;
-  if (github.failOnDegraded === true && report.metadata.degraded) return true;
-  const gate = github.gate;
-  if (gate) {
-    const gateWeight = severityWeight2[gate.severity];
-    if (report.findings.some(
-      (finding) => severityWeight2[finding.severity] >= gateWeight && (finding.agreement ?? 1) >= gate.minAgreement
-    )) {
-      return true;
-    }
-  }
-  return false;
 }
 function summarizeDiff(diff) {
   if (!diff || diff.trim().length === 0) return "";
@@ -50025,6 +50115,26 @@ async function loadBaseBaseline(client, params) {
   }
   return null;
 }
+async function loadBasePolicy(client, params) {
+  try {
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path: params.path,
+      ref: params.ref
+    });
+    const data = res.data;
+    if (!Array.isArray(data) && data.type === "file" && typeof data.content === "string") {
+      const file2 = data;
+      const decoded = Buffer.from(file2.content, file2.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      return parsePolicyYaml(decoded);
+    }
+  } catch (error52) {
+    const status = error52.status;
+    if (status !== 404) throw error52;
+  }
+  return null;
+}
 async function runAction(deps) {
   const input = (name) => normalizeInput(deps.getInput(name));
   const token = input("github-token") ?? deps.env?.GITHUB_TOKEN;
@@ -50121,8 +50231,26 @@ async function runAction(deps) {
       }
     }
   }
-  if (shouldFailForReport(report, config2.github)) {
-    deps.setFailed(`Quorate verdict ${report.verdict} meets fail threshold ${config2.github.failOn}.`);
+  const failOnOverride = input("fail-on");
+  let gatePolicy;
+  try {
+    const policyPath = input("policy-path") ?? DEFAULT_POLICY_PATH;
+    const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
+    gatePolicy = resolvePolicy(config2, { policy: basePolicy ?? void 0, failOn: failOnOverride });
+    if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
+  } catch (error52) {
+    deps.warning?.(
+      `Could not load the merge policy (${error52 instanceof Error ? error52.message : String(error52)}) \u2014 using the github config gate.`
+    );
+    gatePolicy = resolvePolicy(config2, { failOn: failOnOverride });
+  }
+  if (!gatePolicy.enabled) {
+    deps.warning?.(
+      "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) \u2014 no verdict can fail this check."
+    );
+  }
+  if (shouldFailForPolicy(report, gatePolicy)) {
+    deps.setFailed(`Quorate verdict ${report.verdict} is blocked by the merge policy (fail-on ${gatePolicy.failOn}).`);
   }
 }
 async function run() {
@@ -50153,6 +50281,7 @@ if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
   changedFilesFromDiff,
   loadBaseBaseline,
   loadBaseConfig,
+  loadBasePolicy,
   normalizeInput,
   parseBoolean,
   resolveBaseRef,

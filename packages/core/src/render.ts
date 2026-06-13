@@ -1,3 +1,4 @@
+import { githubConfigToPolicy, shouldFailForPolicy } from "./policy.js";
 import type { CouncilReport, Finding, GithubConfig, Severity } from "./types.js";
 
 export const reportCommentMarker = "<!-- quorate-report -->";
@@ -90,24 +91,14 @@ export function shouldFailForThreshold(report: CouncilReport, threshold: Severit
   return report.findings.some((finding) => severityWeight[finding.severity] >= severityWeight[threshold]);
 }
 
+/**
+ * Backward-compatible gate over the legacy `github:` config. Delegates to the
+ * unified policy engine via {@link githubConfigToPolicy}, which reproduces this
+ * function's historical behavior exactly. New code should resolve a policy and
+ * call {@link shouldFailForPolicy} directly.
+ */
 export function shouldFailForReport(report: CouncilReport, github: GithubConfig): boolean {
-  if (shouldFailForThreshold(report, github.failOn)) return true;
-  if (github.failOnDegraded === true && report.metadata.degraded) return true;
-
-  const gate = github.gate;
-  if (gate) {
-    const gateWeight = severityWeight[gate.severity];
-    if (
-      report.findings.some(
-        (finding) =>
-          severityWeight[finding.severity] >= gateWeight && (finding.agreement ?? 1) >= gate.minAgreement
-      )
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+  return shouldFailForPolicy(report, githubConfigToPolicy(github));
 }
 
 /**

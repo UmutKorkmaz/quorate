@@ -10,6 +10,7 @@ export * from "./merge.js";
 export * from "./models.js";
 export * from "./pack-heuristics.js";
 export * from "./packs.js";
+export * from "./policy.js";
 export * from "./prompt.js";
 export * from "./providers.js";
 export * from "./render.js";

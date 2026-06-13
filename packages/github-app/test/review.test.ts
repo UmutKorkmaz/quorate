@@ -289,4 +289,43 @@ describe("reviewPullRequest", () => {
     );
     expect(failureUpdate).toBeDefined();
   });
+
+  it("does NOT fail the check when the policy makes the verdict non-blocking (failOn never)", async () => {
+    const { octokit, checkCalls } = makeStubOctokit();
+    const base = createDefaultConfig([]);
+    const result = await reviewPullRequest({
+      octokit,
+      owner: "acme",
+      repo: "web",
+      pullNumber: 51,
+      headSha: "sha-never",
+      getConfig: async () => ({ ...base, github: { ...base.github, failOn: "never" } })
+    });
+    expect(result.conclusion).not.toBe("failure");
+    const lastUpdate = checkCalls.filter((c) => c.name === "update").at(-1)?.params;
+    expect(lastUpdate?.["conclusion"]).not.toBe("failure");
+  });
+
+  it("fails the check when an explicit policy requires a role that never ran", async () => {
+    const { octokit } = makeStubOctokit();
+    const result = await reviewPullRequest({
+      octokit,
+      owner: "acme",
+      repo: "web",
+      pullNumber: 52,
+      headSha: "sha-roles",
+      getConfig: async () => createDefaultConfig([]),
+      // security never runs on a heuristic-only review, so this must block.
+      getPolicy: async () => ({
+        enabled: true,
+        blockOnVerdict: [],
+        allowWarnMerge: true,
+        failOn: "never",
+        failOnDegraded: false,
+        rolesRequired: ["security"],
+        minRealProviders: 0
+      })
+    });
+    expect(result.conclusion).toBe("failure");
+  });
 });

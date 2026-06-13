@@ -130,6 +130,18 @@ jobs:
           </tr>
           <tr>
             <td>
+              <code>policy-path</code>
+            </td>
+            <td>
+              <InlineCode>.quorate/policy.yml</InlineCode>
+            </td>
+            <td>
+              VerdictGate merge policy, read from the base branch. Defines the gate when present;
+              otherwise it&apos;s derived from the github config.
+            </td>
+          </tr>
+          <tr>
+            <td>
               <code>mode</code>
             </td>
             <td>
