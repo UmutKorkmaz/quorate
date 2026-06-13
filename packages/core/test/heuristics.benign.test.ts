@@ -73,6 +73,42 @@ describe("Benign corpus — test helpers are not production hot paths", () => {
     expect(result.findings.find((finding) => finding.title === "Synchronous fs call in a request path")).toBeUndefined();
   });
 
+  it("does not flag synchronous fs in CLI/script/config code (short-lived processes)", () => {
+    const cases = [
+      "packages/cli/src/baseline-command.ts",
+      "src/bin/migrate.ts",
+      "scripts/build.ts",
+      "tools/codegen.ts",
+      "vite.config.ts"
+    ];
+    for (const file of cases) {
+      const diff = `diff --git a/${file} b/${file}
+--- a/${file}
++++ b/${file}
+@@ -1,1 +1,2 @@
++const raw = readFileSync(path, "utf8");
+`;
+      const result = runHeuristicReview({ mode: "review", subject: "cli", diff });
+      expect(
+        result.findings.find((finding) => finding.title === "Synchronous fs call in a request path"),
+        `expected no request-path fs finding for ${file}`
+      ).toBeUndefined();
+    }
+  });
+
+  it("still flags synchronous fs in a server request path (true positive preserved)", () => {
+    const diff = `diff --git a/src/server/render.ts b/src/server/render.ts
+--- a/src/server/render.ts
++++ b/src/server/render.ts
+@@ -1,1 +1,2 @@
++  const tpl = fs.readFileSync(path.join(dir, 'page.html'), 'utf8');
+`;
+    const result = runHeuristicReview({ mode: "review", subject: "server", diff });
+    expect(
+      result.findings.find((finding) => finding.title === "Synchronous fs call in a request path")
+    ).toBeDefined();
+  });
+
   it("still flags credential-like values under fixture paths", () => {
     const secretLine = "+const api" + "Key = \"test-secret-value\";";
     const diff = `diff --git a/packages/core/test/fixtures/leaky-client.ts b/packages/core/test/fixtures/leaky-client.ts
