@@ -4014,7 +4014,7 @@ var require_util2 = __commonJS({
     try {
       crypto2 = require("node:crypto");
       const possibleRelevantHashes = ["sha256", "sha384", "sha512"];
-      supportedHashes = crypto2.getHashes().filter((hash2) => possibleRelevantHashes.includes(hash2));
+      supportedHashes = crypto2.getHashes().filter((hash3) => possibleRelevantHashes.includes(hash3));
     } catch {
     }
     function responseURL(response) {
@@ -46554,7 +46554,7 @@ function parseConfig(source) {
 }
 
 // ../core/src/council.ts
-var import_node_crypto = require("node:crypto");
+var import_node_crypto2 = require("node:crypto");
 
 // ../core/src/pack-heuristics.ts
 var RAW_PACK_HEURISTIC_RULES = [
@@ -48622,6 +48622,32 @@ function runHeuristicReview(request2, role = "maintainer") {
   };
 }
 
+// ../core/src/identity.ts
+var import_node_crypto = require("node:crypto");
+var HEX = 16;
+function normalizeFingerprintText(text) {
+  return text.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+function titleKey(title) {
+  const normalized = normalizeFingerprintText(title);
+  return normalized.length > 0 ? normalized : `raw:${title.trim().toLowerCase()}`;
+}
+function hash2(parts, length) {
+  return (0, import_node_crypto.createHash)("sha256").update(JSON.stringify(parts), "utf8").digest("hex").slice(0, length);
+}
+function fingerprintFinding(finding) {
+  return hash2([finding.severity, finding.file ?? "", titleKey(finding.title)], HEX);
+}
+function normalizeDiff(diff) {
+  return diff.replace(/\r\n?/g, "\n").split("\n").map((line) => line.replace(/[ \t]+$/, "")).join("\n").trim();
+}
+function computeReviewId(input) {
+  const basis = input.diff && input.diff.trim().length > 0 ? normalizeDiff(input.diff) : input.subject.trim();
+  const providers = [...new Set(input.providerIds)].sort();
+  const councils = [...new Set(input.councils)].sort();
+  return (0, import_node_crypto.createHash)("sha256").update(JSON.stringify([input.mode, basis, providers, councils]), "utf8").digest("hex").slice(0, HEX);
+}
+
 // ../core/src/merge.ts
 var import_node_child_process2 = require("node:child_process");
 var MERGE_TIMEOUT_MS = 12e4;
@@ -48979,7 +49005,7 @@ async function runProviderWithEvents(provider, role, request2, ctx) {
 var DEGRADED_NO_REAL_PROVIDER = "Only the built-in heuristic ran \u2014 enable a real provider (`/use available`) for a trustworthy verdict.";
 var DEGRADED_ALL_REAL_FAILED = "All real providers failed or were interrupted \u2014 this verdict is based only on the heuristic.";
 async function runCouncil(request2, config2 = createDefaultConfig(), options) {
-  const councilRunId = (0, import_node_crypto.randomUUID)();
+  const councilRunId = (0, import_node_crypto2.randomUUID)();
   const signal = options?.signal;
   const onEvent = options?.onEvent;
   const emit = (event) => {
@@ -49036,7 +49062,10 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       }
     }
   }
-  const findings = sortFindings(clusterFindings(workingFindings));
+  const findings = sortFindings(clusterFindings(workingFindings)).map((finding) => ({
+    ...finding,
+    fingerprint: fingerprintFinding(finding)
+  }));
   const baseVerdict = verdictFor(findings, providerResults);
   const realOk = providerResults.filter(
     (result) => (result.providerType === "cli" || result.providerType === "api") && result.status === "ok"
@@ -49067,7 +49096,14 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       requestedProviders,
       ranProviders,
       degraded,
-      mergedBy
+      mergedBy,
+      reviewId: computeReviewId({
+        mode: request2.mode,
+        subject: request2.subject,
+        diff: request2.diff,
+        providerIds: lanes.map((lane) => lane.provider.id),
+        councils: config2.councils
+      })
     }
   };
   emit({ type: "council/done", councilRunId, report });
@@ -49732,16 +49768,16 @@ async function upsertReportComment(client, input) {
 }
 
 // src/inline.ts
-var import_node_crypto2 = require("node:crypto");
+var import_node_crypto3 = require("node:crypto");
 function findingMarkerHash(finding) {
   const key = `${finding.severity}|${finding.file ?? ""}|${finding.line ?? ""}|${finding.title}`;
-  return (0, import_node_crypto2.createHash)("sha1").update(key).digest("hex").slice(0, 8);
+  return (0, import_node_crypto3.createHash)("sha1").update(key).digest("hex").slice(0, 8);
 }
-function findingMarker(hash2) {
-  return `<!-- quorate-finding:${hash2} -->`;
+function findingMarker(hash3) {
+  return `<!-- quorate-finding:${hash3} -->`;
 }
-function renderCommentBody(finding, hash2) {
-  return `${findingMarker(hash2)}
+function renderCommentBody(finding, hash3) {
+  return `${findingMarker(hash3)}
 **${finding.severity.toUpperCase()}: ${finding.title}**
 
 ${finding.body}`;
@@ -49765,14 +49801,14 @@ async function postInlineComments(client, input) {
   const comments = [];
   for (const finding of located) {
     if (comments.length >= input.limit) break;
-    const hash2 = findingMarkerHash(finding);
-    if (seen.has(hash2)) continue;
-    seen.add(hash2);
+    const hash3 = findingMarkerHash(finding);
+    if (seen.has(hash3)) continue;
+    seen.add(hash3);
     comments.push({
       path: finding.file,
       line: finding.line,
       side: "RIGHT",
-      body: renderCommentBody(finding, hash2)
+      body: renderCommentBody(finding, hash3)
     });
   }
   if (comments.length === 0) return 0;
