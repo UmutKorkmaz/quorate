@@ -29,6 +29,7 @@ import {
   type QuorateConfig
 } from "@quorate/core";
 import { buildProvider } from "./provider-add.js";
+import { applyBaselineToReport, writeBaselineFromReport } from "./baseline-command.js";
 import { createFixSnapshot, finalizeFix, listFixes, revertFix } from "./fix.js";
 import { buildFixPrompt, extractHunk } from "./fix-prompt.js";
 import { runWriteAgent, WRITE_AGENT_PROFILES, writeAgentProfile } from "./fix-agent.js";
@@ -667,6 +668,8 @@ export function buildProgram(): Command {
     .option("--merge <id>", "Master agent that merges duplicate findings across reviewers")
     .option("--json", "Stream NDJSON events to stdout (final line is the report JSON)")
     .option("--write-json <path>", "Write the JSON report to a file")
+    .option("--baseline", "Gate only on findings absent from the committed baseline")
+    .option("--baseline-path <path>", "Baseline file to gate against (default .quorate.baseline.json)")
     .action(async (options) => {
       const cwd = cwdFrom(program);
       let config = applyProviderFilter(configFrom(program), options.providers);
@@ -685,25 +688,84 @@ export function buildProgram(): Command {
         pullRequest: options.pr ? { number: Number(options.pr) } : undefined
       };
 
+      // When --baseline is set, suppress findings already in the committed
+      // baseline and recompute the verdict on what remains. The notes (missing
+      // baseline, staleness, suppressed count) go to stderr so stdout stays
+      // clean for --json consumers. We capture the raw (pre-baseline) report so
+      // last-report.json — the source for a later `quorate baseline` and for
+      // `quorate fix` — always holds the full finding set.
+      let rawReport: CouncilReport | undefined;
+      const transformReport = (raw: CouncilReport): CouncilReport => {
+        rawReport = raw;
+        if (!options.baseline) return raw;
+        const applied = applyBaselineToReport(raw, cwd, options.baselinePath);
+        for (const note of applied.notes) console.error(note);
+        return applied.report;
+      };
+
       const report = options.json
-        ? await runCouncilWithJsonStream(request, config, {
-            writeStdout: (line) => process.stdout.write(`${line}\n`),
-            writeStderr: (line) => console.error(line)
-          })
-        : await runCouncil(request, config);
+        ? await runCouncilWithJsonStream(
+            request,
+            config,
+            {
+              writeStdout: (line) => process.stdout.write(`${line}\n`),
+              writeStderr: (line) => console.error(line)
+            },
+            transformReport
+          )
+        : transformReport(await runCouncil(request, config));
 
       if (options.writeJson) {
         writeFileSync(resolve(cwd, options.writeJson), `${JSON.stringify(report, null, 2)}\n`, "utf8");
       }
-      // Persist for `quorate fix` (same file the TUI writes).
+      // Persist the RAW report for `quorate fix` and `quorate baseline` (same
+      // file the TUI writes) — never the baseline-filtered view, or a follow-up
+      // `quorate baseline` would record a shrunken set.
       mkdirSync(resolve(cwd, ".quorate"), { recursive: true });
-      writeFileSync(resolve(cwd, ".quorate", "last-report.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+      writeFileSync(
+        resolve(cwd, ".quorate", "last-report.json"),
+        `${JSON.stringify(rawReport ?? report, null, 2)}\n`,
+        "utf8"
+      );
 
       if (!options.json) {
         console.log(renderMarkdownReport(report));
       }
 
       if (shouldFailForReport(report, config.github)) {
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command("baseline")
+    .helpGroup("Review:")
+    .description("Record current findings as an accepted baseline so `review --baseline` gates only new ones.")
+    .option("--update", "Overwrite an existing baseline")
+    .option("--expires-days <n>", "Advisory expiry; warn once the baseline is older than this")
+    .option("--report <path>", "Source report to baseline from (default .quorate/last-report.json)")
+    .option("--path <path>", "Baseline output path (default .quorate.baseline.json)")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      const expiresDays = options.expiresDays !== undefined ? Number(options.expiresDays) : undefined;
+      if (expiresDays !== undefined && (!Number.isInteger(expiresDays) || expiresDays <= 0)) {
+        console.error("--expires-days must be a positive integer.");
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        const result = writeBaselineFromReport({
+          cwd,
+          reportPath: options.report,
+          baselinePath: options.path,
+          update: Boolean(options.update),
+          expiresDays
+        });
+        const verb = result.overwritten ? "Updated" : "Wrote";
+        console.log(`${verb} baseline with ${result.count} finding(s) at ${relative(cwd, result.path)}.`);
+        console.log("Commit this file so teammates and CI share the same accepted-issue set.");
+      } catch (error: unknown) {
+        console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
       }
     });

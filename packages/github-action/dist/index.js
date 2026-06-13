@@ -19059,12 +19059,12 @@ var require_lib = __commonJS({
             throw new Error("Client has already been disposed.");
           }
           const parsedUrl = new URL(requestUrl);
-          let info = this._prepareRequest(verb, parsedUrl, headers);
+          let info2 = this._prepareRequest(verb, parsedUrl, headers);
           const maxTries = this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
           let numTries = 0;
           let response;
           do {
-            response = yield this.requestRaw(info, data);
+            response = yield this.requestRaw(info2, data);
             if (response && response.message && response.message.statusCode === HttpCodes2.Unauthorized) {
               let authenticationHandler;
               for (const handler2 of this.handlers) {
@@ -19074,7 +19074,7 @@ var require_lib = __commonJS({
                 }
               }
               if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info, data);
+                return authenticationHandler.handleAuthentication(this, info2, data);
               } else {
                 return response;
               }
@@ -19097,8 +19097,8 @@ var require_lib = __commonJS({
                   }
                 }
               }
-              info = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = yield this.requestRaw(info, data);
+              info2 = this._prepareRequest(verb, parsedRedirectUrl, headers);
+              response = yield this.requestRaw(info2, data);
               redirectsRemaining--;
             }
             if (!response.message.statusCode || !HttpResponseRetryCodes2.includes(response.message.statusCode)) {
@@ -19127,7 +19127,7 @@ var require_lib = __commonJS({
        * @param info
        * @param data
        */
-      requestRaw(info, data) {
+      requestRaw(info2, data) {
         return __awaiter3(this, void 0, void 0, function* () {
           return new Promise((resolve, reject) => {
             function callbackForResult(err, res) {
@@ -19139,7 +19139,7 @@ var require_lib = __commonJS({
                 resolve(res);
               }
             }
-            this.requestRawWithCallback(info, data, callbackForResult);
+            this.requestRawWithCallback(info2, data, callbackForResult);
           });
         });
       }
@@ -19149,12 +19149,12 @@ var require_lib = __commonJS({
        * @param data
        * @param onResult
        */
-      requestRawWithCallback(info, data, onResult) {
+      requestRawWithCallback(info2, data, onResult) {
         if (typeof data === "string") {
-          if (!info.options.headers) {
-            info.options.headers = {};
+          if (!info2.options.headers) {
+            info2.options.headers = {};
           }
-          info.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
+          info2.options.headers["Content-Length"] = Buffer.byteLength(data, "utf8");
         }
         let callbackCalled = false;
         function handleResult(err, res) {
@@ -19163,7 +19163,7 @@ var require_lib = __commonJS({
             onResult(err, res);
           }
         }
-        const req = info.httpModule.request(info.options, (msg) => {
+        const req = info2.httpModule.request(info2.options, (msg) => {
           const res = new HttpClientResponse(msg);
           handleResult(void 0, res);
         });
@@ -19175,7 +19175,7 @@ var require_lib = __commonJS({
           if (socket) {
             socket.end();
           }
-          handleResult(new Error(`Request timeout: ${info.options.path}`));
+          handleResult(new Error(`Request timeout: ${info2.options.path}`));
         });
         req.on("error", function(err) {
           handleResult(err);
@@ -19211,27 +19211,27 @@ var require_lib = __commonJS({
         return this._getProxyAgentDispatcher(parsedUrl, proxyUrl);
       }
       _prepareRequest(method, requestUrl, headers) {
-        const info = {};
-        info.parsedUrl = requestUrl;
-        const usingSsl = info.parsedUrl.protocol === "https:";
-        info.httpModule = usingSsl ? https : http;
+        const info2 = {};
+        info2.parsedUrl = requestUrl;
+        const usingSsl = info2.parsedUrl.protocol === "https:";
+        info2.httpModule = usingSsl ? https : http;
         const defaultPort = usingSsl ? 443 : 80;
-        info.options = {};
-        info.options.host = info.parsedUrl.hostname;
-        info.options.port = info.parsedUrl.port ? parseInt(info.parsedUrl.port) : defaultPort;
-        info.options.path = (info.parsedUrl.pathname || "") + (info.parsedUrl.search || "");
-        info.options.method = method;
-        info.options.headers = this._mergeHeaders(headers);
+        info2.options = {};
+        info2.options.host = info2.parsedUrl.hostname;
+        info2.options.port = info2.parsedUrl.port ? parseInt(info2.parsedUrl.port) : defaultPort;
+        info2.options.path = (info2.parsedUrl.pathname || "") + (info2.parsedUrl.search || "");
+        info2.options.method = method;
+        info2.options.headers = this._mergeHeaders(headers);
         if (this.userAgent != null) {
-          info.options.headers["user-agent"] = this.userAgent;
+          info2.options.headers["user-agent"] = this.userAgent;
         }
-        info.options.agent = this._getAgent(info.parsedUrl);
+        info2.options.agent = this._getAgent(info2.parsedUrl);
         if (this.handlers) {
           for (const handler2 of this.handlers) {
-            handler2.prepareRequest(info.options);
+            handler2.prepareRequest(info2.options);
           }
         }
-        return info;
+        return info2;
       }
       _mergeHeaders(headers) {
         if (this.requestOptions && this.requestOptions.headers) {
@@ -21217,12 +21217,12 @@ var require_log = __commonJS({
       if (logLevel === "debug")
         console.log(...messages);
     }
-    function warn(logLevel, warning) {
+    function warn(logLevel, warning2) {
       if (logLevel === "debug" || logLevel === "warn") {
         if (typeof node_process.emitWarning === "function")
-          node_process.emitWarning(warning);
+          node_process.emitWarning(warning2);
         else
-          console.warn(warning);
+          console.warn(warning2);
       }
     }
     exports2.debug = debug2;
@@ -24691,9 +24691,9 @@ var require_composer = __commonJS({
         this.prelude = [];
         this.errors = [];
         this.warnings = [];
-        this.onError = (source, code, message, warning) => {
+        this.onError = (source, code, message, warning2) => {
           const pos = getErrorPos(source);
-          if (warning)
+          if (warning2)
             this.warnings.push(new errors.YAMLWarning(pos, code, message));
           else
             this.errors.push(new errors.YAMLParseError(pos, code, message));
@@ -24766,10 +24766,10 @@ ${cb}` : comment;
           console.dir(token, { depth: null });
         switch (token.type) {
           case "directive":
-            this.directives.add(token.source, (offset, message, warning) => {
+            this.directives.add(token.source, (offset, message, warning2) => {
               const pos = getErrorPos(token);
               pos[0] += offset;
-              this.onError(pos, "BAD_DIRECTIVE", message, warning);
+              this.onError(pos, "BAD_DIRECTIVE", message, warning2);
             });
             this.prelude.push(token.source);
             this.atDirectives = true;
@@ -26811,7 +26811,7 @@ var require_public_api = __commonJS({
       const doc = parseDocument(src, options);
       if (!doc)
         return null;
-      doc.warnings.forEach((warning) => log.warn(doc.options.logLevel, warning));
+      doc.warnings.forEach((warning2) => log.warn(doc.options.logLevel, warning2));
       if (doc.errors.length > 0) {
         if (doc.options.logLevel !== "silent")
           throw doc.errors[0];
@@ -26907,6 +26907,7 @@ __export(index_exports, {
   applyOverrides: () => applyOverrides,
   applyPacks: () => applyPacks,
   changedFilesFromDiff: () => changedFilesFromDiff,
+  loadBaseBaseline: () => loadBaseBaseline,
   loadBaseConfig: () => loadBaseConfig,
   normalizeInput: () => normalizeInput,
   parseBoolean: () => parseBoolean,
@@ -27404,6 +27405,12 @@ function setFailed(message) {
 }
 function error(message, properties = {}) {
   issueCommand("error", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+function warning(message, properties = {}) {
+  issueCommand("warning", toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+function info(message) {
+  process.stdout.write(message + os4.EOL);
 }
 
 // ../../node_modules/@actions/github/lib/context.js
@@ -31979,9 +31986,6 @@ async function runApiProvider(provider, role, request2, hooks) {
     if (hooks?.signal) hooks.signal.removeEventListener("abort", onUserAbort);
   }
 }
-
-// ../core/src/config.ts
-var import_yaml = __toESM(require_dist2(), 1);
 
 // ../../node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -46497,62 +46501,6 @@ function date4(params) {
 // ../../node_modules/zod/v4/classic/external.js
 config(en_default());
 
-// ../core/src/config.ts
-var severitySchema = external_exports.enum(["critical", "high", "medium", "low", "info"]);
-var providerSchema = external_exports.object({
-  id: external_exports.string().min(1),
-  type: external_exports.enum(["cli", "api", "mock"]).default("cli"),
-  command: external_exports.string().min(1).optional(),
-  args: external_exports.array(external_exports.string()).default([]),
-  roles: external_exports.array(external_exports.string().min(1)).default([]),
-  enabled: external_exports.boolean().default(false),
-  timeoutMs: external_exports.number().int().positive().default(12e4),
-  killGraceMs: external_exports.number().int().positive().default(5e3),
-  stdin: external_exports.boolean().default(true),
-  inputMode: external_exports.enum(["stdin", "prompt-file", "none"]).optional(),
-  maxInputBytes: external_exports.number().int().positive().optional(),
-  maxOutputBytes: external_exports.number().int().positive().default(1e6),
-  allowDangerousArgs: external_exports.boolean().default(false),
-  headlessAllowlist: external_exports.array(external_exports.string().min(1)).optional(),
-  inheritEnv: external_exports.boolean().default(false),
-  envAllowlist: external_exports.array(external_exports.string().min(1)).optional(),
-  env: external_exports.record(external_exports.string(), external_exports.string()).optional(),
-  installHint: external_exports.string().optional(),
-  baseUrl: external_exports.string().url().optional(),
-  model: external_exports.string().min(1).optional(),
-  apiKeyEnv: external_exports.string().min(1).optional()
-});
-var configSchema = external_exports.object({
-  councils: external_exports.array(external_exports.string().min(1)).default([]),
-  providers: external_exports.array(providerSchema).default([]),
-  github: external_exports.object({
-    commentMode: external_exports.enum(["update", "new", "off"]).optional(),
-    failOn: external_exports.union([severitySchema, external_exports.literal("never")]).optional(),
-    runnerMode: external_exports.enum(["auto", "cli", "api"]).optional(),
-    failOnDegraded: external_exports.boolean().optional(),
-    inlineComments: external_exports.boolean().optional(),
-    inlineCommentLimit: external_exports.number().int().positive().optional(),
-    gate: external_exports.object({ severity: severitySchema, minAgreement: external_exports.number().int().positive() }).optional()
-  }).default({}),
-  merge: external_exports.object({ provider: external_exports.string().min(1) }).optional(),
-  roleGuidance: external_exports.record(external_exports.string(), external_exports.string()).optional()
-});
-function parseConfig(source) {
-  const parsed = import_yaml.default.parse(source) ?? {};
-  const defaults2 = createDefaultConfig();
-  const userConfig = configSchema.parse(parsed);
-  return {
-    councils: userConfig.councils.length > 0 ? userConfig.councils : defaults2.councils,
-    providers: userConfig.providers.length > 0 ? userConfig.providers : defaults2.providers,
-    github: {
-      ...defaults2.github,
-      ...userConfig.github
-    },
-    merge: userConfig.merge,
-    roleGuidance: userConfig.roleGuidance
-  };
-}
-
 // ../core/src/council.ts
 var import_node_crypto2 = require("node:crypto");
 
@@ -48925,6 +48873,10 @@ function verdictFor(findings, providerResults) {
   }
   return "pass";
 }
+function finalVerdict(findings, providerResults, degraded) {
+  const base = verdictFor(findings, providerResults);
+  return base === "pass" && degraded ? "warn" : base;
+}
 function enabledProviders(config2) {
   const enabled = config2.providers.filter((provider) => provider.enabled !== false);
   if (enabled.length > 0) return enabled;
@@ -49066,12 +49018,11 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
     ...finding,
     fingerprint: fingerprintFinding(finding)
   }));
-  const baseVerdict = verdictFor(findings, providerResults);
   const realOk = providerResults.filter(
     (result) => (result.providerType === "cli" || result.providerType === "api") && result.status === "ok"
   );
   const degraded = realOk.length === 0;
-  const verdict = baseVerdict === "pass" && degraded ? "warn" : baseVerdict;
+  const verdict = finalVerdict(findings, providerResults, degraded);
   const ranProviders = providerResults.filter((result) => result.status !== "skipped").map((result) => `${result.providerId}:${result.role}`);
   const issueCount = findings.length;
   const countSummary = issueCount > 0 ? `Quorate found ${issueCount} finding${issueCount === 1 ? "" : "s"} across ${providerResults.length} review run${providerResults.length === 1 ? "" : "s"}.` : `Quorate found no blocking findings across ${providerResults.length} review run${providerResults.length === 1 ? "" : "s"}.`;
@@ -49109,6 +49060,132 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
   emit({ type: "council/done", councilRunId, report });
   emit({ type: "verdict", councilRunId, report });
   return report;
+}
+
+// ../core/src/baseline.ts
+var BASELINE_VERSION = 1;
+var DEFAULT_BASELINE_PATH = ".quorate.baseline.json";
+var baselineEntrySchema = external_exports.object({
+  fingerprint: external_exports.string().min(1),
+  severity: external_exports.enum(severities),
+  title: external_exports.string(),
+  file: external_exports.string().optional()
+});
+var baselineStoreSchema = external_exports.object({
+  version: external_exports.number().int(),
+  generatedAt: external_exports.string(),
+  expiresAfterDays: external_exports.number().int().positive().optional(),
+  findings: external_exports.array(baselineEntrySchema)
+});
+function fingerprintOf(finding) {
+  return finding.fingerprint ?? fingerprintFinding(finding);
+}
+function parseBaseline(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid baseline file: not valid JSON.");
+  }
+  const parsed = baselineStoreSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(`Invalid baseline file: ${parsed.error.issues[0]?.message ?? "schema mismatch"}.`);
+  }
+  if (parsed.data.version !== BASELINE_VERSION) {
+    throw new Error(
+      `Unsupported baseline version ${parsed.data.version} (expected ${BASELINE_VERSION}). Regenerate with \`quorate baseline --update\`.`
+    );
+  }
+  return parsed.data;
+}
+function filterBaselineFindings(findings, store) {
+  const baselined = new Set(store.findings.map((entry) => entry.fingerprint));
+  const kept = [];
+  const suppressed = [];
+  for (const finding of findings) {
+    if (baselined.has(fingerprintOf(finding))) {
+      suppressed.push(finding);
+    } else {
+      kept.push(finding);
+    }
+  }
+  return { kept, suppressed };
+}
+function applyBaseline(report, store) {
+  const { kept, suppressed } = filterBaselineFindings(report.findings, store);
+  if (suppressed.length === 0) return report;
+  const verdict = finalVerdict(kept, report.providerResults, report.metadata.degraded);
+  const summary2 = `Quorate found ${kept.length} finding${kept.length === 1 ? "" : "s"} after suppressing ${suppressed.length} baselined.`;
+  return {
+    ...report,
+    verdict,
+    summary: summary2,
+    findings: kept,
+    metadata: { ...report.metadata, baselinedFindings: suppressed.length }
+  };
+}
+function isBaselineStale(store, nowMs = Date.now()) {
+  if (store.expiresAfterDays === void 0) return false;
+  const generated = Date.parse(store.generatedAt);
+  if (Number.isNaN(generated)) return false;
+  return generated + store.expiresAfterDays * 864e5 <= nowMs;
+}
+
+// ../core/src/config.ts
+var import_yaml = __toESM(require_dist2(), 1);
+var severitySchema = external_exports.enum(["critical", "high", "medium", "low", "info"]);
+var providerSchema = external_exports.object({
+  id: external_exports.string().min(1),
+  type: external_exports.enum(["cli", "api", "mock"]).default("cli"),
+  command: external_exports.string().min(1).optional(),
+  args: external_exports.array(external_exports.string()).default([]),
+  roles: external_exports.array(external_exports.string().min(1)).default([]),
+  enabled: external_exports.boolean().default(false),
+  timeoutMs: external_exports.number().int().positive().default(12e4),
+  killGraceMs: external_exports.number().int().positive().default(5e3),
+  stdin: external_exports.boolean().default(true),
+  inputMode: external_exports.enum(["stdin", "prompt-file", "none"]).optional(),
+  maxInputBytes: external_exports.number().int().positive().optional(),
+  maxOutputBytes: external_exports.number().int().positive().default(1e6),
+  allowDangerousArgs: external_exports.boolean().default(false),
+  headlessAllowlist: external_exports.array(external_exports.string().min(1)).optional(),
+  inheritEnv: external_exports.boolean().default(false),
+  envAllowlist: external_exports.array(external_exports.string().min(1)).optional(),
+  env: external_exports.record(external_exports.string(), external_exports.string()).optional(),
+  installHint: external_exports.string().optional(),
+  baseUrl: external_exports.string().url().optional(),
+  model: external_exports.string().min(1).optional(),
+  apiKeyEnv: external_exports.string().min(1).optional()
+});
+var configSchema = external_exports.object({
+  councils: external_exports.array(external_exports.string().min(1)).default([]),
+  providers: external_exports.array(providerSchema).default([]),
+  github: external_exports.object({
+    commentMode: external_exports.enum(["update", "new", "off"]).optional(),
+    failOn: external_exports.union([severitySchema, external_exports.literal("never")]).optional(),
+    runnerMode: external_exports.enum(["auto", "cli", "api"]).optional(),
+    failOnDegraded: external_exports.boolean().optional(),
+    inlineComments: external_exports.boolean().optional(),
+    inlineCommentLimit: external_exports.number().int().positive().optional(),
+    gate: external_exports.object({ severity: severitySchema, minAgreement: external_exports.number().int().positive() }).optional()
+  }).default({}),
+  merge: external_exports.object({ provider: external_exports.string().min(1) }).optional(),
+  roleGuidance: external_exports.record(external_exports.string(), external_exports.string()).optional()
+});
+function parseConfig(source) {
+  const parsed = import_yaml.default.parse(source) ?? {};
+  const defaults2 = createDefaultConfig();
+  const userConfig = configSchema.parse(parsed);
+  return {
+    councils: userConfig.councils.length > 0 ? userConfig.councils : defaults2.councils,
+    providers: userConfig.providers.length > 0 ? userConfig.providers : defaults2.providers,
+    github: {
+      ...defaults2.github,
+      ...userConfig.github
+    },
+    merge: userConfig.merge,
+    roleGuidance: userConfig.roleGuidance
+  };
 }
 
 // ../core/src/packs.ts
@@ -49584,6 +49661,10 @@ function renderMarkdownReport(report, options = {}) {
     // When degraded, the blockquote already carries the full summary, so the
     // plain paragraph is dropped to avoid printing it twice.
     report.metadata.degraded ? `> \u26A0 Degraded: ${report.summary}` : report.summary,
+    // Explain a quiet report: "No findings" after a baseline run must be
+    // distinguishable from a genuinely clean run.
+    report.metadata.baselinedFindings ? `
+_(${report.metadata.baselinedFindings} finding${report.metadata.baselinedFindings === 1 ? "" : "s"} suppressed by the committed baseline)_` : void 0,
     hasSummary ? "" : void 0,
     hasSummary ? "## Summary" : void 0,
     hasSummary ? "" : void 0,
@@ -49918,6 +49999,26 @@ async function loadBaseConfig(client, params) {
   }
   return createDefaultConfig();
 }
+async function loadBaseBaseline(client, params) {
+  try {
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path: params.path,
+      ref: params.ref
+    });
+    const data = res.data;
+    if (!Array.isArray(data) && data.type === "file" && typeof data.content === "string") {
+      const file2 = data;
+      const decoded = Buffer.from(file2.content, file2.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      return parseBaseline(decoded);
+    }
+  } catch (error52) {
+    const status = error52.status;
+    if (status !== 404) throw error52;
+  }
+  return null;
+}
 async function runAction(deps) {
   const input = (name) => normalizeInput(deps.getInput(name));
   const token = input("github-token") ?? deps.env?.GITHUB_TOKEN;
@@ -49944,7 +50045,7 @@ async function runAction(deps) {
   });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const config2 = applyPacks(baseConfig, input("pack"), changedFilesFromDiff(diff));
-  const report = await runCouncil(
+  const rawReport = await runCouncil(
     {
       mode: "review",
       subject: `PR #${pullNumber}: ${pullRequest.title ?? "Untitled pull request"}`,
@@ -49958,6 +50059,31 @@ async function runAction(deps) {
     },
     config2
   );
+  let report = rawReport;
+  if (parseBoolean(input("baseline"), false)) {
+    const baselinePath = input("baseline-path") ?? DEFAULT_BASELINE_PATH;
+    try {
+      const baseline = await loadBaseBaseline(client, { owner, repo, ref: baseRef, path: baselinePath });
+      if (!baseline) {
+        deps.info?.(`No baseline at ${baselinePath} on the base ref \u2014 gating on all findings.`);
+      } else {
+        if (isBaselineStale(baseline)) {
+          deps.warning?.(
+            `Quorate baseline is past its ${baseline.expiresAfterDays}-day expiry (generated ${baseline.generatedAt}). Refresh with \`quorate baseline --update\`.`
+          );
+        }
+        report = applyBaseline(rawReport, baseline);
+        if (report.metadata.baselinedFindings) {
+          deps.info?.(`Suppressed ${report.metadata.baselinedFindings} finding(s) matching the committed baseline.`);
+        }
+      }
+    } catch (error52) {
+      deps.warning?.(
+        `Could not apply the committed baseline (${error52 instanceof Error ? error52.message : String(error52)}) \u2014 gating on all findings.`
+      );
+      report = rawReport;
+    }
+  }
   const summary2 = summarizeDiff(diff);
   const body = renderMarkdownReport(report, { includeMarker: true, summary: summary2 });
   deps.setOutput("verdict", report.verdict);
@@ -50004,7 +50130,9 @@ async function run() {
     },
     context: context2,
     getOctokit: (token) => getOctokit(token),
-    env: process.env
+    env: process.env,
+    warning: (message) => warning(message),
+    info: (message) => info(message)
   });
 }
 if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
@@ -50017,6 +50145,7 @@ if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
   applyOverrides,
   applyPacks,
   changedFilesFromDiff,
+  loadBaseBaseline,
   loadBaseConfig,
   normalizeInput,
   parseBoolean,

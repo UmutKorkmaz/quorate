@@ -126,6 +126,21 @@ export function verdictFor(findings: Finding[], providerResults: ProviderResult[
   return "pass";
 }
 
+/**
+ * The final verdict including the degraded override: a would-be `pass` is
+ * downgraded to `warn` when no real provider succeeded (heuristic-only run).
+ * Shared by {@link runCouncil} and baseline re-evaluation so the two can never
+ * diverge on how a filtered finding set maps to a verdict.
+ */
+export function finalVerdict(
+  findings: Finding[],
+  providerResults: ProviderResult[],
+  degraded: boolean
+): Verdict {
+  const base = verdictFor(findings, providerResults);
+  return base === "pass" && degraded ? "warn" : base;
+}
+
 export function enabledProviders(config: QuorateConfig): ProviderConfig[] {
   const enabled = config.providers.filter((provider) => provider.enabled !== false);
   if (enabled.length > 0) return enabled;
@@ -324,14 +339,12 @@ export async function runCouncil(
     ...finding,
     fingerprint: fingerprintFinding(finding)
   }));
-  const baseVerdict = verdictFor(findings, providerResults);
-
   const realOk = providerResults.filter(
     (result) =>
       (result.providerType === "cli" || result.providerType === "api") && result.status === "ok"
   );
   const degraded = realOk.length === 0;
-  const verdict: Verdict = baseVerdict === "pass" && degraded ? "warn" : baseVerdict;
+  const verdict = finalVerdict(findings, providerResults, degraded);
 
   const ranProviders = providerResults
     .filter((result) => result.status !== "skipped")

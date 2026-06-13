@@ -269,3 +269,40 @@ describe("renderMarkdownReport degraded banner", () => {
     expect(renderMarkdownReport(report)).not.toContain("> ⚠ Degraded:");
   });
 });
+
+describe("renderMarkdownReport baseline suppression note", () => {
+  it("surfaces the suppressed count so a quiet report isn't mistaken for a clean run", () => {
+    const report = reportFixture({
+      verdict: "pass",
+      findings: [],
+      metadata: {
+        generatedAt: "2026-06-13T00:00:00.000Z",
+        mode: "review",
+        subject: "fixture",
+        providers: ["glm:security"],
+        requestedProviders: ["glm:security"],
+        ranProviders: ["glm:security"],
+        degraded: false,
+        baselinedFindings: 3
+      }
+    });
+    expect(renderMarkdownReport(report)).toContain("3 findings suppressed by the committed baseline");
+  });
+
+  it("omits the note when no baseline was applied", () => {
+    const report = reportFixture({
+      verdict: "pass",
+      findings: [],
+      metadata: {
+        generatedAt: "2026-06-13T00:00:00.000Z",
+        mode: "review",
+        subject: "fixture",
+        providers: ["glm:security"],
+        requestedProviders: ["glm:security"],
+        ranProviders: ["glm:security"],
+        degraded: false
+      }
+    });
+    expect(renderMarkdownReport(report)).not.toContain("suppressed by the committed baseline");
+  });
+});

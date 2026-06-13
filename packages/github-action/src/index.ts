@@ -1,15 +1,21 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import {
+  applyBaseline,
   createDefaultConfig,
   detectPacks,
+  DEFAULT_BASELINE_PATH,
+  isBaselineStale,
   PACKS,
   PACK_IDS,
+  parseBaseline,
   parseConfig,
   renderMarkdownReport,
   runCouncil,
   shouldFailForReport,
   summarizeDiff,
+  type BaselineStore,
+  type CouncilReport,
   type QuorateConfig,
   type Severity
 } from "@quorate/core";
@@ -46,6 +52,9 @@ export interface ActionDeps {
   context: ActionContext;
   getOctokit: (token: string) => Octokit;
   env?: Record<string, string | undefined>;
+  /** Non-fatal diagnostics (e.g. baseline staleness, fallback notices). */
+  warning?: (message: string) => void;
+  info?: (message: string) => void;
 }
 
 /** Normalize an input value: trim and treat the empty string as "unset". */
@@ -217,6 +226,35 @@ export async function loadBaseConfig(
 }
 
 /**
+ * Load the committed baseline from the pull request's BASE ref (trusted), never
+ * the head — otherwise a PR could add its own new findings to the baseline and
+ * weaken the gate that reviews it. Returns null when no baseline is committed.
+ */
+export async function loadBaseBaseline(
+  client: Octokit,
+  params: { owner: string; repo: string; ref: string; path: string }
+): Promise<BaselineStore | null> {
+  try {
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path: params.path,
+      ref: params.ref
+    });
+    const data = res.data;
+    if (!Array.isArray(data) && data.type === "file" && typeof (data as { content?: string }).content === "string") {
+      const file = data as { content: string; encoding?: string };
+      const decoded = Buffer.from(file.content, file.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      return parseBaseline(decoded);
+    }
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status !== 404) throw error;
+  }
+  return null;
+}
+
+/**
  * Dependency-injected orchestration for the action. Behavior mirrors the real
  * entry point exactly; {@link run} simply wires up @actions/core and
  * @actions/github and delegates here so the logic stays unit-testable.
@@ -251,7 +289,7 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   // Layer domain pack(s) — explicit list or "auto" detected from the PR's files.
   const config = applyPacks(baseConfig, input("pack"), changedFilesFromDiff(diff));
-  const report = await runCouncil(
+  const rawReport = await runCouncil(
     {
       mode: "review",
       subject: `PR #${pullNumber}: ${pullRequest.title ?? "Untitled pull request"}`,
@@ -265,6 +303,37 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     },
     config
   );
+
+  // Optional baseline: gate only on findings absent from the committed baseline,
+  // read from the BASE ref so a PR cannot baseline away its own new findings. A
+  // malformed/oversized base baseline must NOT brick the gate for every PR — on
+  // any error we warn and fall back to gating on all findings (fail-secure).
+  let report: CouncilReport = rawReport;
+  if (parseBoolean(input("baseline"), false)) {
+    const baselinePath = input("baseline-path") ?? DEFAULT_BASELINE_PATH;
+    try {
+      const baseline = await loadBaseBaseline(client, { owner, repo, ref: baseRef, path: baselinePath });
+      if (!baseline) {
+        deps.info?.(`No baseline at ${baselinePath} on the base ref — gating on all findings.`);
+      } else {
+        if (isBaselineStale(baseline)) {
+          deps.warning?.(
+            `Quorate baseline is past its ${baseline.expiresAfterDays}-day expiry (generated ${baseline.generatedAt}). Refresh with \`quorate baseline --update\`.`
+          );
+        }
+        report = applyBaseline(rawReport, baseline);
+        if (report.metadata.baselinedFindings) {
+          deps.info?.(`Suppressed ${report.metadata.baselinedFindings} finding(s) matching the committed baseline.`);
+        }
+      }
+    } catch (error: unknown) {
+      deps.warning?.(
+        `Could not apply the committed baseline (${error instanceof Error ? error.message : String(error)}) — gating on all findings.`
+      );
+      report = rawReport;
+    }
+  }
+
   const summary = summarizeDiff(diff);
   const body = renderMarkdownReport(report, { includeMarker: true, summary });
 
@@ -318,7 +387,9 @@ export async function run(): Promise<void> {
     },
     context: github.context as unknown as ActionContext,
     getOctokit: (token) => github.getOctokit(token),
-    env: process.env
+    env: process.env,
+    warning: (message) => core.warning(message),
+    info: (message) => core.info(message)
   });
 }
 

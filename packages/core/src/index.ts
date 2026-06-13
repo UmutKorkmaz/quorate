@@ -1,4 +1,5 @@
 export * from "./api-provider.js";
+export * from "./baseline.js";
 export * from "./pack-coverage.js";
 export * from "./cli-provider.js";
 export * from "./config.js";
