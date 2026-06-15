@@ -13,6 +13,7 @@ import {
   parseConfig,
   parsePolicyYaml,
   renderMarkdownReport,
+  renderSarif,
   resolvePolicy,
   runCouncil,
   shouldFailForPolicy,
@@ -23,6 +24,12 @@ import {
   type QuoratePolicy,
   type Severity
 } from "@quorate/core";
+
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+// esbuild inlines this JSON at build time, so the Action's SARIF carries the
+// same tool version the CLI records.
+import pkg from "../package.json";
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 import { buildPullRequestDiff } from "./diff.js";
@@ -374,6 +381,24 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   deps.setOutput("findings", String(report.findings.length));
   deps.summary.addRaw(body);
   await deps.summary.write();
+
+  // Optional SARIF artifact for GitHub Code Scanning. A composite action cannot
+  // call github/codeql-action/upload-sarif itself, so we write the file and
+  // expose its path as an output for a downstream upload-sarif step to consume.
+  const sarifFile = input("sarif-file");
+  if (sarifFile) {
+    try {
+      const target = resolve(process.cwd(), sarifFile);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, renderSarif(report, { toolVersion: pkg.version }), "utf8");
+      deps.setOutput("sarif-path", target);
+      deps.info?.(`Wrote SARIF report to ${sarifFile} (set sarif-path output).`);
+    } catch (error: unknown) {
+      deps.warning?.(
+        `Could not write SARIF to ${sarifFile} (${error instanceof Error ? error.message : String(error)}).`
+      );
+    }
+  }
 
   if (parseBoolean(input("post-comment"), true) && config.github.commentMode !== "off") {
     await upsertReportComment(client, {
