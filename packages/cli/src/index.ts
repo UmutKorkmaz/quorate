@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import {
@@ -30,6 +30,12 @@ import {
 } from "@quorate/core";
 import { buildProvider } from "./provider-add.js";
 import { applyBaselineToReport, writeBaselineFromReport } from "./baseline-command.js";
+import {
+  buildRiskReport,
+  generateGithubActionWorkflow,
+  mergeVscodeRecommendations,
+  type RiskItem
+} from "./setup-command.js";
 import { createFixSnapshot, finalizeFix, listFixes, revertFix } from "./fix.js";
 import { buildFixPrompt, extractHunk } from "./fix-prompt.js";
 import { runWriteAgent, WRITE_AGENT_PROFILES, writeAgentProfile } from "./fix-agent.js";
@@ -81,6 +87,64 @@ function collectFilePaths(dir: string, root: string, depth: number, maxDepth: nu
     } else if (entry.isFile()) {
       acc.push(rel);
     }
+  }
+}
+
+/** Gather the signals `buildRiskReport` needs from the repo (stack, CI, keys). */
+function gatherRiskInput(config: QuorateConfig, cwd: string): Parameters<typeof buildRiskReport>[0] {
+  const files: string[] = [];
+  collectFilePaths(cwd, cwd, 0, 6, files);
+  let dependencies: string[] = [];
+  const pkgPath = resolve(cwd, "package.json");
+  if (existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      dependencies = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})];
+    } catch {
+      // non-fatal
+    }
+  }
+  const detectedPacks = detectPacks({ files, dependencies });
+
+  // A workflow "references Quorate" if any .github/workflows/*.yml mentions it.
+  let hasCiWorkflow = false;
+  const workflowsDir = resolve(cwd, ".github", "workflows");
+  if (existsSync(workflowsDir)) {
+    try {
+      for (const entry of readdirSync(workflowsDir, { withFileTypes: true })) {
+        if (!entry.isFile() || !/\.ya?ml$/.test(entry.name)) continue;
+        const text = readFileSync(resolve(workflowsDir, entry.name), "utf8").toLowerCase();
+        if (text.includes("quorate")) {
+          hasCiWorkflow = true;
+          break;
+        }
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  const missingProviderKeys = config.providers
+    .filter((p) => p.enabled !== false && p.type === "api" && p.apiKeyEnv)
+    .map((p) => p.apiKeyEnv as string)
+    .filter((envVar) => !process.env[envVar]);
+
+  return { config, detectedPacks, hasCiWorkflow, missingProviderKeys: [...new Set(missingProviderKeys)] };
+}
+
+/** Render the risk report with a colored status glyph per item. */
+function printRiskReport(items: RiskItem[]): void {
+  const glyph: Record<RiskItem["level"], string> = {
+    ok: paint(PALETTE.ok, "✓"),
+    warn: paint(PALETTE.warn, "!"),
+    risk: paint(PALETTE.fail, "✗")
+  };
+  console.log("Quorate risk report\n");
+  for (const item of items) {
+    console.log(`${glyph[item.level]} ${paint(PALETTE.dim, item.label)} — ${item.detail}`);
   }
 }
 
@@ -407,12 +471,24 @@ export function buildProgram(): Command {
     .helpGroup("Setup:")
     .description("Check council readiness: environment, provider availability, and the next step.")
     .option("--json", "Print machine-readable JSON")
+    .option("--risk", "Summarize the repo's review posture (providers, keys, CI, gate, stack)")
     .option("--bundle", "Zip diagnostics to stdout (redacted config, provider grid, last report)")
     .option("--bundle-file <path>", "Write diagnostic zip to a file")
     .action((options) => {
       const cwd = cwdFrom(program);
       const config = configFrom(program);
       const detected = detectAvailableProviders();
+
+      if (options.risk) {
+        const report = buildRiskReport(gatherRiskInput(config, cwd));
+        if (options.json) {
+          console.log(JSON.stringify(report, null, 2));
+          return;
+        }
+        printRiskReport(report.items);
+        if (report.items.some((item) => item.level === "risk")) process.exitCode = 1;
+        return;
+      }
 
       if (options.bundle || options.bundleFile) {
         const buffer = buildDoctorBundle(config, cwd);
@@ -431,6 +507,73 @@ export function buildProgram(): Command {
       }
 
       printDoctor(config, cwd);
+    });
+
+  const setupCmd = program
+    .command("setup")
+    .helpGroup("Setup:")
+    .description("Generate starter files for a target (github-action, vscode) or show next steps.");
+
+  setupCmd
+    .command("github-action")
+    .description("Write a starter .github/workflows/quorate.yml.")
+    .option("-f, --force", "Overwrite an existing workflow file")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      const target = resolve(cwd, ".github", "workflows", "quorate.yml");
+      if (existsSync(target) && !options.force) {
+        console.error(`${relative(cwd, target)} already exists. Use --force to overwrite it.`);
+        process.exitCode = 1;
+        return;
+      }
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, generateGithubActionWorkflow(), "utf8");
+      console.log(`Wrote ${relative(cwd, target)}.`);
+      console.log("Next steps:");
+      console.log("  1. Commit the workflow — the heuristic reviews every PR with zero setup.");
+      console.log("  2. For real model review, add a `type: api` provider to .quorate.yml");
+      console.log("     (`quorate provider add`) and pass its key secret via the step's env.");
+    });
+
+  setupCmd
+    .command("vscode")
+    .description("Recommend the Quorate VS Code extension in .vscode/extensions.json.")
+    .action(() => {
+      const cwd = cwdFrom(program);
+      const target = resolve(cwd, ".vscode", "extensions.json");
+      const existing = existsSync(target) ? readFileSync(target, "utf8") : undefined;
+      const merged = mergeVscodeRecommendations(existing);
+      if (merged === null) {
+        console.error(
+          `Could not parse ${relative(cwd, target)} (it may use JSONC comments). Add "umutkorkmaz.quorate-vscode" to its recommendations manually.`
+        );
+        process.exitCode = 1;
+        return;
+      }
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, merged, "utf8");
+      console.log(`Updated ${relative(cwd, target)} to recommend the Quorate extension.`);
+      console.log("Reload VS Code and accept the workspace recommendation to install it.");
+    });
+
+  setupCmd
+    .command("provider")
+    .description("How to add a model provider (delegates to `quorate provider add`).")
+    .action(() => {
+      console.log("Add a provider with a preset, then export its key:");
+      console.log("  quorate provider add openrouter --preset openrouter");
+      console.log("  export OPENROUTER_API_KEY=…");
+      console.log("Run `quorate provider presets` to see all 16 presets, or `quorate provider add --help`.");
+    });
+
+  setupCmd
+    .command("github-app")
+    .description("How to install the hosted Quorate GitHub App.")
+    .action(() => {
+      console.log("The Quorate GitHub App reviews PRs org-wide with no per-repo workflow.");
+      console.log("Install it from the repository's Settings → GitHub Apps, or self-host");
+      console.log("`@quorate/github-app` (see packages/github-app/README.md).");
+      console.log("For a single repo without the App, use `quorate setup github-action` instead.");
     });
 
   program

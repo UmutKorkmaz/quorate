@@ -32,6 +32,14 @@ one → earn trust → control cost → improve precision → extend reach.
   the kept set with the degraded→warn override preserved; the Action reads the baseline from the
   **base ref**, never the PR head. 22 tests (core + CLI + Action). Keys off K0's `fingerprintFinding`.
 
+- **M1 · Setup generators + risk report — DONE** (`packages/cli/src/setup-command.ts`).
+  `quorate setup github-action` writes a starter workflow (refuses to clobber without `--force`);
+  `quorate setup vscode` adds the extension to `.vscode/extensions.json` (idempotent merge; never
+  clobbers a JSONC file); `setup provider`/`github-app` print next steps. `quorate doctor --risk`
+  summarizes review posture — real-provider coverage (heuristic-only is flagged a risk), missing
+  provider keys, CI coverage, the gate threshold, and the detected stack — exiting non-zero on a
+  risk. Pure generators; 10 tests. Note: this PR is independent of the export/policy PRs.
+
 ## Two keystones (build these first — they unblock half the list)
 
 ### K1. Canonical finding fingerprint — `fingerprintFinding()` in core
