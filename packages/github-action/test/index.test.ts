@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { createDefaultConfig, reportCommentMarker } from "@quorate/core";
 import {
   applyOverrides,
@@ -370,5 +373,37 @@ describe("runAction baseline fail-secure", () => {
     // A malformed baseline must never *crash* the gate; setFailed is only ever
     // about the verdict, never an unhandled baseline error.
     expect(failed.every((m) => /verdict/i.test(m))).toBe(true);
+  });
+});
+
+describe("runAction SARIF output", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    dirs.length = 0;
+  });
+
+  it("writes a SARIF file and sets the sarif-path output when sarif-file is set", async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), "quorate-sarif-"));
+    dirs.push(dir);
+    const sarifPath = resolve(dir, "quorate.sarif");
+    const { deps, outputs } = makeDeps({
+      getInput: (name) =>
+        ({ "github-token": "token-123", "post-comment": "false", "sarif-file": sarifPath } as Record<string, string>)[name]
+    });
+
+    await runAction(deps);
+
+    expect(outputs["sarif-path"]).toBe(sarifPath);
+    expect(existsSync(sarifPath)).toBe(true);
+    const sarif = JSON.parse(readFileSync(sarifPath, "utf8"));
+    expect(sarif.version).toBe("2.1.0");
+    expect(sarif.runs[0].tool.driver.name).toBe("Quorate");
+  });
+
+  it("does not set sarif-path when sarif-file is empty", async () => {
+    const { deps, outputs } = makeDeps();
+    await runAction(deps);
+    expect(outputs["sarif-path"]).toBeUndefined();
   });
 });

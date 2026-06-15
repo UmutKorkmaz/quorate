@@ -142,6 +142,16 @@ jobs:
           </tr>
           <tr>
             <td>
+              <code>sarif-file</code>
+            </td>
+            <td>—</td>
+            <td>
+              Path to write a SARIF 2.1.0 report; the path is exposed as the <code>sarif-path</code>{" "}
+              output for a downstream <InlineCode>upload-sarif</InlineCode> step.
+            </td>
+          </tr>
+          <tr>
+            <td>
               <code>mode</code>
             </td>
             <td>
@@ -151,6 +161,36 @@ jobs:
           </tr>
         </tbody>
       </table>
+
+      <h2>SARIF → GitHub Code Scanning</h2>
+      <p>
+        Write a SARIF report and hand it to GitHub&apos;s <InlineCode>upload-sarif</InlineCode> action
+        to surface findings in the repository <strong>Security</strong> tab, with inline annotations
+        that persist beyond the PR. A composite action can&apos;t upload SARIF itself, so Quorate
+        writes the file and exposes its path:
+      </p>
+      <CodeBlock language="yaml">{`permissions:
+  contents: read
+  pull-requests: write
+  security-events: write          # required to upload SARIF
+steps:
+  - uses: actions/checkout@v4
+  - id: quorate
+    uses: UmutKorkmaz/quorate@v0.9.0
+    with:
+      github-token: \${{ secrets.GITHUB_TOKEN }}
+      sarif-file: quorate.sarif
+  - uses: github/codeql-action/upload-sarif@v3
+    if: always()
+    with:
+      sarif_file: \${{ steps.quorate.outputs.sarif-path }}`}</CodeBlock>
+      <p>
+        The SARIF rule id is stable per finding class (Code Scanning groups recurrences instead of
+        re-opening them), and each result carries a <InlineCode>quorateFingerprint</InlineCode>. The
+        CLI writes the same formats locally — <InlineCode>review --write-sarif</InlineCode>,{" "}
+        <InlineCode>--write-junit</InlineCode> (CI test dashboards, incl. GitLab/Azure),{" "}
+        <InlineCode>--write-html</InlineCode>, and <InlineCode>--write-md</InlineCode>.
+      </p>
 
       <h2>Adopt on an existing repo: baseline mode</h2>
       <p>
