@@ -68,6 +68,13 @@ inputs:
     description: Path to the committed baseline file (read from the base branch).
     required: false
     default: .quorate.baseline.json
+  suppress-path:
+    description: >-
+      Path to a committed suppression store, read from the base branch. When
+      present, accepted-risk findings are tagged suppressed (visible but
+      ungated). A PR cannot suppress its own new findings.
+    required: false
+    default: .quorate/suppressions.json
   policy-path:
     description: >-
       Path to a VerdictGate policy file (read from the base branch). When present

@@ -210,6 +210,26 @@ git add .quorate.baseline.json && git commit -m "chore: quorate baseline"`}</Cod
         <InlineCode>quorate baseline --update</InlineCode>.
       </p>
 
+      <h2>Accept a finding: suppressions</h2>
+      <p>
+        When a finding is a deliberate, accepted risk, suppress it by fingerprint with a{" "}
+        <strong>required reason</strong> (and optional expiry). Suppressed findings are{" "}
+        <strong>tagged, not dropped</strong>: they stay visible in the report —{" "}
+        <em>1 active, 2 suppressed</em> — but never count toward the verdict or merge gate, so an
+        accepted critical can never pass <em>silently</em>.
+      </p>
+      <CodeBlock language="bash">{`quorate review --base origin/main        # produce a report
+quorate fix --list                        # find the finding number (1-based)
+quorate suppress add 1 --reason "third-party fixture, not a real secret" [--expires 2026-09-01]
+git add -f .quorate/suppressions.json && git commit -m "chore: suppress fixture secret"`}</CodeBlock>
+      <p>
+        Then the committed <InlineCode>.quorate/suppressions.json</InlineCode> applies
+        automatically on every run. Like the baseline, the Action reads it from the{" "}
+        <strong>base branch</strong>, so a PR can&apos;t suppress its own new findings. Manage it with{" "}
+        <InlineCode>quorate suppress list</InlineCode>, <InlineCode>remove</InlineCode>, and{" "}
+        <InlineCode>audit</InlineCode> (which exits non-zero when any suppression has expired).
+      </p>
+
       <h2>Outputs</h2>
       <ul>
         <li>

@@ -48,6 +48,16 @@ one → earn trust → control cost → improve precision → extend reach.
   provider keys, CI coverage, the gate threshold, and the detected stack — exiting non-zero on a
   risk. Pure generators; 10 tests. Note: this PR is independent of the export/policy PRs.
 
+- **M2 · Suppression management — DONE** (`packages/core/src/suppression.ts`,
+  CLI `quorate suppress add|list|remove|audit` + always-on in `review`, Action
+  `suppress-path` input). A committed `.quorate/suppressions.json` records
+  accepted-risk findings (fingerprint + **required** reason + optional expiry).
+  Suppressed findings are **tagged, not dropped** — they stay visible in the
+  report (`_(suppressed)_`, "N active, M suppressed") but never count toward the
+  verdict or gate. `verdictFor`/`shouldFailForPolicy` skip `status:"suppressed"`.
+  The store is read from the **base ref**; a malformed store warns and gates on
+  all findings (fail-secure). Keys off K0's `fingerprintFinding`. 35 tests.
+
 - **M1 · Export pipeline — DONE** (`packages/core/src/export.ts`, CLI `review
   --write-sarif|--write-junit|--write-html|--write-md`, Action `sarif-file` input + `sarif-path`
   output). Pure `CouncilReport → string` exporters: SARIF 2.1.0 (Code Scanning / GitLab),

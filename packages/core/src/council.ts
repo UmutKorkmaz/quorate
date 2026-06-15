@@ -110,12 +110,23 @@ export function clusterFindings(findings: Finding[]): Finding[] {
   });
 }
 
+/**
+ * Findings that count toward a verdict/gate. Suppressed findings are tagged
+ * `status: "suppressed"` and remain VISIBLE in the report, but they must never
+ * influence the verdict or merge gate — so every gate computation filters them
+ * out here. See `applySuppressions` in suppression.ts.
+ */
+export function activeFindings(findings: Finding[]): Finding[] {
+  return findings.filter((finding) => finding.status !== "suppressed");
+}
+
 export function verdictFor(findings: Finding[], providerResults: ProviderResult[]): Verdict {
-  if (findings.some((finding) => finding.severity === "critical" || finding.severity === "high")) {
+  const active = activeFindings(findings);
+  if (active.some((finding) => finding.severity === "critical" || finding.severity === "high")) {
     return "fail";
   }
 
-  if (findings.some((finding) => finding.severity === "medium")) {
+  if (active.some((finding) => finding.severity === "medium")) {
     return "warn";
   }
 

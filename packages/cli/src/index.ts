@@ -36,6 +36,13 @@ import {
 import { buildProvider } from "./provider-add.js";
 import { applyBaselineToReport, writeBaselineFromReport } from "./baseline-command.js";
 import {
+  applySuppressionStore,
+  loadSuppressionStore,
+  removeSuppressionFromStore,
+  writeSuppression
+} from "./suppress-command.js";
+import { listExpired } from "@quorate/core";
+import {
   buildRiskReport,
   generateGithubActionWorkflow,
   mergeVscodeRecommendations,
@@ -829,6 +836,7 @@ export function buildProgram(): Command {
     .option("--write-md <path>", "Write the Markdown report to a file")
     .option("--baseline", "Gate only on findings absent from the committed baseline")
     .option("--baseline-path <path>", "Baseline file to gate against (default .quorate.baseline.json)")
+    .option("--suppress-path <path>", "Suppression store to apply (default .quorate/suppressions.json)")
     .option("--fail-on <severity>", "Override the gate threshold (critical…info, or never)")
     .action(async (options) => {
       const cwd = cwdFrom(program);
@@ -857,10 +865,19 @@ export function buildProgram(): Command {
       let rawReport: CouncilReport | undefined;
       const transformReport = (raw: CouncilReport): CouncilReport => {
         rawReport = raw;
-        if (!options.baseline) return raw;
-        const applied = applyBaselineToReport(raw, cwd, options.baselinePath);
-        for (const note of applied.notes) console.error(note);
-        return applied.report;
+        // Baseline first (removes accepted findings entirely), then suppression
+        // (tags the remainder as accepted-but-visible). Suppression is always-on
+        // when a committed .quorate/suppressions.json exists — its presence IS
+        // the opt-in. Both notes go to stderr so stdout stays clean for --json.
+        let current = raw;
+        if (options.baseline) {
+          const applied = applyBaselineToReport(current, cwd, options.baselinePath);
+          for (const note of applied.notes) console.error(note);
+          current = applied.report;
+        }
+        const suppressed = applySuppressionStore(current, cwd, options.suppressPath);
+        for (const note of suppressed.notes) console.error(note);
+        return suppressed.report;
       };
 
       const report = options.json
@@ -942,6 +959,132 @@ export function buildProgram(): Command {
         const verb = result.overwritten ? "Updated" : "Wrote";
         console.log(`${verb} baseline with ${result.count} finding(s) at ${relative(cwd, result.path)}.`);
         console.log("Commit this file so teammates and CI share the same accepted-issue set.");
+      } catch (error: unknown) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
+    });
+
+  const suppressCmd = program
+    .command("suppress")
+    .helpGroup("Review:")
+    .description("Manage accepted-risk suppressions (.quorate/suppressions.json).");
+
+  suppressCmd
+    .command("add")
+    .description("Accept a finding by fingerprint or number from the last report. Requires --reason.")
+    .argument("[target]", "A finding fingerprint, or a 1-based finding number from --report")
+    .option("--reason <text>", "Why this finding is accepted (required)")
+    .option("--expires <yyyy-mm-dd>", "Date the suppression lapses (optional)")
+    .option("--report <path>", "Source report for a finding number (default .quorate/last-report.json)")
+    .option("--path <path>", "Suppression store path (default .quorate/suppressions.json)")
+    .action((target: string | undefined, options) => {
+      const cwd = cwdFrom(program);
+      if (!target) {
+        console.error("Pass a fingerprint or a finding number (from `quorate fix --list`).");
+        process.exitCode = 1;
+        return;
+      }
+      if (!options.reason || options.reason.trim().length === 0) {
+        console.error("A --reason is required to suppress a finding.");
+        process.exitCode = 1;
+        return;
+      }
+      // A finding number (1-based) resolves to a fingerprint via the last report.
+      let fingerprint = target;
+      if (/^\d+$/.test(target)) {
+        const last = loadLastReport(cwd, options.report);
+        if (!last) {
+          console.error("No report found to resolve the finding number. Run `quorate review` first.");
+          process.exitCode = 1;
+          return;
+        }
+        const n = Number(target);
+        const found = last.findings[n - 1];
+        if (!found) {
+          console.error(`Finding number ${n} is out of range (the last report has ${last.findings.length}).`);
+          process.exitCode = 1;
+          return;
+        }
+        fingerprint = found.fingerprint ?? "";
+        if (!fingerprint) {
+          console.error("That finding has no fingerprint (stale report — re-run `quorate review`).");
+          process.exitCode = 1;
+          return;
+        }
+      }
+      try {
+        const result = writeSuppression(cwd, fingerprint, options.reason, {
+          storePath: options.path,
+          expires: options.expires,
+          createdAt: new Date().toISOString()
+        });
+        console.log(`Suppressed ${fingerprint} at ${relative(cwd, result.path)}.`);
+        console.log("The .quorate/ dir is gitignored — commit it with: git add -f .quorate/suppressions.json");
+      } catch (error: unknown) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
+    });
+
+  suppressCmd
+    .command("list")
+    .description("List committed suppressions and flag expired ones.")
+    .option("--path <path>", "Suppression store path (default .quorate/suppressions.json)")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      try {
+        const store = loadSuppressionStore(cwd, options.path);
+        if (!store || store.suppressions.length === 0) {
+          console.log("No suppressions recorded.");
+          return;
+        }
+        const now = Date.now();
+        for (const entry of store.suppressions) {
+          const expired = entry.expires !== undefined && Date.parse(entry.expires) <= now;
+          const when = expired ? "(expired)" : entry.expires ? `→ expires ${entry.expires}` : "(no expiry)";
+          console.log(`${entry.fingerprint}  ${when}\n  ${entry.reason}`);
+        }
+      } catch (error: unknown) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
+    });
+
+  suppressCmd
+    .command("remove")
+    .description("Remove a suppression by fingerprint.")
+    .argument("<fingerprint>", "The fingerprint to un-suppress")
+    .option("--path <path>", "Suppression store path (default .quorate/suppressions.json)")
+    .action((fingerprint: string, options) => {
+      const cwd = cwdFrom(program);
+      const removed = removeSuppressionFromStore(cwd, fingerprint, options.path);
+      if (removed) {
+        console.log(`Removed suppression for ${fingerprint}.`);
+      } else {
+        console.error(`No suppression for ${fingerprint}.`);
+        process.exitCode = 1;
+      }
+    });
+
+  suppressCmd
+    .command("audit")
+    .description("Report on suppressions: counts and expired entries (exit 1 if any are expired).")
+    .option("--path <path>", "Suppression store path (default .quorate/suppressions.json)")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      try {
+        const store = loadSuppressionStore(cwd, options.path);
+        if (!store) {
+          console.log("No suppression store committed.");
+          return;
+        }
+        const expired = listExpired(store);
+        console.log(`${store.suppressions.length} suppression(s) committed${expired.length ? `, ${expired.length} expired` : ""}.`);
+        for (const entry of expired) {
+          console.log(`  ! ${entry.fingerprint} expired ${entry.expires} — ${entry.reason}`);
+        }
+        if (expired.length > 0) process.exitCode = 1;
       } catch (error: unknown) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;

@@ -2,16 +2,20 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import {
   applyBaseline,
+  applySuppressions,
   createDefaultConfig,
-  detectPacks,
   DEFAULT_BASELINE_PATH,
   DEFAULT_POLICY_PATH,
+  DEFAULT_SUPPRESSION_PATH,
+  detectPacks,
   isBaselineStale,
+  listExpired,
   PACKS,
   PACK_IDS,
   parseBaseline,
   parseConfig,
   parsePolicyYaml,
+  parseSuppressionStore,
   renderMarkdownReport,
   renderSarif,
   resolvePolicy,
@@ -22,7 +26,8 @@ import {
   type CouncilReport,
   type QuorateConfig,
   type QuoratePolicy,
-  type Severity
+  type Severity,
+  type SuppressionStore
 } from "@quorate/core";
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -266,6 +271,35 @@ export async function loadBaseBaseline(
 }
 
 /**
+ * Load a committed suppression store from the BASE ref (trusted), never the PR
+ * head — a PR must not be able to suppress its own new findings. Returns null
+ * when no store is committed.
+ */
+export async function loadBaseSuppressionStore(
+  client: Octokit,
+  params: { owner: string; repo: string; ref: string; path: string }
+): Promise<SuppressionStore | null> {
+  try {
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path: params.path,
+      ref: params.ref
+    });
+    const data = res.data;
+    if (!Array.isArray(data) && data.type === "file" && typeof (data as { content?: string }).content === "string") {
+      const file = data as { content: string; encoding?: string };
+      const decoded = Buffer.from(file.content, file.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      return parseSuppressionStore(decoded);
+    }
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status !== 404) throw error;
+  }
+  return null;
+}
+
+/**
  * Load a standalone VerdictGate policy from the BASE ref (trusted), never the PR
  * head — a pull request must not be able to weaken the gate that reviews it.
  * Returns null when no policy is committed.
@@ -372,6 +406,29 @@ export async function runAction(deps: ActionDeps): Promise<void> {
       );
       report = rawReport;
     }
+  }
+
+  // Committed suppression store (always-on when present): accept-risk entries
+  // tag matching findings `suppressed` (visible but ungated). Read from the BASE
+  // ref so a PR cannot suppress its own new findings; a malformed store warns
+  // and falls back to gating on all findings (fail-secure).
+  const suppressPath = input("suppress-path") ?? DEFAULT_SUPPRESSION_PATH;
+  try {
+    const store = await loadBaseSuppressionStore(client, { owner, repo, ref: baseRef, path: suppressPath });
+    if (store) {
+      const expired = listExpired(store);
+      if (expired.length > 0) {
+        deps.warning?.(`${expired.length} committed suppression(s) have expired and no longer apply.`);
+      }
+      report = applySuppressions(report, store);
+      if (report.metadata.suppressedFindings) {
+        deps.info?.(`Suppressed ${report.metadata.suppressedFindings} finding(s) via the committed store.`);
+      }
+    }
+  } catch (error: unknown) {
+    deps.warning?.(
+      `Could not apply the suppression store (${error instanceof Error ? error.message : String(error)}) — gating on all findings.`
+    );
   }
 
   const summary = summarizeDiff(diff);
