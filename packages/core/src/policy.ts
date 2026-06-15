@@ -137,13 +137,19 @@ export function resolvePolicy(
 
 function exceedsThreshold(report: CouncilReport, failOn: Severity | "never"): boolean {
   if (failOn === "never") return false;
-  return report.findings.some((finding) => severityWeight[finding.severity] >= severityWeight[failOn]);
+  // Suppressed findings stay visible but never count toward the gate.
+  return report.findings.some(
+    (finding) => finding.status !== "suppressed" && severityWeight[finding.severity] >= severityWeight[failOn]
+  );
 }
 
 function agreementGateTrips(report: CouncilReport, gate: { severity: Severity; minAgreement: number }): boolean {
   const gateWeight = severityWeight[gate.severity];
   return report.findings.some(
-    (finding) => severityWeight[finding.severity] >= gateWeight && (finding.agreement ?? 1) >= gate.minAgreement
+    (finding) =>
+      finding.status !== "suppressed" &&
+      severityWeight[finding.severity] >= gateWeight &&
+      (finding.agreement ?? 1) >= gate.minAgreement
   );
 }
 

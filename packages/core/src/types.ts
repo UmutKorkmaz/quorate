@@ -114,6 +114,12 @@ export interface Finding {
    * and inline-comment markers. See `fingerprintFinding` in identity.ts.
    */
   fingerprint?: string;
+  /**
+   * Suppression state: `active` (default, ungated) or `suppressed` (matched a
+   * committed suppression store — visible but never counted toward the verdict
+   * or merge gate). See `applySuppressions` in suppression.ts.
+   */
+  status?: "active" | "suppressed";
 }
 
 export type ProviderRunStatus = "ok" | "error" | "skipped" | "interrupted";
@@ -156,6 +162,12 @@ export interface CouncilReport {
      * baseline. Set only when a baseline was applied. See `applyBaseline`.
      */
     baselinedFindings?: number;
+    /**
+     * Number of findings tagged `status: "suppressed"` by the committed
+     * suppression store. Suppressed findings stay visible but never count
+     * toward the verdict or merge gate. See `applySuppressions`.
+     */
+    suppressedFindings?: number;
   };
 }
 

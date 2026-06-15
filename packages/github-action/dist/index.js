@@ -26910,6 +26910,7 @@ __export(index_exports, {
   loadBaseBaseline: () => loadBaseBaseline,
   loadBaseConfig: () => loadBaseConfig,
   loadBasePolicy: () => loadBasePolicy,
+  loadBaseSuppressionStore: () => loadBaseSuppressionStore,
   normalizeInput: () => normalizeInput,
   parseBoolean: () => parseBoolean,
   resolveBaseRef: () => resolveBaseRef,
@@ -48873,11 +48874,15 @@ function clusterFindings(findings) {
     };
   });
 }
+function activeFindings(findings) {
+  return findings.filter((finding) => finding.status !== "suppressed");
+}
 function verdictFor(findings, providerResults) {
-  if (findings.some((finding) => finding.severity === "critical" || finding.severity === "high")) {
+  const active = activeFindings(findings);
+  if (active.some((finding) => finding.severity === "critical" || finding.severity === "high")) {
     return "fail";
   }
-  if (findings.some((finding) => finding.severity === "medium")) {
+  if (active.some((finding) => finding.severity === "medium")) {
     return "warn";
   }
   if (providerResults.length > 0 && providerResults.every((result) => result.status === "error")) {
@@ -49768,12 +49773,14 @@ function resolvePolicy(config2, options) {
 }
 function exceedsThreshold(report, failOn) {
   if (failOn === "never") return false;
-  return report.findings.some((finding) => severityWeight2[finding.severity] >= severityWeight2[failOn]);
+  return report.findings.some(
+    (finding) => finding.status !== "suppressed" && severityWeight2[finding.severity] >= severityWeight2[failOn]
+  );
 }
 function agreementGateTrips(report, gate) {
   const gateWeight = severityWeight2[gate.severity];
   return report.findings.some(
-    (finding) => severityWeight2[finding.severity] >= gateWeight && (finding.agreement ?? 1) >= gate.minAgreement
+    (finding) => finding.status !== "suppressed" && severityWeight2[finding.severity] >= gateWeight && (finding.agreement ?? 1) >= gate.minAgreement
   );
 }
 function requiredRolesMissing(report, rolesRequired) {
@@ -49813,13 +49820,14 @@ function agreementFor(finding) {
   return String(finding.agreement ?? 1);
 }
 function findingRow(finding) {
+  const title = finding.status === "suppressed" ? `${finding.title} _(suppressed)_` : finding.title;
   return [
     finding.severity,
     agreementFor(finding),
     finding.providerId ?? "",
     finding.role ?? "",
     locationFor(finding),
-    finding.title.replaceAll("|", "\\|"),
+    title.replaceAll("|", "\\|"),
     finding.body.replaceAll("\n", " ").replaceAll("|", "\\|")
   ].join(" | ");
 }
@@ -49838,6 +49846,8 @@ function renderMarkdownReport(report, options = {}) {
     // distinguishable from a genuinely clean run.
     report.metadata.baselinedFindings ? `
 _(${report.metadata.baselinedFindings} finding${report.metadata.baselinedFindings === 1 ? "" : "s"} suppressed by the committed baseline)_` : void 0,
+    report.metadata.suppressedFindings ? `
+_(${report.metadata.suppressedFindings} finding${report.metadata.suppressedFindings === 1 ? "" : "s"} accepted as suppressed \u2014 visible but not gating)_` : void 0,
     hasSummary ? "" : void 0,
     hasSummary ? "## Summary" : void 0,
     hasSummary ? "" : void 0,
@@ -49898,6 +49908,76 @@ function summarizeDiff(diff) {
   const heading = `**${files.length} file${files.length === 1 ? "" : "s"} changed**`;
   const bullets = files.map((path) => `- \`${path}\``);
   return [heading, "", ...bullets].join("\n");
+}
+
+// ../core/src/suppression.ts
+var SUPPRESSION_VERSION = 1;
+var DEFAULT_SUPPRESSION_PATH = ".quorate/suppressions.json";
+var entrySchema = external_exports.object({
+  fingerprint: external_exports.string().min(1),
+  reason: external_exports.string().min(1),
+  createdAt: external_exports.string().min(1),
+  expires: external_exports.string().optional()
+});
+var storeSchema = external_exports.object({
+  version: external_exports.number().int(),
+  suppressions: external_exports.array(entrySchema)
+});
+function parseSuppressionStore(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid suppression store: not valid JSON.");
+  }
+  const parsed = storeSchema.safeParse(data);
+  if (!parsed.success) {
+    throw new Error(
+      `Invalid suppression store: ${parsed.error.issues[0]?.message ?? "schema mismatch"}.`
+    );
+  }
+  if (parsed.data.version !== SUPPRESSION_VERSION) {
+    throw new Error(
+      `Unsupported suppression store version ${parsed.data.version} (expected ${SUPPRESSION_VERSION}). Regenerate with \`quorate suppress\`.`
+    );
+  }
+  return parsed.data;
+}
+function isSuppressed(store, fingerprint, nowMs = Date.now()) {
+  return store.suppressions.some((entry) => {
+    if (entry.fingerprint !== fingerprint) return false;
+    if (entry.expires !== void 0 && Date.parse(entry.expires) <= nowMs) return false;
+    return true;
+  });
+}
+function listExpired(store, nowMs = Date.now()) {
+  return store.suppressions.filter(
+    (entry) => entry.expires !== void 0 && Date.parse(entry.expires) <= nowMs
+  );
+}
+function applySuppressions(report, store, nowMs = Date.now()) {
+  if (store.suppressions.length === 0) return report;
+  let tagged = 0;
+  const findings = report.findings.map((finding) => {
+    const fingerprint = finding.fingerprint ?? fingerprintFinding(finding);
+    if (isSuppressed(store, fingerprint, nowMs)) {
+      tagged += 1;
+      return { ...finding, fingerprint, status: "suppressed" };
+    }
+    return finding;
+  });
+  if (tagged === 0) return report;
+  const active = findings.filter((finding) => finding.status !== "suppressed");
+  const verdict = finalVerdict(active, report.providerResults, report.metadata.degraded);
+  const activeCount = active.length;
+  const summary2 = `${activeCount} active finding${activeCount === 1 ? "" : "s"} (${tagged} suppressed).`;
+  return {
+    ...report,
+    verdict,
+    summary: summary2,
+    findings,
+    metadata: { ...report.metadata, suppressedFindings: tagged }
+  };
 }
 
 // ../core/src/theme.ts
@@ -50198,6 +50278,26 @@ async function loadBaseBaseline(client, params) {
   }
   return null;
 }
+async function loadBaseSuppressionStore(client, params) {
+  try {
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path: params.path,
+      ref: params.ref
+    });
+    const data = res.data;
+    if (!Array.isArray(data) && data.type === "file" && typeof data.content === "string") {
+      const file2 = data;
+      const decoded = Buffer.from(file2.content, file2.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      return parseSuppressionStore(decoded);
+    }
+  } catch (error52) {
+    const status = error52.status;
+    if (status !== 404) throw error52;
+  }
+  return null;
+}
 async function loadBasePolicy(client, params) {
   try {
     const res = await client.rest.repos.getContent({
@@ -50282,6 +50382,24 @@ async function runAction(deps) {
       );
       report = rawReport;
     }
+  }
+  const suppressPath = input("suppress-path") ?? DEFAULT_SUPPRESSION_PATH;
+  try {
+    const store = await loadBaseSuppressionStore(client, { owner, repo, ref: baseRef, path: suppressPath });
+    if (store) {
+      const expired = listExpired(store);
+      if (expired.length > 0) {
+        deps.warning?.(`${expired.length} committed suppression(s) have expired and no longer apply.`);
+      }
+      report = applySuppressions(report, store);
+      if (report.metadata.suppressedFindings) {
+        deps.info?.(`Suppressed ${report.metadata.suppressedFindings} finding(s) via the committed store.`);
+      }
+    }
+  } catch (error52) {
+    deps.warning?.(
+      `Could not apply the suppression store (${error52 instanceof Error ? error52.message : String(error52)}) \u2014 gating on all findings.`
+    );
   }
   const summary2 = summarizeDiff(diff);
   const body = renderMarkdownReport(report, { includeMarker: true, summary: summary2 });
@@ -50379,6 +50497,7 @@ if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
   loadBaseBaseline,
   loadBaseConfig,
   loadBasePolicy,
+  loadBaseSuppressionStore,
   normalizeInput,
   parseBoolean,
   resolveBaseRef,

@@ -21,13 +21,16 @@ function agreementFor(finding: Finding): string {
 }
 
 function findingRow(finding: Finding): string {
+  // Suppressed findings stay visible but are clearly marked as accepted and
+  // ungated, so a quiet verdict is never mistaken for a genuinely clean run.
+  const title = finding.status === "suppressed" ? `${finding.title} _(suppressed)_` : finding.title;
   return [
     finding.severity,
     agreementFor(finding),
     finding.providerId ?? "",
     finding.role ?? "",
     locationFor(finding),
-    finding.title.replaceAll("|", "\\|"),
+    title.replaceAll("|", "\\|"),
     finding.body.replaceAll("\n", " ").replaceAll("|", "\\|")
   ].join(" | ");
 }
@@ -50,6 +53,9 @@ export function renderMarkdownReport(
     // distinguishable from a genuinely clean run.
     report.metadata.baselinedFindings
       ? `\n_(${report.metadata.baselinedFindings} finding${report.metadata.baselinedFindings === 1 ? "" : "s"} suppressed by the committed baseline)_`
+      : undefined,
+    report.metadata.suppressedFindings
+      ? `\n_(${report.metadata.suppressedFindings} finding${report.metadata.suppressedFindings === 1 ? "" : "s"} accepted as suppressed — visible but not gating)_`
       : undefined,
     hasSummary ? "" : undefined,
     hasSummary ? "## Summary" : undefined,
@@ -88,7 +94,11 @@ export function renderMarkdownReport(
 
 export function shouldFailForThreshold(report: CouncilReport, threshold: Severity | "never"): boolean {
   if (threshold === "never") return false;
-  return report.findings.some((finding) => severityWeight[finding.severity] >= severityWeight[threshold]);
+  // Suppressed findings stay visible but never count toward the threshold, so a
+  // suppressed critical cannot trip the gate. Mirrors the policy engine.
+  return report.findings.some(
+    (finding) => finding.status !== "suppressed" && severityWeight[finding.severity] >= severityWeight[threshold]
+  );
 }
 
 /**
