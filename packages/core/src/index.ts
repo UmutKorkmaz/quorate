@@ -4,6 +4,7 @@ export * from "./pack-coverage.js";
 export * from "./cli-provider.js";
 export * from "./config.js";
 export * from "./council.js";
+export * from "./export.js";
 export * from "./heuristics.js";
 export * from "./identity.js";
 export * from "./merge.js";

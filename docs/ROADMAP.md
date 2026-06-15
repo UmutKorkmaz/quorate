@@ -48,6 +48,14 @@ one → earn trust → control cost → improve precision → extend reach.
   provider keys, CI coverage, the gate threshold, and the detected stack — exiting non-zero on a
   risk. Pure generators; 10 tests. Note: this PR is independent of the export/policy PRs.
 
+- **M1 · Export pipeline — DONE** (`packages/core/src/export.ts`, CLI `review
+  --write-sarif|--write-junit|--write-html|--write-md`, Action `sarif-file` input + `sarif-path`
+  output). Pure `CouncilReport → string` exporters: SARIF 2.1.0 (Code Scanning / GitLab),
+  JUnit XML (CI test dashboards), self-contained HTML, Markdown. SARIF `ruleId` comes from K0's
+  `findingRuleId` (one stable rule per finding class) and carries `quorateFingerprint`; HTML/XML
+  are injection-safe (escaped) and HTML caps at 500 rows. The Action writes SARIF and exposes its
+  path for a downstream `upload-sarif` step (a composite action can't upload itself). 17 tests.
+
 ## Two keystones (build these first — they unblock half the list)
 
 ### K1. Canonical finding fingerprint — `fingerprintFinding()` in core

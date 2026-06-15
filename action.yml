@@ -76,11 +76,20 @@ inputs:
       docs/products/VERDICT-GATE.md.
     required: false
     default: .quorate/policy.yml
+  sarif-file:
+    description: >-
+      Path to write a SARIF 2.1.0 report. The written path is exposed as the
+      `sarif-path` output; add a downstream `github/codeql-action/upload-sarif`
+      step to publish it to the Security tab. Empty disables SARIF output.
+    required: false
+    default: ""
 outputs:
   verdict:
     description: Final Quorate verdict.
   findings:
     description: Number of findings in the report.
+  sarif-path:
+    description: Absolute path of the written SARIF file (when sarif-file is set).
 runs:
   using: node20
   main: packages/github-action/dist/index.js

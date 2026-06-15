@@ -20,7 +20,10 @@ import {
   PALETTE,
   PROVIDER_PRESETS,
   PROVIDER_PRESET_NAMES,
+  renderHtml,
+  renderJunit,
   renderMarkdownReport,
+  renderSarif,
   resolvePolicy,
   runCouncil,
   serializeConfig,
@@ -820,6 +823,10 @@ export function buildProgram(): Command {
     .option("--merge <id>", "Master agent that merges duplicate findings across reviewers")
     .option("--json", "Stream NDJSON events to stdout (final line is the report JSON)")
     .option("--write-json <path>", "Write the JSON report to a file")
+    .option("--write-sarif <path>", "Write a SARIF 2.1.0 report (GitHub Code Scanning, GitLab)")
+    .option("--write-junit <path>", "Write a JUnit XML report (CI test dashboards)")
+    .option("--write-html <path>", "Write a standalone HTML report")
+    .option("--write-md <path>", "Write the Markdown report to a file")
     .option("--baseline", "Gate only on findings absent from the committed baseline")
     .option("--baseline-path <path>", "Baseline file to gate against (default .quorate.baseline.json)")
     .option("--fail-on <severity>", "Override the gate threshold (critical…info, or never)")
@@ -871,6 +878,18 @@ export function buildProgram(): Command {
       if (options.writeJson) {
         writeFileSync(resolve(cwd, options.writeJson), `${JSON.stringify(report, null, 2)}\n`, "utf8");
       }
+      // Multi-format exporters for CI ecosystems (Code Scanning, test dashboards).
+      const writeExport = (path: string | undefined, content: string): void => {
+        if (!path) return;
+        const target = resolve(cwd, path);
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, content, "utf8");
+      };
+      writeExport(options.writeSarif, renderSarif(report, { toolVersion: readVersion() }));
+      writeExport(options.writeJunit, renderJunit(report));
+      writeExport(options.writeHtml, renderHtml(report));
+      writeExport(options.writeMd, renderMarkdownReport(report));
+
       // Persist the RAW report for `quorate fix` and `quorate baseline` (same
       // file the TUI writes) — never the baseline-filtered view, or a follow-up
       // `quorate baseline` would record a shrunken set.
