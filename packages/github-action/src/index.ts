@@ -5,18 +5,22 @@ import {
   createDefaultConfig,
   detectPacks,
   DEFAULT_BASELINE_PATH,
+  DEFAULT_POLICY_PATH,
   isBaselineStale,
   PACKS,
   PACK_IDS,
   parseBaseline,
   parseConfig,
+  parsePolicyYaml,
   renderMarkdownReport,
+  resolvePolicy,
   runCouncil,
-  shouldFailForReport,
+  shouldFailForPolicy,
   summarizeDiff,
   type BaselineStore,
   type CouncilReport,
   type QuorateConfig,
+  type QuoratePolicy,
   type Severity
 } from "@quorate/core";
 
@@ -255,6 +259,35 @@ export async function loadBaseBaseline(
 }
 
 /**
+ * Load a standalone VerdictGate policy from the BASE ref (trusted), never the PR
+ * head — a pull request must not be able to weaken the gate that reviews it.
+ * Returns null when no policy is committed.
+ */
+export async function loadBasePolicy(
+  client: Octokit,
+  params: { owner: string; repo: string; ref: string; path: string }
+): Promise<QuoratePolicy | null> {
+  try {
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path: params.path,
+      ref: params.ref
+    });
+    const data = res.data;
+    if (!Array.isArray(data) && data.type === "file" && typeof (data as { content?: string }).content === "string") {
+      const file = data as { content: string; encoding?: string };
+      const decoded = Buffer.from(file.content, file.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      return parsePolicyYaml(decoded);
+    }
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status !== 404) throw error;
+  }
+  return null;
+}
+
+/**
  * Dependency-injected orchestration for the action. Behavior mirrors the real
  * entry point exactly; {@link run} simply wires up @actions/core and
  * @actions/github and delegates here so the logic stays unit-testable.
@@ -371,8 +404,30 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     }
   }
 
-  if (shouldFailForReport(report, config.github)) {
-    deps.setFailed(`Quorate verdict ${report.verdict} meets fail threshold ${config.github.failOn}.`);
+  // Resolve the merge policy: a standalone .quorate/policy.yml from the BASE ref
+  // wins, else the legacy github config. A malformed policy must not brick the
+  // gate — warn and fall back to the github-derived policy (fail-secure).
+  const failOnOverride = input("fail-on") as Severity | "never" | undefined;
+  let gatePolicy: QuoratePolicy;
+  try {
+    const policyPath = input("policy-path") ?? DEFAULT_POLICY_PATH;
+    const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
+    gatePolicy = resolvePolicy(config, { policy: basePolicy ?? undefined, failOn: failOnOverride });
+    if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
+  } catch (error: unknown) {
+    deps.warning?.(
+      `Could not load the merge policy (${error instanceof Error ? error.message : String(error)}) — using the github config gate.`
+    );
+    gatePolicy = resolvePolicy(config, { failOn: failOnOverride });
+  }
+
+  if (!gatePolicy.enabled) {
+    deps.warning?.(
+      "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) — no verdict can fail this check."
+    );
+  }
+  if (shouldFailForPolicy(report, gatePolicy)) {
+    deps.setFailed(`Quorate verdict ${report.verdict} is blocked by the merge policy (fail-on ${gatePolicy.failOn}).`);
   }
 }
 

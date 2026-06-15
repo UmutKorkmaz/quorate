@@ -10,11 +10,14 @@ import {
   detectPacks,
   PACKS,
   renderMarkdownReport,
+  resolvePolicy,
   runCouncil,
+  shouldFailForPolicy,
   summarizeDiff,
   type CouncilReport,
   type Finding,
   type QuorateConfig,
+  type QuoratePolicy,
   type Severity
 } from "@quorate/core";
 import { buildPullRequestDiff } from "../../github-action/src/diff.js";
@@ -55,6 +58,11 @@ export interface AppDeps {
   readonly prTitle?: string;
   /** Override config loading — useful for tests. Falls back to base-branch detection. */
   readonly getConfig?: () => Promise<QuorateConfig>;
+  /**
+   * Load the VerdictGate policy (from the base ref). When omitted the gate is
+   * derived from the config's `github` block, matching the Action's behavior.
+   */
+  readonly getPolicy?: () => Promise<QuoratePolicy | null>;
 }
 
 export type CheckRunConclusion = "success" | "failure" | "neutral";
@@ -78,10 +86,19 @@ function severityToAnnotationLevel(severity: Severity): GitHubAnnotationLevel {
   return "notice";
 }
 
-function verdictToConclusion(verdict: CouncilReport["verdict"]): CheckRunConclusion {
-  if (verdict === "fail") return "failure";
-  if (verdict === "warn") return "neutral";
-  return "success";
+/**
+ * Map a report to a Check Run conclusion via the merge policy (not the raw
+ * verdict), so the App honors `failOn`/agreement/role gates like the CLI and
+ * Action: blocked → failure, clean pass → success, anything else → neutral.
+ * An explicit `policy` (loaded from the base ref) wins over the github config.
+ */
+function reportToConclusion(
+  report: CouncilReport,
+  config: QuorateConfig,
+  policy: QuoratePolicy | null
+): CheckRunConclusion {
+  if (shouldFailForPolicy(report, resolvePolicy(config, { policy: policy ?? undefined }))) return "failure";
+  return report.verdict === "pass" ? "success" : "neutral";
 }
 
 interface CheckRunAnnotation {
@@ -116,14 +133,18 @@ function findingsToAnnotations(findings: readonly Finding[]): CheckRunAnnotation
 function buildSummary(
   report: CouncilReport,
   detectedPacks: string[],
-  markdownBody: string
+  markdownBody: string,
+  conclusion: CheckRunConclusion
 ): string {
   const { verdict, findings } = report;
-  const verdictLine = verdict === "fail"
-    ? "**Verdict: FAIL** — critical or high-severity findings require attention."
-    : verdict === "warn"
-      ? "**Verdict: WARN** — medium-severity findings found."
-      : "**Verdict: PASS** — no blocking findings.";
+  // Describe the gate OUTCOME, not just the raw verdict — when the policy makes
+  // a fail/warn non-blocking, the text must not claim it "requires attention".
+  const verdictLine =
+    conclusion === "failure"
+      ? `**Verdict: ${verdict.toUpperCase()}** — blocks merge under the current policy.`
+      : verdict === "pass"
+        ? "**Verdict: PASS** — no blocking findings."
+        : `**Verdict: ${verdict.toUpperCase()}** — informational; does not block merge under the current policy.`;
 
   const counts: Record<string, number> = {};
   for (const f of findings) {
@@ -247,6 +268,7 @@ export async function reviewPullRequest(deps: AppDeps): Promise<CheckRunResult> 
       : buildHostedConfig(changedFiles);
 
     const detectedPackIds = detectPacks({ files: changedFiles });
+    const policy = deps.getPolicy ? await deps.getPolicy() : null;
 
     // 4. Run the council.
     const report = await runCouncil(
@@ -262,10 +284,12 @@ export async function reviewPullRequest(deps: AppDeps): Promise<CheckRunResult> 
       config
     );
 
-    // 5. Build summary markdown and the PR comment body.
+    // 5. Build summary markdown and the PR comment body. The Check Run
+    // conclusion is computed first so the summary text matches the gate outcome.
+    const conclusion = reportToConclusion(report, config, policy);
     const diffSummary = summarizeDiff(diff);
     const prCommentBody = renderMarkdownReport(report, { includeMarker: true, summary: diffSummary });
-    const checkRunSummary = buildSummary(report, detectedPackIds, prCommentBody);
+    const checkRunSummary = buildSummary(report, detectedPackIds, prCommentBody, conclusion);
 
     // 6. Upsert PR summary comment (best-effort).
     try {
@@ -283,7 +307,6 @@ export async function reviewPullRequest(deps: AppDeps): Promise<CheckRunResult> 
     }
 
     // 7. Complete the Check Run with conclusion, annotations, and a re-run action.
-    const conclusion = verdictToConclusion(report.verdict);
     const annotations = findingsToAnnotations(report.findings);
 
     await octokit.rest.checks.update({

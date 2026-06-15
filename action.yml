@@ -68,6 +68,14 @@ inputs:
     description: Path to the committed baseline file (read from the base branch).
     required: false
     default: .quorate.baseline.json
+  policy-path:
+    description: >-
+      Path to a VerdictGate policy file (read from the base branch). When present
+      it defines the merge gate (fail-on, agreement, required roles, provider
+      floor); otherwise the gate is derived from the github config. See
+      docs/products/VERDICT-GATE.md.
+    required: false
+    default: .quorate/policy.yml
 outputs:
   verdict:
     description: Final Quorate verdict.

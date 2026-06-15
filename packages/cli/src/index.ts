@@ -21,12 +21,14 @@ import {
   PROVIDER_PRESETS,
   PROVIDER_PRESET_NAMES,
   renderMarkdownReport,
+  resolvePolicy,
   runCouncil,
   serializeConfig,
-  shouldFailForReport,
+  shouldFailForPolicy,
   type CouncilReport,
   type ProviderConfig,
-  type QuorateConfig
+  type QuorateConfig,
+  type Severity
 } from "@quorate/core";
 import { buildProvider } from "./provider-add.js";
 import { applyBaselineToReport, writeBaselineFromReport } from "./baseline-command.js";
@@ -36,6 +38,13 @@ import {
   mergeVscodeRecommendations,
   type RiskItem
 } from "./setup-command.js";
+import {
+  explainPolicy,
+  loadLastReport,
+  loadPolicyFile,
+  policyDoctor,
+  writeStarterPolicy
+} from "./policy-command.js";
 import { createFixSnapshot, finalizeFix, listFixes, revertFix } from "./fix.js";
 import { buildFixPrompt, extractHunk } from "./fix-prompt.js";
 import { runWriteAgent, WRITE_AGENT_PROFILES, writeAgentProfile } from "./fix-agent.js";
@@ -813,6 +822,7 @@ export function buildProgram(): Command {
     .option("--write-json <path>", "Write the JSON report to a file")
     .option("--baseline", "Gate only on findings absent from the committed baseline")
     .option("--baseline-path <path>", "Baseline file to gate against (default .quorate.baseline.json)")
+    .option("--fail-on <severity>", "Override the gate threshold (critical…info, or never)")
     .action(async (options) => {
       const cwd = cwdFrom(program);
       let config = applyProviderFilter(configFrom(program), options.providers);
@@ -875,7 +885,13 @@ export function buildProgram(): Command {
         console.log(renderMarkdownReport(report));
       }
 
-      if (shouldFailForReport(report, config.github)) {
+      // Gate on the resolved policy: a standalone .quorate/policy.yml wins,
+      // else the legacy github config; --fail-on overrides the threshold.
+      const policy = resolvePolicy(config, {
+        policy: loadPolicyFile(cwd) ?? undefined,
+        failOn: options.failOn as Severity | "never" | undefined
+      });
+      if (shouldFailForPolicy(report, policy)) {
         process.exitCode = 1;
       }
     });
@@ -911,6 +927,79 @@ export function buildProgram(): Command {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
       }
+    });
+
+  const policyCmd = program
+    .command("policy")
+    .helpGroup("Review:")
+    .description("Manage the VerdictGate merge policy (.quorate/policy.yml).");
+
+  policyCmd
+    .command("init")
+    .description("Write a starter .quorate/policy.yml.")
+    .option("--path <path>", "Policy file path (default .quorate/policy.yml)")
+    .option("--force", "Overwrite an existing policy file")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      try {
+        const result = writeStarterPolicy(cwd, { policyPath: options.path, force: Boolean(options.force) });
+        console.log(`${result.overwritten ? "Updated" : "Wrote"} policy at ${relative(cwd, result.path)}.`);
+        console.log("The .quorate/ dir is gitignored — commit it with: git add -f .quorate/policy.yml");
+      } catch (error: unknown) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
+    });
+
+  policyCmd
+    .command("doctor")
+    .description("Show the resolved merge policy and flag config gaps that would make it unsatisfiable.")
+    .option("--path <path>", "Policy file path (default .quorate/policy.yml)")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      const config = configFrom(program);
+      try {
+        const loaded = loadPolicyFile(cwd, options.path);
+        const policy = resolvePolicy(config, { policy: loaded ?? undefined });
+        const { warnings } = policyDoctor(config, policy);
+        const source = loaded ? options.path ?? ".quorate/policy.yml" : "github config (derived)";
+        console.log(`Resolved policy (source: ${source}):`);
+        console.log(`  fail_on: ${policy.failOn}   fail_on_degraded: ${policy.failOnDegraded}`);
+        console.log(`  block_on_verdict: [${policy.blockOnVerdict.join(", ")}]   allow_warn_merge: ${policy.allowWarnMerge}`);
+        console.log(`  agreement gate: ${policy.gate ? `${policy.gate.severity}+ × ${policy.gate.minAgreement}` : "(none)"}`);
+        console.log(`  roles_required: [${policy.rolesRequired.join(", ")}]   min_real_providers: ${policy.minRealProviders}`);
+        if (warnings.length === 0) {
+          console.log("\n✓ Policy is satisfiable by the current config.");
+        } else {
+          console.log("\nWarnings:");
+          for (const warning of warnings) console.log(`  ! ${warning}`);
+          process.exitCode = 1;
+        }
+      } catch (error: unknown) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
+    });
+
+  policyCmd
+    .command("explain")
+    .description("Explain whether the last review would block merge under the current policy.")
+    .option("--path <path>", "Policy file path (default .quorate/policy.yml)")
+    .option("--report <path>", "Report to explain (default .quorate/last-report.json)")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      const config = configFrom(program);
+      const report = loadLastReport(cwd, options.report);
+      if (!report) {
+        console.error("No report found. Run `quorate review` first, or pass --report <path>.");
+        process.exitCode = 1;
+        return;
+      }
+      const policy = resolvePolicy(config, { policy: loadPolicyFile(cwd, options.path) ?? undefined });
+      const result = explainPolicy(report, policy);
+      console.log(`Verdict: ${report.verdict.toUpperCase()} → merge ${result.fail ? "BLOCKED" : "allowed"}.`);
+      for (const reason of result.reasons) console.log(`  ${result.fail ? "✗" : "•"} ${reason}`);
+      if (result.fail) process.exitCode = 1;
     });
 
   program
