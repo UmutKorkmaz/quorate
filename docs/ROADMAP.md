@@ -58,6 +58,16 @@ one → earn trust → control cost → improve precision → extend reach.
   The store is read from the **base ref**; a malformed store warns and gates on
   all findings (fail-secure). Keys off K0's `fingerprintFinding`. 35 tests.
 
+- **M2 · Review history + stats — DONE** (`packages/core/src/history.ts`,
+  CLI `quorate history|stats`). A local append-only JSONL store at
+  `~/.quorate/history/<repoHash>.jsonl` (outside the repo, never in git) records
+  every review keyed by the K0 `reviewId`. `quorate history` shows recent runs
+  newest-first; `quorate stats [--since]` aggregates verdict distribution,
+  degraded runs, noisiest files, recurring findings, and per-provider reliability.
+  Pure core projection/aggregation; CLI owns the I/O (fire-and-forget append,
+  corrupt-line-skipping read). Suppressed findings are excluded from counts.
+  18 tests. History is CLI-local in this PR.
+
 - **M1 · Export pipeline — DONE** (`packages/core/src/export.ts`, CLI `review
   --write-sarif|--write-junit|--write-html|--write-md`, Action `sarif-file` input + `sarif-path`
   output). Pure `CouncilReport → string` exporters: SARIF 2.1.0 (Code Scanning / GitLab),

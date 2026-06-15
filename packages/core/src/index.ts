@@ -6,6 +6,7 @@ export * from "./config.js";
 export * from "./council.js";
 export * from "./export.js";
 export * from "./heuristics.js";
+export * from "./history.js";
 export * from "./identity.js";
 export * from "./merge.js";
 export * from "./models.js";

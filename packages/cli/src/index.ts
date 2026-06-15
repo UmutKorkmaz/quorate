@@ -41,6 +41,13 @@ import {
   removeSuppressionFromStore,
   writeSuppression
 } from "./suppress-command.js";
+import {
+  appendHistory,
+  computeStats,
+  formatHistoryTable,
+  formatStatsReport,
+  readHistory
+} from "./history-command.js";
 import { listExpired } from "@quorate/core";
 import {
   buildRiskReport,
@@ -916,6 +923,10 @@ export function buildProgram(): Command {
         `${JSON.stringify(rawReport ?? report, null, 2)}\n`,
         "utf8"
       );
+      // Append to the per-repo history store (best-effort, never throws). The
+      // gated report is what the team saw and the gate acted on; suppressed
+      // findings are excluded from the counts by toHistoryEntry.
+      appendHistory(cwd, report);
 
       if (!options.json) {
         console.log(renderMarkdownReport(report));
@@ -1089,6 +1100,39 @@ export function buildProgram(): Command {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
       }
+    });
+
+  program
+    .command("history")
+    .helpGroup("Review:")
+    .description("Show recent reviews (newest-first). Stored at ~/.quorate/history/.")
+    .option("--limit <n>", "Maximum number of entries to show", "20")
+    .option("--json", "Print machine-readable JSON")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      const entries = readHistory(cwd);
+      if (options.json) {
+        console.log(JSON.stringify(entries, null, 2));
+        return;
+      }
+      console.log(formatHistoryTable(entries, Number(options.limit) || 20));
+    });
+
+  program
+    .command("stats")
+    .helpGroup("Review:")
+    .description("Aggregate review trends: verdicts, noisiest files, recurring findings, provider reliability.")
+    .option("--since <iso-date>", "Only count reviews from this date onward")
+    .option("--json", "Print machine-readable JSON")
+    .action((options) => {
+      const cwd = cwdFrom(program);
+      const entries = readHistory(cwd);
+      const stats = computeStats(entries, { since: options.since });
+      if (options.json) {
+        console.log(JSON.stringify(stats, null, 2));
+        return;
+      }
+      console.log(formatStatsReport(stats));
     });
 
   const policyCmd = program
