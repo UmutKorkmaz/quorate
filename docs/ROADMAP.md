@@ -30,7 +30,15 @@ one → earn trust → control cost → improve precision → extend reach.
   `review --baseline`, Action `baseline:` input). Gates only on findings absent from a committed
   `.quorate.baseline.json` (root, not `.quorate/` which is gitignored); verdict is recomputed on
   the kept set with the degraded→warn override preserved; the Action reads the baseline from the
-  **base ref**, never the PR head. 22 tests (core + CLI + Action). Keys off K0's `fingerprintFinding`.
+  base ref, never the PR head. 22 tests (core + CLI + Action). Keys off K0's `fingerprintFinding`.
+
+- **M1 · Portable policy — DONE** (`packages/core/src/policy.ts`, CLI `quorate policy
+  init|doctor|explain` + `review --fail-on`, Action `policy-path` input, App Check Run gate).
+  One `QuoratePolicy` + `shouldFailForPolicy` now drives the merge decision for CLI/Action/App
+  identically; `shouldFailForReport` is a backward-compat wrapper (`githubConfigToPolicy`
+  reproduces it exactly — equivalence-tested). A standalone `.quorate/policy.yml` (snake_case,
+  per `docs/products/VERDICT-GATE.md`) adds a verdict-block list, required roles, and a provider
+  floor; read from the **base ref**, fail-secure on a malformed file. 27 tests.
 
 - **M1 · Setup generators + risk report — DONE** (`packages/cli/src/setup-command.ts`).
   `quorate setup github-action` writes a starter workflow (refuses to clobber without `--force`);

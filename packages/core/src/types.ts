@@ -44,6 +44,22 @@ export interface GithubConfig {
   gate?: { severity: Severity; minAgreement: number };
 }
 
+/**
+ * Resolved VerdictGate policy — the single source of truth for whether a report
+ * blocks merge. Built from a standalone `.quorate/policy.yml`, a `policy:` block
+ * in `.quorate.yml`, or derived from {@link GithubConfig}. See policy.ts.
+ */
+export interface QuoratePolicy {
+  enabled: boolean;
+  blockOnVerdict: Verdict[];
+  allowWarnMerge: boolean;
+  failOn: Severity | "never";
+  failOnDegraded: boolean;
+  gate?: { severity: Severity; minAgreement: number };
+  rolesRequired: string[];
+  minRealProviders: number;
+}
+
 export interface QuorateConfig {
   councils: string[];
   providers: ProviderConfig[];
