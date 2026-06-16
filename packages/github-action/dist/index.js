@@ -50448,23 +50448,30 @@ async function runAction(deps) {
   }
   const failOnOverride = input("fail-on");
   let gatePolicy;
+  let policyLoadFailed = false;
   try {
     const policyPath = input("policy-path") ?? DEFAULT_POLICY_PATH;
     const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
     gatePolicy = resolvePolicy(config2, { policy: basePolicy ?? void 0, failOn: failOnOverride });
     if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
   } catch (error52) {
+    const reason = error52 instanceof Error ? error52.message : String(error52);
     deps.warning?.(
-      `Could not load the merge policy (${error52 instanceof Error ? error52.message : String(error52)}) \u2014 using the github config gate.`
+      `Could not load the committed merge policy (${reason}). The check will fail \u2014 the policy's intended strictness is unknown and must not silently relax. Fix the policy file on the base branch.`
     );
     gatePolicy = resolvePolicy(config2, { failOn: failOnOverride });
+    policyLoadFailed = true;
   }
   if (!gatePolicy.enabled) {
     deps.warning?.(
       "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) \u2014 no verdict can fail this check."
     );
   }
-  if (shouldFailForPolicy(report, gatePolicy)) {
+  if (policyLoadFailed) {
+    deps.setFailed(
+      "Quorate could not load the committed policy file \u2014 the merge gate's strictness is unknown. Fix the policy on the base branch."
+    );
+  } else if (shouldFailForPolicy(report, gatePolicy)) {
     deps.setFailed(`Quorate verdict ${report.verdict} is blocked by the merge policy (fail-on ${gatePolicy.failOn}).`);
   }
 }
