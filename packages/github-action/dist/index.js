@@ -50605,7 +50605,7 @@ async function runAction(deps) {
     gatePolicy = resolvePolicy(config2, { failOn: failOnOverride });
     policyLoadFailed = true;
   }
-  if (!gatePolicy.enabled) {
+  if (!policyLoadFailed && !gatePolicy.enabled) {
     deps.warning?.(
       "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) \u2014 no verdict can fail this check."
     );

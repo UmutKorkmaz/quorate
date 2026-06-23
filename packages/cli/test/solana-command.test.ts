@@ -28,7 +28,7 @@ function captureConsoleLog(): string[] {
   return output;
 }
 
-function writeAnchorProject(options: { idl?: boolean; quorate?: boolean } = {}): void {
+function writeAnchorProject(options: { idl?: boolean; quorate?: boolean; verifiable?: boolean } = {}): void {
   writeFileSync(
     join(dir, "Anchor.toml"),
     `[programs.localnet]
@@ -57,8 +57,10 @@ edition = "2021"
 
   mkdirSync(join(dir, "target", "deploy"), { recursive: true });
   writeFileSync(join(dir, "target", "deploy", "counter.so"), "", "utf8");
-  mkdirSync(join(dir, "target", "verifiable"), { recursive: true });
-  writeFileSync(join(dir, "target", "verifiable", "counter-build.json"), "{}", "utf8");
+  if (options.verifiable !== false) {
+    mkdirSync(join(dir, "target", "verifiable"), { recursive: true });
+    writeFileSync(join(dir, "target", "verifiable", "counter-build.json"), "{}", "utf8");
+  }
 
   if (options.idl !== false) {
     mkdirSync(join(dir, "target", "idl"), { recursive: true });
@@ -96,6 +98,17 @@ describe("quorate solana", () => {
     program.exitOverride();
 
     await program.parseAsync(["node", "quorate", "--cwd", dir, "solana", "doctor", "--json"], { from: "node" });
+
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("sets exitCode on warnings when Solana doctor runs in strict mode", async () => {
+    writeAnchorProject({ verifiable: false });
+    captureConsoleLog();
+    const program = buildProgram();
+    program.exitOverride();
+
+    await program.parseAsync(["node", "quorate", "--cwd", dir, "solana", "doctor", "--strict"], { from: "node" });
 
     expect(process.exitCode).toBe(1);
   });

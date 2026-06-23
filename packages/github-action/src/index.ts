@@ -511,7 +511,7 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     policyLoadFailed = true;
   }
 
-  if (!gatePolicy.enabled) {
+  if (!policyLoadFailed && !gatePolicy.enabled) {
     deps.warning?.(
       "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) — no verdict can fail this check."
     );

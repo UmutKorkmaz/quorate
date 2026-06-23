@@ -556,10 +556,11 @@ export function buildProgram(): Command {
     .option("--strict", "Exit non-zero on warnings as well as failures")
     .action(async (options: { json?: boolean; strict?: boolean }) => {
       const cwd = cwdFrom(program);
+      const configPath = configPathFrom(program, cwd);
       const report = await buildSolanaReleaseGate({
         cwd,
-        config: configFrom(program),
-        configPath: configPathFrom(program, cwd)
+        config: loadConfig(configPath, cwd),
+        configPath
       });
 
       if (options.json) {
@@ -579,10 +580,11 @@ export function buildProgram(): Command {
     .option("--json", "Print machine-readable JSON")
     .action(async (options: { json?: boolean }) => {
       const cwd = cwdFrom(program);
+      const configPath = configPathFrom(program, cwd);
       const report = await buildSolanaReleaseGate({
         cwd,
-        config: configFrom(program),
-        configPath: configPathFrom(program, cwd)
+        config: loadConfig(configPath, cwd),
+        configPath
       });
       const plan = buildSolanaTestPlan(report);
 
