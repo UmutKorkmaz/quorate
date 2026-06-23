@@ -31,7 +31,7 @@ describe("writeStarterPolicy / loadPolicyFile", () => {
   it("writes a valid starter policy and reads it back", () => {
     const { path, overwritten } = writeStarterPolicy(dir);
     expect(overwritten).toBe(false);
-    expect(path.endsWith(".quorate/policy.yml")).toBe(true);
+    expect(path).toBe(resolve(dir, ".quorate", "policy.yml"));
     // the starter file must parse cleanly
     const parsed = parsePolicyYaml(readFileSync(path, "utf8"));
     expect(parsed.failOn).toBe("high");

@@ -7,6 +7,5 @@ diff --git a/app/src/legacy-blockhash.ts b/app/src/legacy-blockhash.ts
 +export async function loadLegacyBlockhash(connection: Connection): Promise<string> {
 +  const { blockhash } = await connection.getRecentBlockhash("confirmed");
 +  const fees = await connection.getFeeCalculatorForBlockhash(blockhash, "confirmed");
-+  console.log(fees.value?.lamportsPerSignature);
-+  return blockhash;
++  return `${blockhash}:${fees.value?.lamportsPerSignature ?? ""}`;
 +}

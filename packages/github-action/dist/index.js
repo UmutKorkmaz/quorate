@@ -47659,6 +47659,7 @@ var SOLANA_INVARIANT_RE = /(?:amount|balance|reserve|supply|vault|collateral|liq
 var TOKEN_2022_RISK_RE = /\b(?:StateWithExtensions::<\s*(?:Mint|Account)\s*>\s*::\s*unpack|spl_token_2022::state::(?:Mint|Account)::unpack|Program\s*<\s*'info\s*,\s*Token2022\s*>|TOKEN_2022_PROGRAM_ID|Token2022)\b/;
 var TOKEN_EXTENSION_CHECK_RE = /\b(?:get_extension|get_extension_types|try_get_extension|ExtensionType::|transfer_hook|permanent_delegate|confidential_transfer|transfer_fee)\b/i;
 var IMPORT_OR_USE_RE = /^\s*(?:import|use)\b/;
+var COMMENT_ONLY_RE = /^\s*(?:\/\/|\/\*|\*|#)/;
 function isTestLikePath(file2) {
   if (!file2) return false;
   return TEST_PATH_RE.test(file2) || TEST_FILE_RE.test(file2);
@@ -47667,12 +47668,20 @@ function isNonRequestPath(file2) {
   if (!file2) return false;
   return NON_REQUEST_PATH_RE.test(file2) || CONFIG_BUILD_FILE_RE.test(file2);
 }
-function textByFile(lines) {
+function linesByFile(lines) {
   const result = /* @__PURE__ */ new Map();
   for (const line of lines) {
     if (!line.file) continue;
-    result.set(line.file, `${result.get(line.file) ?? ""}
-${line.text}`);
+    const bucket = result.get(line.file) ?? [];
+    bucket.push(line);
+    result.set(line.file, bucket);
+  }
+  return result;
+}
+function textByFile(grouped) {
+  const result = /* @__PURE__ */ new Map();
+  for (const [file2, lines] of grouped) {
+    result.set(file2, lines.map((line) => line.text).join("\n"));
   }
   return result;
 }
@@ -47683,10 +47692,10 @@ function anchorConstraintKeys(text) {
   }
   return keys;
 }
-function nearbyAddedText(target, lines, distance = 6) {
+function nearbyAddedText(target, grouped, distance = 6) {
   if (!target.file || target.line === void 0) return "";
-  return lines.filter(
-    (line) => line.file === target.file && line.line !== void 0 && Math.abs(line.line - target.line) <= distance
+  return (grouped.get(target.file) ?? []).filter(
+    (line) => line.line !== void 0 && Math.abs(line.line - target.line) <= distance
   ).map((line) => line.text).join("\n");
 }
 function hasAnchorConstraintWeakening(removed, added) {
@@ -47731,7 +47740,8 @@ function runHeuristicReview(request2, role = "maintainer") {
   const startedAt = Date.now();
   const findings = [];
   const lines = addedLines(request2.diff ?? "");
-  const addedTextByFile = textByFile(lines);
+  const addedLinesByFile = linesByFile(lines);
+  const addedTextByFile = textByFile(addedLinesByFile);
   const testLikeByFile = /* @__PURE__ */ new Map();
   for (const line of lines) {
     const text = line.text;
@@ -47804,7 +47814,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "remaining_accounts are not validated by Anchor's account constraints. Require explicit owner/key/writable/signer checks before using them in CPI, token movement, or authority decisions."
       });
     }
-    if (line.file?.endsWith(".rs") && /Program\s*<\s*'info\s*,\s*UncheckedAccount|program_id\s*:\s*ctx\.accounts|(?:^|[^A-Za-z0-9_])program\.key\(\)|CpiContext::new\s*\(\s*ctx\.accounts\.[A-Za-z0-9_]*(?:program|program_id)\.to_account_info\(\)/.test(text)) {
+    if (line.file?.endsWith(".rs") && /Program\s*<\s*'info\s*,\s*UncheckedAccount|program_id\s*:\s*ctx\.accounts\.[A-Za-z0-9_]+\.key\(\)|(?:^|[^A-Za-z0-9_])program\.key\(\)|CpiContext::new\s*\(\s*ctx\.accounts\.[A-Za-z0-9_]*(?:program|program_id)\.to_account_info\(\)/.test(text)) {
       findings.push({
         ...base,
         severity: "high",
@@ -47884,7 +47894,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "unpacking SPL token Account/Mint data without checking owner == token program and the expected mint enables account-substitution; validate owner and mint (and decimals) before trusting amounts."
       });
     }
-    if (line.file?.endsWith(".rs") && /\b(?:InterfaceAccount|Token2022|token_2022|spl_token_2022|TransferHook|PermanentDelegate|ConfidentialTransfer|MetadataPointer)\b/.test(text) && !IMPORT_OR_USE_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
+    if (line.file?.endsWith(".rs") && /\b(?:InterfaceAccount|Token2022|token_2022|spl_token_2022|TransferHook|PermanentDelegate|ConfidentialTransfer|MetadataPointer)\b/.test(text) && !IMPORT_OR_USE_RE.test(text) && !COMMENT_ONLY_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
       findings.push({
         ...base,
         severity: "medium",
@@ -47892,7 +47902,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "Token-2022 and interface accounts can carry extensions such as transfer hooks, permanent delegates, or confidential transfers. Validate the token program, mint, owner, decimals, and expected extension policy."
       });
     }
-    if ((line.file?.endsWith(".rs") || SOLANA_CLIENT_FILE_RE.test(line.file ?? "")) && TOKEN_2022_RISK_RE.test(text) && !IMPORT_OR_USE_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
+    if ((line.file?.endsWith(".rs") || SOLANA_CLIENT_FILE_RE.test(line.file ?? "")) && TOKEN_2022_RISK_RE.test(text) && !IMPORT_OR_USE_RE.test(text) && !COMMENT_ONLY_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
       findings.push({
         ...base,
         severity: "high",
@@ -48670,7 +48680,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "a removed #[account(...)] constraint (has_one/constraint/address/seeds/signer) drops an authorization or validation check \u2014 confirm this is intentional."
       });
     }
-    if (line.file?.endsWith(".rs") && hasAnchorConstraintWeakening(line, lines)) {
+    if (line.file?.endsWith(".rs") && hasAnchorConstraintWeakening(line, addedLinesByFile)) {
       findings.push({
         ...base,
         severity: "high",

@@ -551,9 +551,9 @@ export function buildProgram(): Command {
     .description("Run an offline Solana release gate over Anchor.toml, Cargo.toml, IDL, and Quorate config.")
     .option("--json", "Print machine-readable JSON")
     .option("--strict", "Exit non-zero on warnings as well as failures")
-    .action((options: { json?: boolean; strict?: boolean }) => {
+    .action(async (options: { json?: boolean; strict?: boolean }) => {
       const cwd = cwdFrom(program);
-      const report = buildSolanaReleaseGate({
+      const report = await buildSolanaReleaseGate({
         cwd,
         config: configFrom(program),
         configPath: configPathFrom(program, cwd)
@@ -574,9 +574,9 @@ export function buildProgram(): Command {
     .command("test-plan")
     .description("Generate a Solana release test plan from the offline doctor signals.")
     .option("--json", "Print machine-readable JSON")
-    .action((options: { json?: boolean }) => {
+    .action(async (options: { json?: boolean }) => {
       const cwd = cwdFrom(program);
-      const report = buildSolanaReleaseGate({
+      const report = await buildSolanaReleaseGate({
         cwd,
         config: configFrom(program),
         configPath: configPathFrom(program, cwd)

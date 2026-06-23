@@ -85,6 +85,7 @@ const TOKEN_2022_RISK_RE =
 const TOKEN_EXTENSION_CHECK_RE =
   /\b(?:get_extension|get_extension_types|try_get_extension|ExtensionType::|transfer_hook|permanent_delegate|confidential_transfer|transfer_fee)\b/i;
 const IMPORT_OR_USE_RE = /^\s*(?:import|use)\b/;
+const COMMENT_ONLY_RE = /^\s*(?:\/\/|\/\*|\*|#)/;
 
 function isTestLikePath(file?: string): boolean {
   if (!file) return false;
@@ -103,11 +104,21 @@ function isNonRequestPath(file?: string): boolean {
   return NON_REQUEST_PATH_RE.test(file) || CONFIG_BUILD_FILE_RE.test(file);
 }
 
-function textByFile(lines: DiffLine[]): Map<string, string> {
-  const result = new Map<string, string>();
+function linesByFile(lines: DiffLine[]): Map<string, DiffLine[]> {
+  const result = new Map<string, DiffLine[]>();
   for (const line of lines) {
     if (!line.file) continue;
-    result.set(line.file, `${result.get(line.file) ?? ""}\n${line.text}`);
+    const bucket = result.get(line.file) ?? [];
+    bucket.push(line);
+    result.set(line.file, bucket);
+  }
+  return result;
+}
+
+function textByFile(grouped: Map<string, DiffLine[]>): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const [file, lines] of grouped) {
+    result.set(file, lines.map((line) => line.text).join("\n"));
   }
   return result;
 }
@@ -120,12 +131,11 @@ function anchorConstraintKeys(text: string): Set<string> {
   return keys;
 }
 
-function nearbyAddedText(target: DiffLine, lines: DiffLine[], distance = 6): string {
+function nearbyAddedText(target: DiffLine, grouped: Map<string, DiffLine[]>, distance = 6): string {
   if (!target.file || target.line === undefined) return "";
-  return lines
+  return (grouped.get(target.file) ?? [])
     .filter(
       (line) =>
-        line.file === target.file &&
         line.line !== undefined &&
         Math.abs(line.line - target.line!) <= distance
     )
@@ -133,7 +143,7 @@ function nearbyAddedText(target: DiffLine, lines: DiffLine[], distance = 6): str
     .join("\n");
 }
 
-function hasAnchorConstraintWeakening(removed: DiffLine, added: DiffLine[]): boolean {
+function hasAnchorConstraintWeakening(removed: DiffLine, added: Map<string, DiffLine[]>): boolean {
   const removedKeys = anchorConstraintKeys(removed.text);
   if (removedKeys.size === 0) return false;
 
@@ -186,7 +196,8 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
   const startedAt = Date.now();
   const findings: Finding[] = [];
   const lines = addedLines(request.diff ?? "");
-  const addedTextByFile = textByFile(lines);
+  const addedLinesByFile = linesByFile(lines);
+  const addedTextByFile = textByFile(addedLinesByFile);
   const testLikeByFile = new Map<string, boolean>();
 
   for (const line of lines) {
@@ -291,7 +302,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     if (
       line.file?.endsWith(".rs") &&
-      /Program\s*<\s*'info\s*,\s*UncheckedAccount|program_id\s*:\s*ctx\.accounts|(?:^|[^A-Za-z0-9_])program\.key\(\)|CpiContext::new\s*\(\s*ctx\.accounts\.[A-Za-z0-9_]*(?:program|program_id)\.to_account_info\(\)/.test(text)
+      /Program\s*<\s*'info\s*,\s*UncheckedAccount|program_id\s*:\s*ctx\.accounts\.[A-Za-z0-9_]+\.key\(\)|(?:^|[^A-Za-z0-9_])program\.key\(\)|CpiContext::new\s*\(\s*ctx\.accounts\.[A-Za-z0-9_]*(?:program|program_id)\.to_account_info\(\)/.test(text)
     ) {
       findings.push({
         ...base,
@@ -435,6 +446,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       line.file?.endsWith(".rs") &&
       /\b(?:InterfaceAccount|Token2022|token_2022|spl_token_2022|TransferHook|PermanentDelegate|ConfidentialTransfer|MetadataPointer)\b/.test(text) &&
       !IMPORT_OR_USE_RE.test(text) &&
+      !COMMENT_ONLY_RE.test(text) &&
       !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)
     ) {
       findings.push({
@@ -451,6 +463,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       (line.file?.endsWith(".rs") || SOLANA_CLIENT_FILE_RE.test(line.file ?? "")) &&
       TOKEN_2022_RISK_RE.test(text) &&
       !IMPORT_OR_USE_RE.test(text) &&
+      !COMMENT_ONLY_RE.test(text) &&
       !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)
     ) {
       findings.push({
@@ -1880,7 +1893,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     if (
       line.file?.endsWith(".rs") &&
-      hasAnchorConstraintWeakening(line, lines)
+      hasAnchorConstraintWeakening(line, addedLinesByFile)
     ) {
       findings.push({
         ...base,

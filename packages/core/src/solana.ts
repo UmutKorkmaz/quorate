@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { access, readFile, readdir } from "node:fs/promises";
 import { basename, join, relative, resolve } from "node:path";
 import YAML from "yaml";
 import { findConfigPath, loadConfig } from "./config.js";
@@ -92,8 +92,12 @@ interface TomlDoc {
   sections: Map<string, Record<string, string>>;
 }
 
+interface AnchorProgramEntry extends SolanaProgramId {
+  name: string;
+}
+
 interface AnchorManifest {
-  programs: SolanaProgramId[];
+  programs: AnchorProgramEntry[];
   provider: {
     cluster?: string;
     wallet?: string;
@@ -107,7 +111,17 @@ interface CargoManifest {
 }
 
 const BASE58_PUBLIC_KEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-const SKIP_DIRS = new Set(["node_modules", ".git", ".quorate/sessions"]);
+const SKIP_DIRS = new Set(["node_modules", ".git", "sessions"]);
+const EVIDENCE_ROOTS = [
+  ["target", "verifiable"],
+  ["target", "attestations"],
+  ["target", "provenance"],
+  ["target", "build-info"],
+  ["target", "buildinfo"],
+  [".quorate"]
+] as const;
+const MAX_EVIDENCE_FILES = 100;
+const MAX_EVIDENCE_SCAN_DEPTH = 3;
 const SOLANA_COUNCILS = new Set(PACKS.solana.councils.filter((council) => council !== "maintainer"));
 const CLUSTER_ALIASES: Record<string, string[]> = {
   localnet: ["localnet"],
@@ -119,6 +133,15 @@ const CLUSTER_ALIASES: Record<string, string[]> = {
 
 function rel(cwd: string, path: string): string {
   return relative(cwd, path) || ".";
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeProgramName(name: string): string {
@@ -192,9 +215,9 @@ function parseTomlLite(source: string): TomlDoc {
   return { sections };
 }
 
-function parseAnchorManifest(path: string): AnchorManifest {
-  const doc = parseTomlLite(readFileSync(path, "utf8"));
-  const programs: SolanaProgramId[] = [];
+async function parseAnchorManifest(path: string): Promise<AnchorManifest> {
+  const doc = parseTomlLite(await readFile(path, "utf8"));
+  const programs: AnchorProgramEntry[] = [];
   const providerSection = doc.sections.get("provider") ?? {};
   const scripts = doc.sections.get("scripts") ?? {};
 
@@ -203,6 +226,7 @@ function parseAnchorManifest(path: string): AnchorManifest {
     const cluster = section.slice("programs.".length);
     for (const [name, programId] of Object.entries(values)) {
       programs.push({
+        name,
         cluster,
         programId,
         valid: isLikelySolanaPublicKey(programId)
@@ -220,47 +244,48 @@ function parseAnchorManifest(path: string): AnchorManifest {
   };
 }
 
-function parseCargoManifest(path: string): CargoManifest {
-  const doc = parseTomlLite(readFileSync(path, "utf8"));
+async function parseCargoManifest(path: string): Promise<CargoManifest> {
+  const doc = parseTomlLite(await readFile(path, "utf8"));
   const pkg = doc.sections.get("package") ?? {};
   return { path, packageName: pkg.name };
 }
 
-function collectCargoTomls(cwd: string): CargoManifest[] {
+async function collectCargoTomls(cwd: string): Promise<CargoManifest[]> {
   const manifests: CargoManifest[] = [];
   const root = resolve(cwd, "Cargo.toml");
-  if (existsSync(root)) manifests.push(parseCargoManifest(root));
+  if (await pathExists(root)) manifests.push(await parseCargoManifest(root));
 
   const programsDir = resolve(cwd, "programs");
-  if (!existsSync(programsDir)) return manifests;
+  if (!(await pathExists(programsDir))) return manifests;
 
-  const visit = (dir: string, depth: number): void => {
+  const visit = async (dir: string, depth: number): Promise<void> => {
     if (depth > 4) return;
     let entries;
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = await readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
     for (const entry of entries) {
       const full = join(dir, entry.name);
+      if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
-        visit(full, depth + 1);
+        await visit(full, depth + 1);
       } else if (entry.isFile() && entry.name === "Cargo.toml" && full !== root) {
-        manifests.push(parseCargoManifest(full));
+        manifests.push(await parseCargoManifest(full));
       }
     }
   };
 
-  visit(programsDir, 0);
+  await visit(programsDir, 0);
   return manifests;
 }
 
-function parseIdlFile(path: string): SolanaIdlInfo {
+async function parseIdlFile(path: string): Promise<SolanaIdlInfo> {
   const name = normalizeProgramName(basename(path, ".json"));
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+    const parsed = JSON.parse(await readFile(path, "utf8")) as {
       address?: unknown;
       metadata?: { address?: unknown };
     };
@@ -277,24 +302,27 @@ function parseIdlFile(path: string): SolanaIdlInfo {
   }
 }
 
-function collectIdlFiles(cwd: string): SolanaIdlInfo[] {
+async function collectIdlFiles(cwd: string): Promise<SolanaIdlInfo[]> {
   const idlDir = resolve(cwd, "target", "idl");
-  if (!existsSync(idlDir)) return [];
+  if (!(await pathExists(idlDir))) return [];
   try {
-    return readdirSync(idlDir, { withFileTypes: true })
+    const files = await readdir(idlDir, { withFileTypes: true });
+    const idls = await Promise.all(
+      files
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map((entry) => parseIdlFile(join(idlDir, entry.name)))
-      .sort((a, b) => a.path.localeCompare(b.path));
+    );
+    return idls.sort((a, b) => a.path.localeCompare(b.path));
   } catch {
     return [];
   }
 }
 
-function collectDeployArtifacts(cwd: string): string[] {
+async function collectDeployArtifacts(cwd: string): Promise<string[]> {
   const deployDir = resolve(cwd, "target", "deploy");
-  if (!existsSync(deployDir)) return [];
+  if (!(await pathExists(deployDir))) return [];
   try {
-    return readdirSync(deployDir, { withFileTypes: true })
+    return (await readdir(deployDir, { withFileTypes: true }))
       .filter((entry) => entry.isFile() && /\.(so|json)$/i.test(entry.name))
       .map((entry) => join(deployDir, entry.name))
       .sort();
@@ -303,36 +331,44 @@ function collectDeployArtifacts(cwd: string): string[] {
   }
 }
 
-function collectEvidencePaths(cwd: string): string[] {
-  const roots = [resolve(cwd, "target"), resolve(cwd, ".quorate")].filter((path) => existsSync(path));
-  const evidence: string[] = [];
+async function collectEvidencePaths(cwd: string): Promise<string[]> {
+  const rootCandidates = EVIDENCE_ROOTS.map((parts) => resolve(cwd, ...parts));
+  const roots = (await Promise.all(rootCandidates.map(async (root) => ((await pathExists(root)) ? root : undefined)))).filter(
+    (root): root is string => Boolean(root)
+  );
   const matches = /(verifiable|attestation|provenance|buildinfo|build-info)/i;
 
-  const visit = (dir: string, depth: number): void => {
-    if (depth > 5 || evidence.length >= 100) return;
+  const visit = async (dir: string, depth: number): Promise<string[]> => {
+    if (depth > MAX_EVIDENCE_SCAN_DEPTH) return [];
     let entries;
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = await readdir(dir, { withFileTypes: true });
     } catch {
-      return;
+      return [];
     }
-    for (const entry of entries) {
-      const full = join(dir, entry.name);
-      const relativePath = rel(cwd, full);
-      if (matches.test(relativePath)) evidence.push(full);
-      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) visit(full, depth + 1);
-    }
+
+    const fileEvidence = entries
+      .filter((entry) => entry.isFile() && matches.test(rel(cwd, join(dir, entry.name))))
+      .map((entry) => join(dir, entry.name));
+    const childDirs =
+      depth >= MAX_EVIDENCE_SCAN_DEPTH
+        ? []
+        : entries
+            .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && !SKIP_DIRS.has(entry.name))
+            .map((entry) => join(dir, entry.name));
+    const childEvidence = (await Promise.all(childDirs.map((childDir) => visit(childDir, depth + 1)))).flat();
+    return [...fileEvidence, ...childEvidence].slice(0, MAX_EVIDENCE_FILES);
   };
 
-  for (const root of roots) visit(root, 0);
+  const evidence = (await Promise.all(roots.map((root) => visit(root, 0)))).flat().slice(0, MAX_EVIDENCE_FILES);
   return [...new Set(evidence)].sort();
 }
 
-function collectPackageScriptEvidence(cwd: string): string[] {
+async function collectPackageScriptEvidence(cwd: string): Promise<string[]> {
   const packageJson = resolve(cwd, "package.json");
-  if (!existsSync(packageJson)) return [];
+  if (!(await pathExists(packageJson))) return [];
   try {
-    const parsed = JSON.parse(readFileSync(packageJson, "utf8")) as { scripts?: Record<string, unknown> };
+    const parsed = JSON.parse(await readFile(packageJson, "utf8")) as { scripts?: Record<string, unknown> };
     return Object.entries(parsed.scripts ?? {})
       .filter(([, value]) => typeof value === "string" && /(upgrade-authority|set-upgrade-authority|program show|anchor upgrade)/i.test(value))
       .map(([name, value]) => `package.json script ${name}: ${value as string}`);
@@ -341,18 +377,22 @@ function collectPackageScriptEvidence(cwd: string): string[] {
   }
 }
 
-function loadOptionalSolanaEvidence(cwd: string): { upgradeAuthority: string[]; verifiableBuild: string[] } {
-  const paths = [
+async function loadOptionalSolanaEvidence(cwd: string): Promise<{ upgradeAuthority: string[]; verifiableBuild: string[] }> {
+  const candidates = [
     resolve(cwd, ".quorate", "solana-release.json"),
     resolve(cwd, ".quorate", "solana-release.yml"),
     resolve(cwd, ".quorate", "solana-release.yaml")
-  ].filter((path) => existsSync(path));
+  ];
+  const paths: string[] = [];
+  for (const path of candidates) {
+    if (await pathExists(path)) paths.push(path);
+  }
   const upgradeAuthority: string[] = [];
   const verifiableBuild: string[] = [];
 
   for (const path of paths) {
     try {
-      const text = readFileSync(path, "utf8");
+      const text = await readFile(path, "utf8");
       const parsed = path.endsWith(".json") ? JSON.parse(text) : YAML.parse(text);
       if (typeof parsed?.upgradeAuthority === "string") {
         upgradeAuthority.push(`${rel(cwd, path)}: ${parsed.upgradeAuthority}`);
@@ -407,36 +447,35 @@ function check(
   checks.push({ id, title, status, detail, ...options });
 }
 
-export function buildSolanaReleaseGate(options: BuildSolanaReleaseGateOptions = {}): SolanaReleaseGate {
+export async function buildSolanaReleaseGate(options: BuildSolanaReleaseGateOptions = {}): Promise<SolanaReleaseGate> {
   const cwd = resolve(options.cwd ?? process.cwd());
   const generatedAt = (options.now ?? new Date()).toISOString();
   const anchorToml = resolve(cwd, "Anchor.toml");
-  const anchorManifest = existsSync(anchorToml) ? parseAnchorManifest(anchorToml) : undefined;
-  const cargoManifests = collectCargoTomls(cwd);
-  const idlFiles = collectIdlFiles(cwd);
+  const anchorManifest = (await pathExists(anchorToml)) ? await parseAnchorManifest(anchorToml) : undefined;
+  const [cargoManifests, idlFiles, deployArtifacts, optionalEvidence, evidencePaths, packageScriptEvidence] = await Promise.all([
+    collectCargoTomls(cwd),
+    collectIdlFiles(cwd),
+    collectDeployArtifacts(cwd),
+    loadOptionalSolanaEvidence(cwd),
+    collectEvidencePaths(cwd),
+    collectPackageScriptEvidence(cwd)
+  ]);
   const idlsByName = new Map(idlFiles.map((idl) => [normalizeProgramName(idl.name), idl]));
-  const deployArtifacts = collectDeployArtifacts(cwd);
   const configPath = options.configPath ?? findConfigPath(cwd);
   const config = options.config ?? (configPath ? loadConfig(configPath, cwd) : undefined);
-  const optionalEvidence = loadOptionalSolanaEvidence(cwd);
-  const verifiableEvidence = [...collectEvidencePaths(cwd), ...optionalEvidence.verifiableBuild];
+  const verifiableEvidence = [...evidencePaths, ...optionalEvidence.verifiableBuild];
   const providerCluster = anchorManifest?.provider.cluster;
   const clusterAliases = providerClusterAliases(providerCluster);
 
   const names = new Map<string, string>();
   const anchorProgramsByName = new Map<string, SolanaProgramId[]>();
   if (anchorManifest) {
-    const doc = parseTomlLite(readFileSync(anchorToml, "utf8"));
-    for (const [section, values] of doc.sections) {
-      if (!section.startsWith("programs.")) continue;
-      const cluster = section.slice("programs.".length);
-      for (const [rawName, programId] of Object.entries(values)) {
-        const normalized = normalizeProgramName(rawName);
-        names.set(normalized, rawName);
-        const list = anchorProgramsByName.get(normalized) ?? [];
-        list.push({ cluster, programId, valid: isLikelySolanaPublicKey(programId) });
-        anchorProgramsByName.set(normalized, list);
-      }
+    for (const program of anchorManifest.programs) {
+      const normalized = normalizeProgramName(program.name);
+      names.set(normalized, program.name);
+      const list = anchorProgramsByName.get(normalized) ?? [];
+      list.push({ cluster: program.cluster, programId: program.programId, valid: program.valid });
+      anchorProgramsByName.set(normalized, list);
     }
   }
 
@@ -479,7 +518,7 @@ export function buildSolanaReleaseGate(options: BuildSolanaReleaseGateOptions = 
     ...Object.entries(anchorManifest?.scripts ?? {})
       .filter(([, value]) => /(upgrade-authority|set-upgrade-authority|program show|anchor upgrade)/i.test(value))
       .map(([name, value]) => `Anchor.toml script ${name}: ${value}`),
-    ...collectPackageScriptEvidence(cwd),
+    ...packageScriptEvidence,
     ...optionalEvidence.upgradeAuthority
   ];
 
@@ -671,7 +710,6 @@ function firstProgramId(report: SolanaReleaseGate): string | undefined {
 }
 
 export function buildSolanaTestPlan(report: SolanaReleaseGate): SolanaTestPlan {
-  const items: SolanaTestPlanItem[] = [];
   const programNames = report.programs.map((program) => program.name).filter(Boolean);
   const idlCheck =
     programNames.length > 0
@@ -679,64 +717,60 @@ export function buildSolanaTestPlan(report: SolanaReleaseGate): SolanaTestPlan {
       : "ls target/idl/*.json";
   const programId = firstProgramId(report) ?? "<PROGRAM_ID>";
   const cluster = report.provider.cluster ?? "<cluster>";
-
-  items.push({
-    id: "unit-integration",
-    title: "Run Anchor tests",
-    kind: "required",
-    command: "anchor test",
-    reason: "Exercises program instructions against a local validator before the release gate is evaluated."
-  });
-
-  items.push({
-    id: "build-idl",
-    title: "Build program and IDL",
-    kind: "required",
-    command: `anchor build && ${idlCheck}`,
-    reason: "Regenerates SBF and IDL artifacts, then proves the expected IDL files exist."
-  });
-
-  items.push({
-    id: "program-ids",
-    title: "Compare program IDs",
-    kind: "required",
-    command: "anchor keys list",
-    reason: "Confirms the keypairs generated by Anchor match the program IDs committed in Anchor.toml."
-  });
-
-  items.push({
-    id: "verifiable-build",
-    title: "Create verifiable build evidence",
-    kind: report.summary.gate === "pass" ? "recommended" : "required",
-    command: "anchor build --verifiable",
-    reason: "Produces reproducible build evidence that can be archived with the release."
-  });
-
-  if (!report.quorate.hasSolanaPack) {
-    items.push({
+  const quorateConfigItem: SolanaTestPlanItem[] = report.quorate.hasSolanaPack
+    ? []
+    : [{
       id: "quorate-config",
       title: "Enable the Quorate Solana council",
       kind: "required",
       command: "quorate init --pack solana",
       reason: "Adds Solana-specific reviewers before Quorate is used as a merge/release gate."
-    });
-  }
-
-  items.push({
-    id: "quorate-review",
-    title: "Run Solana-focused Quorate review",
-    kind: "required",
-    command: "quorate review --base main",
-    reason: "Runs the configured Solana council on the release diff."
-  });
-
-  items.push({
-    id: "upgrade-authority",
-    title: "Verify upgrade authority",
-    kind: "manual",
-    command: `solana program show ${programId} --url ${cluster}`,
-    reason: "Requires live RPC; compare the Upgrade Authority with the release wallet or intended governance address."
-  });
+    }];
+  const items: SolanaTestPlanItem[] = [
+    {
+      id: "unit-integration",
+      title: "Run Anchor tests",
+      kind: "required",
+      command: "anchor test",
+      reason: "Exercises program instructions against a local validator before the release gate is evaluated."
+    },
+    {
+      id: "build-idl",
+      title: "Build program and IDL",
+      kind: "required",
+      command: `anchor build && ${idlCheck}`,
+      reason: "Regenerates SBF and IDL artifacts, then proves the expected IDL files exist."
+    },
+    {
+      id: "program-ids",
+      title: "Compare program IDs",
+      kind: "required",
+      command: "anchor keys list",
+      reason: "Confirms the keypairs generated by Anchor match the program IDs committed in Anchor.toml."
+    },
+    {
+      id: "verifiable-build",
+      title: "Create verifiable build evidence",
+      kind: report.summary.gate === "pass" ? "recommended" : "required",
+      command: "anchor build --verifiable",
+      reason: "Produces reproducible build evidence that can be archived with the release."
+    },
+    ...quorateConfigItem,
+    {
+      id: "quorate-review",
+      title: "Run Solana-focused Quorate review",
+      kind: "required",
+      command: "quorate review --base main",
+      reason: "Runs the configured Solana council on the release diff."
+    },
+    {
+      id: "upgrade-authority",
+      title: "Verify upgrade authority",
+      kind: "manual",
+      command: `solana program show ${programId} --url ${cluster}`,
+      reason: "Requires live RPC; compare the Upgrade Authority with the release wallet or intended governance address."
+    }
+  ];
 
   return {
     cwd: report.cwd,

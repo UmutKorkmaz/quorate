@@ -92,10 +92,10 @@ edition = "2021"
 }
 
 describe("buildSolanaReleaseGate", () => {
-  it("passes when Anchor, Cargo, IDL, Quorate, authority, and verifiable evidence are present", () => {
+  it("passes when Anchor, Cargo, IDL, Quorate, authority, and verifiable evidence are present", async () => {
     writeAnchorProject();
 
-    const report = buildSolanaReleaseGate({ cwd: dir, now: new Date("2026-06-23T00:00:00.000Z") });
+    const report = await buildSolanaReleaseGate({ cwd: dir, now: new Date("2026-06-23T00:00:00.000Z") });
 
     expect(report.summary.gate).toBe("pass");
     expect(report.checks.every((check) => check.status === "pass")).toBe(true);
@@ -105,10 +105,10 @@ describe("buildSolanaReleaseGate", () => {
     });
   });
 
-  it("fails when no IDL artifacts are present", () => {
+  it("fails when no IDL artifacts are present", async () => {
     writeAnchorProject({ idl: false });
 
-    const report = buildSolanaReleaseGate({ cwd: dir });
+    const report = await buildSolanaReleaseGate({ cwd: dir });
     const idlCheck = report.checks.find((check) => check.id === "idl");
 
     expect(report.summary.gate).toBe("fail");
@@ -116,37 +116,37 @@ describe("buildSolanaReleaseGate", () => {
     expect(idlCheck?.detail).toMatch(/No target\/idl/i);
   });
 
-  it("fails when IDL metadata address does not match Anchor.toml", () => {
+  it("fails when IDL metadata address does not match Anchor.toml", async () => {
     writeAnchorProject({ idlAddress: "22222222222222222222222222222222" });
 
-    const report = buildSolanaReleaseGate({ cwd: dir });
+    const report = await buildSolanaReleaseGate({ cwd: dir });
 
     expect(report.summary.gate).toBe("fail");
     expect(report.checks.find((check) => check.id === "idl")?.detail).toMatch(/do not match/i);
   });
 
-  it("compares IDL metadata against the provider cluster program ID", () => {
+  it("compares IDL metadata against the provider cluster program ID", async () => {
     writeAnchorProject({
       providerCluster: "mainnet",
       mainnetProgramId: MAINNET_PROGRAM_ID,
       idlAddress: PROGRAM_ID
     });
 
-    const report = buildSolanaReleaseGate({ cwd: dir });
+    const report = await buildSolanaReleaseGate({ cwd: dir });
 
     expect(report.summary.gate).toBe("fail");
     expect(report.checks.find((check) => check.id === "idl")?.detail).toMatch(/do not match/i);
     expect(report.programs[0].idlMatchesProgramId).toBe(false);
   });
 
-  it("uses the provider cluster program ID in the generated upgrade-authority command", () => {
+  it("uses the provider cluster program ID in the generated upgrade-authority command", async () => {
     writeAnchorProject({
       providerCluster: "mainnet",
       mainnetProgramId: MAINNET_PROGRAM_ID,
       idlAddress: MAINNET_PROGRAM_ID
     });
 
-    const report = buildSolanaReleaseGate({ cwd: dir });
+    const report = await buildSolanaReleaseGate({ cwd: dir });
     const plan = buildSolanaTestPlan(report);
 
     expect(plan.items.find((item) => item.id === "upgrade-authority")?.command).toBe(
@@ -154,10 +154,10 @@ describe("buildSolanaReleaseGate", () => {
     );
   });
 
-  it("adds Quorate setup to the generated test plan when the Solana pack is missing", () => {
+  it("adds Quorate setup to the generated test plan when the Solana pack is missing", async () => {
     writeAnchorProject({ quorate: false });
 
-    const report = buildSolanaReleaseGate({ cwd: dir });
+    const report = await buildSolanaReleaseGate({ cwd: dir });
     const plan = buildSolanaTestPlan(report);
 
     expect(plan.items.some((item) => item.command === "quorate init --pack solana")).toBe(true);
