@@ -47652,6 +47652,13 @@ var NON_REQUEST_PATH_RE = /(^|\/)(cli|bin|scripts?|tools?|tasks?)(\/|$)/i;
 var CONFIG_BUILD_FILE_RE = /(^|\/)[^/]*\.config\.[cm]?[jt]s$|(^|\/)(esbuild|rollup|webpack|vite|vitest|jest)\.[^/]*$/i;
 var JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
 var PROMPT_INTERPOLATION_RE = /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
+var SOLANA_CLIENT_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
+var ANCHOR_ACCOUNT_ATTR_RE = /#\s*\[\s*account\b/;
+var ANCHOR_CONSTRAINT_KEY_RE = /\b(?:has_one|constraint|address|seeds|bump|owner|signer|executable|zero|close|token::(?:mint|authority|token_program)|mint::(?:authority|decimals)|associated_token::(?:mint|authority|token_program)|extensions::[a-z_]+)\b/gi;
+var SOLANA_INVARIANT_RE = /(?:amount|balance|reserve|supply|vault|collateral|liquidity|fee|shares|debt|total)/i;
+var TOKEN_2022_RISK_RE = /\b(?:StateWithExtensions::<\s*(?:Mint|Account)\s*>\s*::\s*unpack|spl_token_2022::state::(?:Mint|Account)::unpack|Program\s*<\s*'info\s*,\s*Token2022\s*>|TOKEN_2022_PROGRAM_ID|Token2022)\b/;
+var TOKEN_EXTENSION_CHECK_RE = /\b(?:get_extension|get_extension_types|try_get_extension|ExtensionType::|transfer_hook|permanent_delegate|confidential_transfer|transfer_fee)\b/i;
+var IMPORT_OR_USE_RE = /^\s*(?:import|use)\b/;
 function isTestLikePath(file2) {
   if (!file2) return false;
   return TEST_PATH_RE.test(file2) || TEST_FILE_RE.test(file2);
@@ -47659,6 +47666,39 @@ function isTestLikePath(file2) {
 function isNonRequestPath(file2) {
   if (!file2) return false;
   return NON_REQUEST_PATH_RE.test(file2) || CONFIG_BUILD_FILE_RE.test(file2);
+}
+function textByFile(lines) {
+  const result = /* @__PURE__ */ new Map();
+  for (const line of lines) {
+    if (!line.file) continue;
+    result.set(line.file, `${result.get(line.file) ?? ""}
+${line.text}`);
+  }
+  return result;
+}
+function anchorConstraintKeys(text) {
+  const keys = /* @__PURE__ */ new Set();
+  for (const match of text.matchAll(ANCHOR_CONSTRAINT_KEY_RE)) {
+    keys.add(match[0].toLowerCase());
+  }
+  return keys;
+}
+function nearbyAddedText(target, lines, distance = 6) {
+  if (!target.file || target.line === void 0) return "";
+  return lines.filter(
+    (line) => line.file === target.file && line.line !== void 0 && Math.abs(line.line - target.line) <= distance
+  ).map((line) => line.text).join("\n");
+}
+function hasAnchorConstraintWeakening(removed, added) {
+  const removedKeys = anchorConstraintKeys(removed.text);
+  if (removedKeys.size === 0) return false;
+  const addedText = nearbyAddedText(removed, added);
+  if (!ANCHOR_ACCOUNT_ATTR_RE.test(addedText)) return false;
+  const addedKeys = anchorConstraintKeys(addedText);
+  for (const key of removedKeys) {
+    if (!addedKeys.has(key)) return true;
+  }
+  return false;
 }
 function applyInlineSuppressions(findings, lines) {
   const textByLoc = /* @__PURE__ */ new Map();
@@ -47691,6 +47731,7 @@ function runHeuristicReview(request2, role = "maintainer") {
   const startedAt = Date.now();
   const findings = [];
   const lines = addedLines(request2.diff ?? "");
+  const addedTextByFile = textByFile(lines);
   const testLikeByFile = /* @__PURE__ */ new Map();
   for (const line of lines) {
     const text = line.text;
@@ -47755,12 +47796,60 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "Raw invoke / invoke_signed bypasses Anchor's typed CPI safety checks. Verify the target program id and all account constraints before calling."
       });
     }
-    if (/\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") && /skipPreflight\s*:\s*true/.test(text)) {
+    if (line.file?.endsWith(".rs") && /\bremaining_accounts\b/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Unchecked remaining_accounts used in CPI",
+        body: "remaining_accounts are not validated by Anchor's account constraints. Require explicit owner/key/writable/signer checks before using them in CPI, token movement, or authority decisions."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /Program\s*<\s*'info\s*,\s*UncheckedAccount|program_id\s*:\s*ctx\.accounts|(?:^|[^A-Za-z0-9_])program\.key\(\)|CpiContext::new\s*\(\s*ctx\.accounts\.[A-Za-z0-9_]*(?:program|program_id)\.to_account_info\(\)/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "CPI program account not pinned",
+        body: "A CPI target program appears to come from caller-controlled accounts. Pin the program id to the expected system, token, associated-token, or application program before invoking it."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /skipPreflight\s*:\s*true/.test(text)) {
       findings.push({
         ...base,
         severity: "medium",
         title: "Preflight checks disabled",
         body: "skipPreflight: true skips transaction simulation, so failing transactions still pay fees and errors are masked. Remove this flag or restrict it to explicit debug builds."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\bconnection\s*\.\s*send(?:Raw)?Transaction\s*\(/.test(text) && !/\b(?:confirmTransaction|sendAndConfirmTransaction)\b/.test(addedTextByFile.get(fileKey) ?? "")) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Transaction sent without confirmation",
+        body: "A Solana transaction is sent without an adjacent confirmation step. Wait for confirmation using the same blockhash/lastValidBlockHeight and commitment before updating application state."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\bgetLatestBlockhash\s*\(/.test(text) && !/\blastValidBlockHeight\b/.test(addedTextByFile.get(fileKey) ?? text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Blockhash expiry not tracked",
+        body: "Fetching a recent blockhash without carrying lastValidBlockHeight makes retries and confirmation expiry ambiguous. Track both blockhash and lastValidBlockHeight when confirming transactions."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\.confirmTransaction\s*\(\s*(?!\{)[^,\n)]+(?:,\s*["'](?:processed|confirmed|finalized)["'])?\s*\)/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Confirmation missing blockhash expiry guard",
+        body: "signature-only confirmTransaction calls do not bind confirmation to the transaction's blockhash and lastValidBlockHeight. Use the blockhash-based confirmation strategy returned by getLatestBlockhash."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\bget(?:RecentBlockhash|FeeCalculatorForBlockhash)\s*\(/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Deprecated blockhash freshness API",
+        body: "Deprecated blockhash freshness APIs do not provide the lastValidBlockHeight needed for expiry-aware confirmation. Use getLatestBlockhash and pass blockhash plus lastValidBlockHeight into confirmTransaction."
       });
     }
     if (line.file?.endsWith(".rs") && /\.unwrap\(\)|\.expect\(|panic!\(|unreachable!\(/.test(text)) {
@@ -47795,12 +47884,36 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "unpacking SPL token Account/Mint data without checking owner == token program and the expected mint enables account-substitution; validate owner and mint (and decimals) before trusting amounts."
       });
     }
+    if (line.file?.endsWith(".rs") && /\b(?:InterfaceAccount|Token2022|token_2022|spl_token_2022|TransferHook|PermanentDelegate|ConfidentialTransfer|MetadataPointer)\b/.test(text) && !IMPORT_OR_USE_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Token-2022 extension constraints missing",
+        body: "Token-2022 and interface accounts can carry extensions such as transfer hooks, permanent delegates, or confidential transfers. Validate the token program, mint, owner, decimals, and expected extension policy."
+      });
+    }
+    if ((line.file?.endsWith(".rs") || SOLANA_CLIENT_FILE_RE.test(line.file ?? "")) && TOKEN_2022_RISK_RE.test(text) && !IMPORT_OR_USE_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Token-2022 extensions not validated",
+        body: "Token-2022 mints/accounts can carry extensions such as transfer fees, transfer hooks, permanent delegates, confidential transfers, or interest-bearing state. Inspect and allowlist expected extensions before trusting balances, decimals, authorities, or transfer semantics."
+      });
+    }
     if (line.file?.endsWith(".rs") && /(amount|balance|lamports|supply)\b[^;=]*[-+*]=(?!=)/.test(text) && !text.includes("checked_")) {
       findings.push({
         ...base,
         severity: "medium",
         title: "Unchecked arithmetic on funds",
         body: "balance/amount math without checked_add/checked_sub can overflow/underflow; use checked_* and handle None."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /\.(authority|owner|admin)\s*=\s*ctx\.accounts\.(?:new_|next_|pending_)[A-Za-z0-9_]+\.key\(\)/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Authority invariant changed",
+        body: "A persistent authority/owner/admin field is reassigned from a transaction account. Require an explicit signer check and invariant test proving the authority can only change through the intended admin path."
       });
     }
     if (/\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") && /fromSecretKey\s*\(|secretKey\s*[:=]\s*(\[|Uint8Array|new Uint8Array|bs58)/.test(text)) {
@@ -48549,12 +48662,28 @@ function runHeuristicReview(request2, role = "maintainer") {
   for (const line of removedLines(request2.diff ?? "")) {
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
-    if (line.file?.endsWith(".rs") && /#\[account|has_one\s*=|constraint\s*=|address\s*=|seeds\s*=/.test(text)) {
+    if (line.file?.endsWith(".rs") && /#\s*\[\s*account|has_one\s*=|constraint\s*=|address\s*=|seeds\s*=|owner\s*=|\bbump\b|\bsigner\b|token::|mint::|associated_token::|extensions::/.test(text)) {
       findings.push({
         ...base,
         severity: "high",
         title: "Anchor account constraint removed",
         body: "a removed #[account(...)] constraint (has_one/constraint/address/seeds/signer) drops an authorization or validation check \u2014 confirm this is intentional."
+      });
+    }
+    if (line.file?.endsWith(".rs") && hasAnchorConstraintWeakening(line, lines)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Anchor account constraint weakened",
+        body: "an Anchor #[account(...)] constraint was replaced by a less restrictive attribute. Confirm the removed has_one, address, owner, signer, seeds, bump, or token constraint is enforced elsewhere before accepting the diff."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /\b(?:require(?:_eq|_ne|_gt|_gte|_lt|_lte)?!|assert(?:_eq|_ne)?!)\s*\(/.test(text) && SOLANA_INVARIANT_RE.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Solana invariant check removed",
+        body: "a removed require/assert check guarded a balance, reserve, supply, fee, debt, or authority invariant. Keep the invariant in code or replace it with an equivalent checked condition and regression test."
       });
     }
   }
@@ -49909,6 +50038,10 @@ function summarizeDiff(diff) {
   const bullets = files.map((path) => `- \`${path}\``);
   return [heading, "", ...bullets].join("\n");
 }
+
+// ../core/src/solana.ts
+var import_yaml3 = __toESM(require_dist2(), 1);
+var SOLANA_COUNCILS = new Set(PACKS.solana.councils.filter((council) => council !== "maintainer"));
 
 // ../core/src/suppression.ts
 var SUPPRESSION_VERSION = 1;

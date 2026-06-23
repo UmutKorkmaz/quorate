@@ -7,7 +7,10 @@ export default function GithubAction() {
   return (
     <article className="doc-page">
       <h1>GitHub Action</h1>
-      <p className="lead">Run the council on every pull request and post a single report comment.</p>
+      <p className="lead">
+        Run the council on every pull request, post one verified report comment, and fail release
+        gates when policy says a finding should block.
+      </p>
 
       <CodeBlock language="yaml">{`name: Quorate
 on: pull_request
@@ -55,6 +58,16 @@ jobs:
             </td>
             <td>—</td>
             <td>Comma-separated provider ids to enable.</td>
+          </tr>
+          <tr>
+            <td>
+              <code>pack</code>
+            </td>
+            <td>—</td>
+            <td>
+              Domain pack(s) to layer onto the review, such as <InlineCode>solana</InlineCode> or{" "}
+              <InlineCode>auto</InlineCode> to detect from changed files.
+            </td>
           </tr>
           <tr>
             <td>
@@ -130,6 +143,18 @@ jobs:
           </tr>
           <tr>
             <td>
+              <code>suppress-path</code>
+            </td>
+            <td>
+              <InlineCode>.quorate/suppressions.json</InlineCode>
+            </td>
+            <td>
+              Path to the committed suppression store, read from the base branch. Suppressed
+              findings stay visible but are not gated.
+            </td>
+          </tr>
+          <tr>
+            <td>
               <code>policy-path</code>
             </td>
             <td>
@@ -161,6 +186,63 @@ jobs:
           </tr>
         </tbody>
       </table>
+
+      <h2>Solana release gate</h2>
+      <p>
+        For Solana and Anchor repositories, run Quorate before preview deployment. The review job
+        can block high-severity Anchor account, transaction-safety, CPI, or Token-2022 findings, and
+        downstream build/deploy jobs can depend on the verdict output.
+      </p>
+      <CodeBlock language="yaml">{`name: Quorate — Solana release gate
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    outputs:
+      verdict: \${{ steps.quorate.outputs.verdict }}
+      findings: \${{ steps.quorate.outputs.findings }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: quorate
+        uses: UmutKorkmaz/quorate@v0.9.0
+        env:
+          OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
+        with:
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+          runner-mode: api
+          pack: solana
+          fail-on: high
+          inline-comments: true
+          sarif-file: quorate.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: \${{ steps.quorate.outputs.sarif-path }}
+
+  build-and-preview:
+    needs: review
+    if: needs.review.outputs.verdict != 'fail'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci && npm test && npm run build
+      - run: npm run deploy:preview`}</CodeBlock>
+      <p>
+        The Quorate PR comment is the verified review-gate record: verdict, diff summary, degraded
+        status, and active and suppressed findings. A deploy job should add its own preview URL
+        after deployment succeeds; keeping it behind the review job makes that build/deploy comment
+        evidence that the Solana gate passed first.
+      </p>
+      <p>
+        The Solana council guidance asks reviewers to inspect Anchor constraint diffs, transaction
+        preflight and confirmation handling, raw CPI and <InlineCode>remaining_accounts</InlineCode>
+        validation, Token-2022 extension behavior, and the test plan/invariants needed to prove the
+        change is safe. See <Link to="/docs/solana">Solana / Anchor</Link> for the checklist.
+      </p>
 
       <h2>SARIF → GitHub Code Scanning</h2>
       <p>
@@ -238,6 +320,10 @@ git add -f .quorate/suppressions.json && git commit -m "chore: suppress fixture 
         </li>
         <li>
           <InlineCode>findings</InlineCode> — the number of findings in the report.
+        </li>
+        <li>
+          <InlineCode>sarif-path</InlineCode> — the absolute path of the written SARIF file when{" "}
+          <InlineCode>sarif-file</InlineCode> is set.
         </li>
       </ul>
 

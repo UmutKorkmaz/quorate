@@ -45,10 +45,10 @@ const PHASE_MS: Record<EmulatorPhase, number> = {
 };
 
 const ROLES = [
-  { id: "architect", glyph: "△", color: "text-quorate-architect" },
-  { id: "security", glyph: "⬡", color: "text-quorate-security" },
-  { id: "qa", glyph: "◇", color: "text-quorate-qa" },
-  { id: "performance", glyph: "↯", color: "text-quorate-performance" },
+  { id: "solana-security", glyph: "⬡", color: "text-quorate-security" },
+  { id: "anchor-accounts", glyph: "△", color: "text-quorate-architect" },
+  { id: "transaction-safety", glyph: "◇", color: "text-quorate-qa" },
+  { id: "token-safety", glyph: "↯", color: "text-quorate-performance" },
   { id: "maintainer", glyph: "⌥", color: "text-quorate-maintainer" }
 ] as const;
 
@@ -92,17 +92,17 @@ interface FixtureData {
 
 export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
   pass: {
-    label: "Clean refactor",
+    label: "Clean Anchor refactor",
     files: [
-      { path: "src/format/date.ts", add: 22, del: 19 },
-      { path: "tests/format/date.test.ts", add: 31, del: 4 }
+      { path: "programs/escrow/src/state.rs", add: 22, del: 19 },
+      { path: "tests/escrow-state.ts", add: 31, del: 4 }
     ],
     added: 53,
     removed: 23,
     running: [
-      { id: "heuristic", role: "maintainer", state: "done", note: "0 findings" },
-      { id: "claude", role: "security", state: "running", note: "" },
-      { id: "codex", role: "qa", state: "queued", note: "" }
+      { id: "heuristic", role: "solana-security", state: "done", note: "0 findings" },
+      { id: "claude", role: "anchor-accounts", state: "running", note: "" },
+      { id: "codex", role: "transaction-safety", state: "queued", note: "" }
     ],
     verdict: "pass",
     findingCount: 0,
@@ -112,25 +112,25 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         verdict: "pass",
         severity: "OK",
         severityColor: "text-quorate-pass",
-        location: "src/format/date.ts",
-        body: "Pure refactor with full coverage — every reviewer agrees the change is safe to merge.",
+        location: "programs/escrow/src/state.rs",
+        body: "Pure account-state refactor with full coverage - every reviewer agrees the change is safe to merge.",
         meta: "agreed by claude, codex, heuristic · confidence 0.94"
       }
     ]
   },
   warn: {
-    label: "New endpoint",
+    label: "Wallet client update",
     files: [
-      { path: "src/api/orders.ts", add: 47, del: 6 },
-      { path: "src/api/schema.ts", add: 19, del: 2 },
-      { path: "tests/api/orders.test.ts", add: 12, del: 0 }
+      { path: "app/actions/createEscrow.ts", add: 47, del: 6 },
+      { path: "app/lib/solana.ts", add: 19, del: 2 },
+      { path: "tests/create-escrow.test.ts", add: 12, del: 0 }
     ],
     added: 78,
     removed: 8,
     running: [
-      { id: "heuristic", role: "maintainer", state: "done", note: "1 finding" },
-      { id: "claude", role: "security", state: "running", note: "" },
-      { id: "codex", role: "qa", state: "queued", note: "" }
+      { id: "heuristic", role: "solana-security", state: "done", note: "1 finding" },
+      { id: "claude", role: "anchor-accounts", state: "running", note: "" },
+      { id: "codex", role: "transaction-safety", state: "queued", note: "" }
     ],
     verdict: "warn",
     findingCount: 1,
@@ -140,26 +140,26 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         verdict: "warn",
         severity: "MED",
         severityColor: "text-quorate-medium",
-        location: "src/api/orders.ts:61",
-        body: "Pagination limit is unbounded — large result sets could pressure the database under load.",
+        location: "app/actions/createEscrow.ts:61",
+        body: "Transaction send path does not wait for confirmation before updating app state.",
         meta: "agreed by claude · confidence 0.71"
       }
     ]
   },
   fail: {
-    label: "Auth change",
+    label: "Escrow close instruction",
     files: [
-      { path: "src/auth.ts", add: 34, del: 12 },
-      { path: "src/middleware/validate.ts", add: 51, del: 8 },
-      { path: "tests/auth.test.ts", add: 28, del: 14 },
-      { path: "package.json", add: 15, del: 8 }
+      { path: "programs/escrow/src/lib.rs", add: 34, del: 12 },
+      { path: "programs/escrow/src/accounts.rs", add: 51, del: 8 },
+      { path: "tests/close-escrow.test.ts", add: 28, del: 14 },
+      { path: "app/actions/closeEscrow.ts", add: 15, del: 8 }
     ],
     added: 128,
     removed: 42,
     running: [
-      { id: "heuristic", role: "maintainer", state: "done", note: "2 findings" },
-      { id: "claude", role: "security", state: "running", note: "" },
-      { id: "codex", role: "qa", state: "queued", note: "" }
+      { id: "heuristic", role: "solana-security", state: "done", note: "2 findings" },
+      { id: "claude", role: "anchor-accounts", state: "running", note: "" },
+      { id: "codex", role: "transaction-safety", state: "queued", note: "" }
     ],
     verdict: "fail",
     findingCount: 3,
@@ -169,16 +169,16 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         verdict: "fail",
         severity: "HIGH",
         severityColor: "text-quorate-high",
-        location: "src/auth.ts:42",
-        body: "Missing authorization check — token introspection result is trusted without verifying the audience claim.",
-        meta: "agreed by claude, codex · confidence 0.82"
+        location: "programs/escrow/src/lib.rs:88",
+        body: "Anchor account constraint removed - close_escrow no longer proves the vault belongs to the escrow authority.",
+        meta: "agreed by claude, codex, heuristic · confidence 0.86"
       },
       {
         verdict: "warn",
         severity: "MED",
         severityColor: "text-quorate-medium",
-        location: "tests/auth.test.ts:18",
-        body: "New test omits negative case for expired token — coverage gap on auth edge path."
+        location: "app/actions/closeEscrow.ts:41",
+        body: "Client sends the transaction with skipPreflight enabled, so simulation failures are hidden from users."
       }
     ]
   }
@@ -302,7 +302,7 @@ export function TerminalEmulator({
   const [paused, setPaused] = useState(false);
   const [loopKey, setLoopKey] = useState(0);
 
-  const cwd = "~/Projects/my-app";
+  const cwd = "~/Projects/solana-escrow";
 
   const goToPhase = useCallback((next: EmulatorPhase) => {
     setPhase(next);
@@ -430,15 +430,15 @@ export function TerminalEmulator({
                 <span className="terminal-meta">node 22 · {cwd}</span>
               </div>
               <p className="terminal-tagline">
-                <span className="text-quorate-amber">✦</span> Council convened. A panel of AI reviewers,
-                one binding verdict.
+                <span className="text-quorate-amber">✦</span> Solana pack loaded. A panel of AI
+                reviewers, one binding verdict.
               </p>
               <div className="terminal-getting-started">
                 <p className="terminal-getting-started-label">GETTING STARTED</p>
                 <ul>
                   <li>
                     <code>/git</code>
-                    <span>load the working tree as a diff</span>
+                    <span>load the Solana app diff</span>
                   </li>
                   <li>
                     <code>/use available</code>
@@ -446,7 +446,7 @@ export function TerminalEmulator({
                   </li>
                   <li>
                     <code>/review</code>
-                    <span>convene the council on the loaded diff</span>
+                    <span>convene the Solana council</span>
                   </li>
                 </ul>
               </div>

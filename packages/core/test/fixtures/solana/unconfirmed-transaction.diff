@@ -1,0 +1,8 @@
+diff --git a/app/src/closeEscrow.ts b/app/src/closeEscrow.ts
+--- a/app/src/closeEscrow.ts
++++ b/app/src/closeEscrow.ts
+@@ -8,6 +8,8 @@ export async function closeEscrow(connection: Connection, tx: Transaction) {
++  const signature = await connection.sendTransaction(tx, [wallet]);
++  markEscrowClosed(signature);
+   return signature;
+ }

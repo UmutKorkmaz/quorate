@@ -14,13 +14,13 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/config":
     "Configure councils, providers, headless args, and safety limits in .quorate.yml.",
   "/docs/github-action":
-    "Run the Quorate council on every pull request with the GitHub Action.",
+    "Run the Quorate council on every pull request with GitHub Action release gates, SARIF, baselines, suppressions, and Solana pack support.",
   "/docs/faq":
     "Frequently asked questions about Quorate — install, providers, degraded reviews, and the GitHub Action.",
   "/docs/manual-testing":
     "Manual testing checklist for Quorate — website, CLI shell, keyboard shortcuts, sessions, headless commands, and edge cases.",
   "/docs/solana":
-    "Quorate Solana pack — Anchor-aware review council and ten deterministic on-chain heuristics for sealevel security.",
+    "Quorate Solana pack — Anchor-aware release gate for constraint diffs, transaction safety, CPI and remaining accounts, Token-2022, test plans, and 21 sealevel heuristics.",
   "/docs/evm":
     "Quorate EVM pack — Solidity-aware review council and ten deterministic on-chain heuristics for smart-contract security.",
   "/docs/iac":

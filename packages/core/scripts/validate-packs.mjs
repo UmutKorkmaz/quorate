@@ -19,14 +19,24 @@ const PACK_VULNERABLE_FIXTURES = {
   solana: [
     "unchecked-account.diff",
     "raw-cpi.diff",
+    "remaining-accounts.diff",
+    "cpi-program-unpinned.diff",
     "skip-preflight.diff",
+    "unconfirmed-transaction.diff",
+    "blockhash-expiry.diff",
+    "signature-only-confirmation.diff",
+    "deprecated-blockhash.diff",
     "panic.diff",
     "non-canonical-bump.diff",
     "manual-close.diff",
     "unvalidated-token.diff",
+    "token-2022-extension.diff",
     "unchecked-arithmetic.diff",
+    "authority-invariant.diff",
     "hardcoded-keypair.diff",
-    "constraint-removed.diff"
+    "constraint-removed.diff",
+    "constraint-weakened.diff",
+    "invariant-removed.diff"
   ],
   evm: [
     "tx-origin.diff",
@@ -235,7 +245,7 @@ const PACK_VULNERABLE_FIXTURES = {
 };
 
 const PACK_CLEAN_FIXTURES = {
-  solana: ["clean-anchor.diff", "clean-web3.diff"],
+  solana: ["clean-anchor.diff", "clean-web3.diff", "clean-token-2022-validated.diff"],
   evm: ["clean-solidity.diff"],
   iac: ["clean-iac.diff"],
   llm: ["clean-llm.diff"],
@@ -373,8 +383,9 @@ md += `---
 
 Findings are produced by **deterministic diff heuristics** — each class maps a
 known-bad pattern (regex or structural match) to a confirmed vulnerable fixture
-and a recognised security taxonomy entry. The demo corpus (10 vulnerable + 1–2
-clean fixtures per pack, plus ${benignCount} cross-domain benign fixtures) forms a
+and a recognised security taxonomy entry. The demo corpus (pack-specific
+vulnerable fixtures + 1–2 clean fixtures per pack, plus ${benignCount}
+cross-domain benign fixtures) forms a
 repeatable regression suite. A real AI council (LLM-based review) can be layered
 on top of these heuristics for richer, context-sensitive analysis.
 `;

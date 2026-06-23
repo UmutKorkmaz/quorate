@@ -7,6 +7,9 @@ import { PACKS_DATA, type PackInfo } from "../lib/packs-data";
 // ── Standard badge colours (reuse design token names) ─────────────
 const STANDARD_STYLE: Record<string, string> = {
   "sealevel-attacks": "border-quorate-accent/40 text-quorate-accent bg-quorate-accent/8",
+  "Solana transaction confirmation": "border-quorate-accent/40 text-quorate-accent bg-quorate-accent/8",
+  "Anchor token constraints": "border-quorate-accent/40 text-quorate-accent bg-quorate-accent/8",
+  "Token-2022 extensions": "border-quorate-accent/40 text-quorate-accent bg-quorate-accent/8",
   SWC: "border-quorate-amber/40 text-quorate-amber bg-quorate-amber/8",
   Move: "border-quorate-architect/40 text-quorate-architect bg-quorate-architect/8",
   CIS: "border-quorate-maintainer/40 text-quorate-maintainer bg-quorate-maintainer/8",
@@ -82,8 +85,8 @@ const PACK_SPAN: Record<string, string> = {
 // ── Stat banner ───────────────────────────────────────────────────
 const STATS = [
   { value: "18", label: "domain packs" },
-  { value: "180", label: "vulnerability classes" },
-  { value: "19", label: "recognised standards" },
+  { value: "191", label: "vulnerability classes" },
+  { value: "22", label: "recognised standards" },
   { value: "0", label: "false positives on clean code" }
 ];
 
@@ -195,7 +198,7 @@ export function Packs() {
     <>
       <Seo
         title="Review Packs"
-        description="Quorate ships 18 domain-aware review packs — Solana, EVM, Move, IaC, Kubernetes, CI/CD, LLM, MLOps, Web, GraphQL, Accessibility, Data & SQL, Fintech, Healthcare, Privacy, Mobile, Embedded, and Performance — each grounding 10 vulnerability classes in a recognised standard."
+        description="Quorate ships 18 domain-aware review packs — Solana, EVM, Move, IaC, Kubernetes, CI/CD, LLM, MLOps, Web, GraphQL, Accessibility, Data & SQL, Fintech, Healthcare, Privacy, Mobile, Embedded, and Performance — each grounding deterministic vulnerability classes in recognised standards."
         path="/packs"
       />
 

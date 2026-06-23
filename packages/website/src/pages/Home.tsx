@@ -1,5 +1,6 @@
 import { Seo } from "../components/Seo";
 import { Hero } from "../components/Hero";
+import { SolanaAppExample } from "../components/SolanaAppExample";
 import { TerminalShowcase } from "../components/TerminalShowcase";
 import { HowItWorks } from "../components/HowItWorks";
 import { WhatIsQuorate } from "../components/WhatIsQuorate";
@@ -48,6 +49,7 @@ export function Home() {
         ogType="website"
       />
       <Hero />
+      <SolanaAppExample />
       <TerminalShowcase />
       <HowItWorks />
       <WhatIsQuorate />
