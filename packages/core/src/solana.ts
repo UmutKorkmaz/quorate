@@ -1,5 +1,7 @@
 import { access, readFile, readdir } from "node:fs/promises";
 import { basename, join, relative, resolve } from "node:path";
+import { parse as parseToml } from "smol-toml";
+import type { TomlTable, TomlValue } from "smol-toml";
 import YAML from "yaml";
 import { findConfigPath, loadConfig } from "./config.js";
 import { PACKS } from "./packs.js";
@@ -88,10 +90,6 @@ export interface BuildSolanaReleaseGateOptions {
   now?: Date;
 }
 
-interface TomlDoc {
-  sections: Map<string, Record<string, string>>;
-}
-
 interface AnchorProgramEntry extends SolanaProgramId {
   name: string;
 }
@@ -163,68 +161,28 @@ function programIdMatchesProviderCluster(entry: SolanaProgramId, clusterAliases?
   return clusterAliases.includes(entry.cluster.toLowerCase());
 }
 
-function stripTomlComment(line: string): string {
-  let quote: "\"" | "'" | undefined;
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if ((char === "\"" || char === "'") && line[i - 1] !== "\\") {
-      quote = quote === char ? undefined : quote ?? char;
-      continue;
-    }
-    if (char === "#" && !quote) return line.slice(0, i);
-  }
-  return line;
+function tableValue(value: TomlValue | undefined): TomlTable {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as TomlTable;
 }
 
-function parseTomlValue(value: string): string {
-  const trimmed = value.trim().replace(/,$/, "");
-  if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-    try {
-      return JSON.parse(trimmed) as string;
-    } catch {
-      return trimmed.slice(1, -1);
-    }
-  }
-  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
+function stringValue(value: TomlValue | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
-function parseTomlLite(source: string): TomlDoc {
-  const sections = new Map<string, Record<string, string>>();
-  let section = "";
-  sections.set(section, {});
-
-  for (const rawLine of source.split(/\r?\n/)) {
-    const line = stripTomlComment(rawLine).trim();
-    if (!line) continue;
-
-    const sectionMatch = line.match(/^\[([^\]]+)\]$/);
-    if (sectionMatch) {
-      section = sectionMatch[1]?.trim() ?? "";
-      if (!sections.has(section)) sections.set(section, {});
-      continue;
-    }
-
-    const pairMatch = line.match(/^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/);
-    if (!pairMatch) continue;
-    sections.get(section)![pairMatch[1]!] = parseTomlValue(pairMatch[2]!);
-  }
-
-  return { sections };
+function stringRecord(value: TomlTable): Record<string, string> {
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
 async function parseAnchorManifest(path: string): Promise<AnchorManifest> {
-  const doc = parseTomlLite(await readFile(path, "utf8"));
+  const doc = parseToml(await readFile(path, "utf8"));
   const programs: AnchorProgramEntry[] = [];
-  const providerSection = doc.sections.get("provider") ?? {};
-  const scripts = doc.sections.get("scripts") ?? {};
+  const programTables = tableValue(doc.programs);
 
-  for (const [section, values] of doc.sections) {
-    if (!section.startsWith("programs.")) continue;
-    const cluster = section.slice("programs.".length);
-    for (const [name, programId] of Object.entries(values)) {
+  for (const [cluster, values] of Object.entries(programTables)) {
+    const clusterPrograms = tableValue(values);
+    for (const [name, programId] of Object.entries(clusterPrograms)) {
+      if (typeof programId !== "string") continue;
       programs.push({
         name,
         cluster,
@@ -234,20 +192,22 @@ async function parseAnchorManifest(path: string): Promise<AnchorManifest> {
     }
   }
 
+  const providerSection = tableValue(doc.provider);
+  const scriptsSection = tableValue(doc.scripts);
   return {
     programs,
     provider: {
-      cluster: providerSection.cluster,
-      wallet: providerSection.wallet
+      cluster: stringValue(providerSection.cluster),
+      wallet: stringValue(providerSection.wallet)
     },
-    scripts
+    scripts: stringRecord(scriptsSection)
   };
 }
 
 async function parseCargoManifest(path: string): Promise<CargoManifest> {
-  const doc = parseTomlLite(await readFile(path, "utf8"));
-  const pkg = doc.sections.get("package") ?? {};
-  return { path, packageName: pkg.name };
+  const doc = parseToml(await readFile(path, "utf8"));
+  const pkg = tableValue(doc.package);
+  return { path, packageName: stringValue(pkg.name) };
 }
 
 async function collectCargoTomls(cwd: string): Promise<CargoManifest[]> {

@@ -31,6 +31,7 @@ function writeAnchorProject(
     verifiable?: boolean;
     providerCluster?: string;
     mainnetProgramId?: string;
+    extraAnchorToml?: string;
   } = {}
 ): void {
   const providerCluster = options.providerCluster ?? "localnet";
@@ -54,6 +55,7 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 verify_upgrade = "solana program show ${options.mainnetProgramId ?? PROGRAM_ID} --url ${providerCluster}"
+${options.extraAnchorToml ?? ""}
 `,
     "utf8"
   );
@@ -152,6 +154,31 @@ describe("buildSolanaReleaseGate", () => {
     expect(plan.items.find((item) => item.id === "upgrade-authority")?.command).toBe(
       `solana program show ${MAINNET_PROGRAM_ID} --url mainnet`
     );
+  });
+
+  it("parses Anchor.toml with multiline validator arrays and genesis tables", async () => {
+    writeAnchorProject({
+      extraAnchorToml: `
+[test]
+startup_wait = 10000
+validator = [
+  { address = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", clone = true },
+  { address = "SysvarRent111111111111111111111111111111111", clone = true },
+]
+
+[[test.genesis]]
+address = "Sysvar1111111111111111111111111111111111111"
+program = "target/deploy/sysvar.so"
+`
+    });
+
+    const report = await buildSolanaReleaseGate({ cwd: dir });
+
+    expect(report.summary.gate).toBe("pass");
+    expect(report.programs[0]).toMatchObject({
+      name: "counter",
+      idlMatchesProgramId: true
+    });
   });
 
   it("adds Quorate setup to the generated test plan when the Solana pack is missing", async () => {
