@@ -112,4 +112,17 @@ describe("quorate solana", () => {
     expect(plan.items.some((item) => item.command === "quorate init --pack solana")).toBe(true);
     expect(plan.items.some((item) => item.command === "anchor test")).toBe(true);
   });
+
+  it.each(["doctor", "test-plan"])("rejects a missing explicit --config for solana %s", async (subcommand) => {
+    writeAnchorProject();
+    const program = buildProgram();
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["node", "quorate", "--cwd", dir, "--config", "missing.yml", "solana", subcommand, "--json"], {
+        from: "node"
+      })
+    ).rejects.toThrow(/Config file not found: missing\.yml/);
+    expect(process.exitCode).toBeUndefined();
+  });
 });

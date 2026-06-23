@@ -251,35 +251,38 @@ async function parseCargoManifest(path: string): Promise<CargoManifest> {
 }
 
 async function collectCargoTomls(cwd: string): Promise<CargoManifest[]> {
-  const manifests: CargoManifest[] = [];
   const root = resolve(cwd, "Cargo.toml");
-  if (await pathExists(root)) manifests.push(await parseCargoManifest(root));
+  const rootManifest = (await pathExists(root)) ? await parseCargoManifest(root) : undefined;
 
   const programsDir = resolve(cwd, "programs");
-  if (!(await pathExists(programsDir))) return manifests;
+  if (!(await pathExists(programsDir))) return rootManifest ? [rootManifest] : [];
 
-  const visit = async (dir: string, depth: number): Promise<void> => {
-    if (depth > 4) return;
+  const visit = async (dir: string, depth: number): Promise<CargoManifest[]> => {
+    if (depth > 4) return [];
     let entries;
     try {
       entries = await readdir(dir, { withFileTypes: true });
     } catch {
-      return;
+      return [];
     }
-    for (const entry of entries) {
-      const full = join(dir, entry.name);
-      if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name)) continue;
-        await visit(full, depth + 1);
-      } else if (entry.isFile() && entry.name === "Cargo.toml" && full !== root) {
-        manifests.push(await parseCargoManifest(full));
-      }
-    }
+
+    const manifestPaths = entries
+      .filter((entry) => entry.isFile() && entry.name === "Cargo.toml")
+      .map((entry) => join(dir, entry.name))
+      .filter((path) => path !== root);
+    const childDirs = entries
+      .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink() && !SKIP_DIRS.has(entry.name))
+      .map((entry) => join(dir, entry.name));
+    const [manifests, nested] = await Promise.all([
+      Promise.all(manifestPaths.map((path) => parseCargoManifest(path))),
+      Promise.all(childDirs.map((childDir) => visit(childDir, depth + 1)))
+    ]);
+
+    return [...manifests, ...nested.flat()];
   };
 
-  await visit(programsDir, 0);
-  return manifests;
+  const manifests = await visit(programsDir, 0);
+  return rootManifest ? [rootManifest, ...manifests] : manifests;
 }
 
 async function parseIdlFile(path: string): Promise<SolanaIdlInfo> {

@@ -187,15 +187,18 @@ function ensureGitignored(cwd: string, entry: string): void {
 }
 
 function configFrom(program: Command): QuorateConfig {
-  const opts = program.opts<GlobalOptions>();
-  return loadConfig(opts.config, cwdFrom(program));
+  const cwd = cwdFrom(program);
+  return loadConfig(configPathFrom(program, cwd), cwd);
 }
 
 function configPathFrom(program: Command, cwd: string): string | undefined {
   const opts = program.opts<GlobalOptions>();
   if (opts.config) {
     const explicitPath = resolve(cwd, opts.config);
-    return existsSync(explicitPath) ? explicitPath : undefined;
+    if (!existsSync(explicitPath)) {
+      throw new Error(`Config file not found: ${opts.config}`);
+    }
+    return explicitPath;
   }
   return findConfigPath(cwd);
 }
