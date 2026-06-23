@@ -17,9 +17,39 @@ export const PACK_COVERAGE: Record<string, CoverageEntry[]> = {
       reference: "sealevel: arbitrary-cpi"
     },
     {
+      title: "Unchecked remaining_accounts used in CPI",
+      standard: "sealevel-attacks",
+      reference: "sealevel: remaining-accounts"
+    },
+    {
+      title: "CPI program account not pinned",
+      standard: "sealevel-attacks",
+      reference: "sealevel: arbitrary-cpi"
+    },
+    {
       title: "Preflight checks disabled",
       standard: "sealevel-attacks",
       reference: "sealevel: preflight-checks"
+    },
+    {
+      title: "Transaction sent without confirmation",
+      standard: "Solana transaction confirmation",
+      reference: "confirmation: confirm-with-blockhash-and-lastValidBlockHeight"
+    },
+    {
+      title: "Blockhash expiry not tracked",
+      standard: "Solana transaction confirmation",
+      reference: "confirmation: blockhash-expiry"
+    },
+    {
+      title: "Confirmation missing blockhash expiry guard",
+      standard: "Solana transaction confirmation",
+      reference: "confirmation: blockhash-expiry"
+    },
+    {
+      title: "Deprecated blockhash freshness API",
+      standard: "Solana transaction confirmation",
+      reference: "confirmation: latest-blockhash"
     },
     {
       title: "Panic in on-chain code",
@@ -42,9 +72,24 @@ export const PACK_COVERAGE: Record<string, CoverageEntry[]> = {
       reference: "sealevel: account-data-matching"
     },
     {
+      title: "Token-2022 extension constraints missing",
+      standard: "Anchor token constraints",
+      reference: "anchor: token-extensions"
+    },
+    {
+      title: "Token-2022 extensions not validated",
+      standard: "Token-2022 extensions",
+      reference: "token-2022: extension-policy"
+    },
+    {
       title: "Unchecked arithmetic on funds",
       standard: "sealevel-attacks",
       reference: "sealevel: integer-overflow"
+    },
+    {
+      title: "Authority invariant changed",
+      standard: "sealevel-attacks",
+      reference: "sealevel: signer-authorization"
     },
     {
       title: "Hardcoded keypair material",
@@ -55,6 +100,16 @@ export const PACK_COVERAGE: Record<string, CoverageEntry[]> = {
       title: "Anchor account constraint removed",
       standard: "sealevel-attacks",
       reference: "sealevel: owner-checks"
+    },
+    {
+      title: "Anchor account constraint weakened",
+      standard: "sealevel-attacks",
+      reference: "sealevel: constraint-validation"
+    },
+    {
+      title: "Solana invariant check removed",
+      standard: "sealevel-attacks",
+      reference: "sealevel: invariant-checks"
     }
   ],
 

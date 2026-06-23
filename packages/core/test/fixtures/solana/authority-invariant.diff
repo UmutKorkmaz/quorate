@@ -1,0 +1,10 @@
+diff --git a/programs/escrow/src/lib.rs b/programs/escrow/src/lib.rs
+--- a/programs/escrow/src/lib.rs
++++ b/programs/escrow/src/lib.rs
+@@ -42,6 +42,8 @@ pub mod escrow {
+     pub fn rotate(ctx: Context<Rotate>) -> Result<()> {
++        ctx.accounts.escrow.authority = ctx.accounts.new_authority.key();
++        emit!(AuthorityRotated {});
+         Ok(())
+     }
+ }

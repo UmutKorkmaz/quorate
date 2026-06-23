@@ -1,0 +1,10 @@
+diff --git a/programs/router/src/lib.rs b/programs/router/src/lib.rs
+--- a/programs/router/src/lib.rs
++++ b/programs/router/src/lib.rs
+@@ -12,6 +12,8 @@ pub mod router {
+     pub fn route(ctx: Context<Route>) -> Result<()> {
++        let unchecked = &ctx.remaining_accounts[0];
++        msg!("routing through {}", unchecked.key());
+         Ok(())
+     }
+ }

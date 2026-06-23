@@ -46,8 +46,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "FAIL",
       severity: "HIGH",
-      location: "src/auth.ts:42",
-      note: "missing authz — audience claim never verified"
+      location: "programs/escrow/src/lib.rs:88",
+      note: "Anchor vault constraint removed"
     },
     span: "lg:col-span-7",
     emphasis: true
@@ -60,8 +60,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "WARN",
       severity: "MED",
-      location: "src/router.ts:118",
-      note: "domain logic leaking into transport layer"
+      location: "programs/escrow/src/accounts.rs:44",
+      note: "authority boundary is split across handlers"
     },
     span: "lg:col-span-5",
     emphasis: true
@@ -74,8 +74,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "WARN",
       severity: "MED",
-      location: "src/parse.ts:73",
-      note: "empty-array branch has no test coverage"
+      location: "tests/close-escrow.test.ts:19",
+      note: "unauthorized closer path has no test"
     },
     span: "lg:col-span-4"
   },
@@ -87,8 +87,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "PASS",
       severity: "LOW",
-      location: "src/index.ts:201",
-      note: "O(n²) scan — fine at current sizes"
+      location: "app/actions/closeEscrow.ts:41",
+      note: "confirmation polling is bounded"
     },
     span: "lg:col-span-4"
   },
@@ -100,8 +100,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "PASS",
       severity: "LOW",
-      location: "src/util.ts:9",
-      note: "duplicated helper — fold into shared module"
+      location: "programs/escrow/src/state.rs:9",
+      note: "seed helper can move into shared module"
     },
     span: "lg:col-span-4"
   }

@@ -33,14 +33,24 @@ const PACK_VULNERABLE_FIXTURES: Record<string, string[]> = {
   solana: [
     "unchecked-account.diff",
     "raw-cpi.diff",
+    "remaining-accounts.diff",
+    "cpi-program-unpinned.diff",
     "skip-preflight.diff",
+    "unconfirmed-transaction.diff",
+    "blockhash-expiry.diff",
+    "signature-only-confirmation.diff",
+    "deprecated-blockhash.diff",
     "panic.diff",
     "non-canonical-bump.diff",
     "manual-close.diff",
     "unvalidated-token.diff",
+    "token-2022-extension.diff",
     "unchecked-arithmetic.diff",
+    "authority-invariant.diff",
     "hardcoded-keypair.diff",
-    "constraint-removed.diff"
+    "constraint-removed.diff",
+    "constraint-weakened.diff",
+    "invariant-removed.diff"
   ],
   evm: [
     "tx-origin.diff",
@@ -268,7 +278,7 @@ function getDetectedTitles(packId: string, vulnFixtures: string[]): Set<string> 
 }
 
 describe("PACK_COVERAGE — structural invariants", () => {
-  it("has exactly 10 pack keys", () => {
+  it("has exactly 18 pack keys", () => {
     const keys = Object.keys(PACK_COVERAGE);
     expect(keys).toHaveLength(18);
     for (const id of EXPECTED_PACK_IDS) {
@@ -295,9 +305,10 @@ describe("PACK_COVERAGE — structural invariants", () => {
     }
   });
 
-  it("each pack has exactly 10 entries", () => {
+  it("each pack has the expected number of entries", () => {
     for (const [packId, entries] of Object.entries(PACK_COVERAGE)) {
-      expect(entries, `${packId} should have 10 entries`).toHaveLength(10);
+      const expected = packId === "solana" ? 21 : 10;
+      expect(entries, `${packId} should have ${expected} entries`).toHaveLength(expected);
     }
   });
 });

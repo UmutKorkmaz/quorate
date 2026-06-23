@@ -42,9 +42,10 @@ export function TerminalShowcase() {
           A review flow you can actually drive
         </h2>
         <p className="mt-4 max-w-2xl text-lg leading-relaxed text-quorate-muted">
-          The demo mirrors the real shell experience: load a diff, choose commands, watch
-          providers run, and land on a single verdict. Hover to pause, click a phase to jump,
-          swap the diff, or replay the full session.
+          The demo mirrors the real shell experience on a Solana escrow app: load a diff,
+          choose commands, watch providers run, and land on a single verdict. The same
+          shell flow works for every pack. Hover to pause, click a phase to jump, swap
+          the diff, or replay the full session.
         </p>
 
         <div className="mt-12 terminal-showcase-grid">
@@ -82,9 +83,9 @@ export function TerminalShowcase() {
             <ul className="terminal-showcase-checklist">
               {phase === "welcome" && (
                 <>
-                  <li>QUORATE opens with a clear path to the first review</li>
+                  <li>QUORATE opens with a clear path to the first Solana review</li>
                   <li>Installed agents and active agents are shown separately</li>
-                  <li>Role chips reflect the council you configured</li>
+                  <li>Role chips reflect the pack-specific council you configured</li>
                 </>
               )}
               {phase === "palette" && (
@@ -96,7 +97,7 @@ export function TerminalShowcase() {
               )}
               {phase === "diff" && (
                 <>
-                  <li>/git loads the working tree with file count and +/-</li>
+                  <li>/git loads the Solana app working tree with file count and +/-</li>
                   <li>The status line names the active diff source</li>
                   <li>/review can load the working tree when no diff is staged</li>
                 </>

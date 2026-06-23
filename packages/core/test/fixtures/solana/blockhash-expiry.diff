@@ -1,0 +1,11 @@
+diff --git a/app/src/blockhash.ts b/app/src/blockhash.ts
+--- a/app/src/blockhash.ts
++++ b/app/src/blockhash.ts
+@@ -1,3 +1,9 @@
++import { Connection, Transaction } from "@solana/web3.js";
++
++export async function attachBlockhash(connection: Connection, tx: Transaction): Promise<Transaction> {
++  const { blockhash } = await connection.getLatestBlockhash();
++  tx.recentBlockhash = blockhash;
++  return tx;
++}

@@ -133,6 +133,17 @@ quorate provider set-model local             # switch an existing provider's mod
         In the shell, <InlineCode>/models &lt;provider&gt;</InlineCode> lists the live models and{" "}
         <InlineCode>/models &lt;provider&gt; &lt;model&gt;</InlineCode> switches it for the session.
       </p>
+
+      <h3>Run Solana release checks</h3>
+      <CodeBlock language="bash">{`quorate init --pack solana
+quorate solana doctor --strict      # Anchor/Cargo/IDL/config release gate
+quorate solana test-plan --json     # machine-readable next test commands
+quorate review --fail-on high`}</CodeBlock>
+      <p>
+        <InlineCode>quorate solana doctor</InlineCode> is offline and repository-local. It checks
+        whether the Solana pack is active, whether Anchor/Cargo/IDL evidence exists, and whether
+        release evidence such as deployed program metadata and verifiable builds has been recorded.
+      </p>
     </article>
   );
 }

@@ -18,7 +18,7 @@ const CARDS = [
   {
     to: "/docs/solana",
     title: "Solana / Anchor",
-    desc: "Solana/Anchor-aware council + ten deterministic on-chain heuristics. Zero-setup sealevel security review."
+    desc: "Start here for the front-page Solana app example: release gate, Anchor constraint diffs, CPI/remaining accounts, Token-2022 review, test-plan guidance, and 21 deterministic heuristics."
   },
   {
     to: "/docs/evm",
@@ -113,8 +113,9 @@ export default function DocsHub() {
       <h1>Documentation</h1>
       <p className="lead">
         Quorate turns local AI CLIs and compatible models into a review council for diffs and plans.
-        Use the interactive shell locally, run headless checks in CI, or install the GitHub Action to
-        put one council verdict on every pull request.
+        The website leads with a Solana app example, but Quorate is generic: use the interactive
+        shell locally, run headless checks in CI, or install the GitHub Action to put one council
+        verdict on every pull request.
       </p>
 
       <h2>Why Quorate</h2>

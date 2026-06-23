@@ -1,0 +1,18 @@
+diff --git a/programs/swap/src/lib.rs b/programs/swap/src/lib.rs
+--- a/programs/swap/src/lib.rs
++++ b/programs/swap/src/lib.rs
+@@ -5,6 +5,14 @@ use anchor_lang::prelude::*;
++use anchor_spl::token_interface::{Mint, Token2022};
++use spl_token_2022::extension::StateWithExtensions;
++use spl_token_2022::state::Mint as Token2022Mint;
++
++pub fn read_supply(ctx: Context<ReadSupply>) -> Result<u64> {
++    let mint = StateWithExtensions::<Token2022Mint>::unpack(&ctx.accounts.mint.to_account_info().data.borrow())?;
++    Ok(mint.base.supply)
++}
++
+ #[derive(Accounts)]
+ pub struct ReadSupply<'info> {
++    pub mint: InterfaceAccount<'info, Mint>,
++    pub token_program: Program<'info, Token2022>,
+ }

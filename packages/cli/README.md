@@ -45,6 +45,8 @@ Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interact
 quorate                                   # open the interactive shell
 quorate doctor                            # see which AI CLIs are installed
 quorate review --base main --head HEAD    # one-shot review of the current branch
+quorate solana doctor --strict            # Solana release-readiness gate
+quorate solana test-plan                  # next Solana release-test commands
 quorate fix --list                        # then delegate a finding to an agent — revertible
 ```
 
@@ -74,13 +76,27 @@ quorate provider set-model local                  # switch a provider's model by
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: UmutKorkmaz/quorate@v0.5.0
+- uses: UmutKorkmaz/quorate@v0.9.0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 `type: api` providers run real model review on standard GitHub-hosted runners — no
 self-hosting required.
+
+## Solana / Anchor
+
+```bash
+quorate init --pack solana
+quorate solana doctor --strict
+quorate solana test-plan
+quorate review --fail-on high
+```
+
+The Solana pack layers 21 deterministic checks for Anchor accounts, CPI and
+`remaining_accounts`, transaction confirmation/blockhash expiry, Token-2022, and
+constraint/invariant regressions, plus an offline release gate over Anchor/Cargo,
+IDL, deployed-program evidence, verifiable-build evidence, and Quorate config.
 
 ## Documentation
 

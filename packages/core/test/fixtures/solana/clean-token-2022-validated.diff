@@ -1,0 +1,18 @@
+diff --git a/programs/swap/src/lib.rs b/programs/swap/src/lib.rs
+--- a/programs/swap/src/lib.rs
++++ b/programs/swap/src/lib.rs
+@@ -5,6 +5,15 @@ use anchor_lang::prelude::*;
++use spl_token_2022::extension::{transfer_fee::TransferFeeConfig, StateWithExtensions};
++use spl_token_2022::state::Mint as Token2022Mint;
++
++pub fn read_validated_supply(ctx: Context<ReadSupply>) -> Result<u64> {
++    let data = ctx.accounts.mint.to_account_info().data.borrow();
++    let mint = StateWithExtensions::<Token2022Mint>::unpack(&data)?;
++    let _fee_config = mint.get_extension::<TransferFeeConfig>()?;
++    require_eq!(ctx.accounts.token_program.key(), spl_token_2022::ID, ErrorCode::BadTokenProgram);
++    Ok(mint.base.supply)
++}
++
+ #[derive(Accounts)]
+ pub struct ReadSupply<'info> {
+ }
