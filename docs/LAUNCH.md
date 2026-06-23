@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.4.0
+      - uses: UmutKorkmaz/quorate@v0.9.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           config-path: .quorate.yml

@@ -14,14 +14,25 @@ function readFixture(name: string): string {
 const ALL_SOLANA_TITLES = [
   "Unchecked account type",
   "Raw CPI invocation",
+  "Unchecked remaining_accounts used in CPI",
+  "CPI program account not pinned",
   "Preflight checks disabled",
+  "Transaction sent without confirmation",
+  "Blockhash expiry not tracked",
+  "Confirmation missing blockhash expiry guard",
+  "Deprecated blockhash freshness API",
   "Panic in on-chain code",
   "Non-canonical PDA bump",
   "Manual account closing",
   "Unvalidated token account",
+  "Token-2022 extension constraints missing",
+  "Token-2022 extensions not validated",
   "Unchecked arithmetic on funds",
+  "Authority invariant changed",
   "Hardcoded keypair material",
-  "Anchor account constraint removed"
+  "Anchor account constraint removed",
+  "Anchor account constraint weakened",
+  "Solana invariant check removed"
 ] as const;
 
 type SolanaTitle = typeof ALL_SOLANA_TITLES[number];
@@ -47,10 +58,46 @@ const FIXTURE_CASES: FixtureCase[] = [
     expectedFile: "programs/foo/src/processor.rs"
   },
   {
+    fixture: "remaining-accounts.diff",
+    title: "Unchecked remaining_accounts used in CPI",
+    severity: "high",
+    expectedFile: "programs/router/src/lib.rs"
+  },
+  {
+    fixture: "cpi-program-unpinned.diff",
+    title: "CPI program account not pinned",
+    severity: "high",
+    expectedFile: "programs/rewards/src/lib.rs"
+  },
+  {
     fixture: "skip-preflight.diff",
     title: "Preflight checks disabled",
     severity: "medium",
     expectedFile: "app/src/tx.ts"
+  },
+  {
+    fixture: "unconfirmed-transaction.diff",
+    title: "Transaction sent without confirmation",
+    severity: "medium",
+    expectedFile: "app/src/closeEscrow.ts"
+  },
+  {
+    fixture: "blockhash-expiry.diff",
+    title: "Blockhash expiry not tracked",
+    severity: "medium",
+    expectedFile: "app/src/blockhash.ts"
+  },
+  {
+    fixture: "signature-only-confirmation.diff",
+    title: "Confirmation missing blockhash expiry guard",
+    severity: "medium",
+    expectedFile: "app/src/confirm.ts"
+  },
+  {
+    fixture: "deprecated-blockhash.diff",
+    title: "Deprecated blockhash freshness API",
+    severity: "medium",
+    expectedFile: "app/src/legacy-blockhash.ts"
   },
   {
     fixture: "panic.diff",
@@ -77,10 +124,28 @@ const FIXTURE_CASES: FixtureCase[] = [
     expectedFile: "programs/swap/src/lib.rs"
   },
   {
+    fixture: "token-2022-extension.diff",
+    title: "Token-2022 extension constraints missing",
+    severity: "medium",
+    expectedFile: "programs/swap/src/lib.rs"
+  },
+  {
+    fixture: "token-2022-extension.diff",
+    title: "Token-2022 extensions not validated",
+    severity: "high",
+    expectedFile: "programs/swap/src/lib.rs"
+  },
+  {
     fixture: "unchecked-arithmetic.diff",
     title: "Unchecked arithmetic on funds",
     severity: "medium",
     expectedFile: "programs/lending/src/lib.rs"
+  },
+  {
+    fixture: "authority-invariant.diff",
+    title: "Authority invariant changed",
+    severity: "medium",
+    expectedFile: "programs/escrow/src/lib.rs"
   },
   {
     fixture: "hardcoded-keypair.diff",
@@ -93,6 +158,18 @@ const FIXTURE_CASES: FixtureCase[] = [
     title: "Anchor account constraint removed",
     severity: "high",
     expectedFile: "programs/governance/src/lib.rs"
+  },
+  {
+    fixture: "constraint-weakened.diff",
+    title: "Anchor account constraint weakened",
+    severity: "high",
+    expectedFile: "programs/governance/src/lib.rs"
+  },
+  {
+    fixture: "invariant-removed.diff",
+    title: "Solana invariant check removed",
+    severity: "high",
+    expectedFile: "programs/pool/src/lib.rs"
   }
 ];
 
@@ -125,6 +202,14 @@ describe("Solana heuristics — vulnerable fixtures", () => {
     expect(finding!.severity).toBe("medium");
     expect(finding!.file).toBe("app/src/tx.ts");
     expect(finding!.line).toBe(9);
+  });
+
+  it("deprecated-blockhash.diff: flags both deprecated blockhash freshness APIs", () => {
+    const diff = readFixture("deprecated-blockhash.diff");
+    const result = runHeuristicReview({ mode: "review", subject: "t", diff });
+    const findings = result.findings.filter((f) => f.title === "Deprecated blockhash freshness API");
+    expect(findings.length).toBeGreaterThanOrEqual(2);
+    expect(findings.every((f) => f.severity === "medium")).toBe(true);
   });
 
   it("panic.diff: flags .unwrap() as medium severity Panic in on-chain code", () => {
@@ -214,23 +299,16 @@ describe("Solana heuristics — fixture table (file and line set)", () => {
 });
 
 describe("Solana heuristics — clean fixtures", () => {
-  it("clean-anchor.diff: yields no Solana heuristic findings", () => {
-    const diff = readFixture("clean-anchor.diff");
-    const result = runHeuristicReview({ mode: "review", subject: "t", diff });
-    const solanaFindings = result.findings.filter((f) =>
-      (ALL_SOLANA_TITLES as readonly string[]).includes(f.title)
-    );
-    expect(solanaFindings).toHaveLength(0);
-  });
-
-  it("clean-web3.diff: yields no Solana heuristic findings", () => {
-    const diff = readFixture("clean-web3.diff");
-    const result = runHeuristicReview({ mode: "review", subject: "t", diff });
-    const solanaFindings = result.findings.filter((f) =>
-      (ALL_SOLANA_TITLES as readonly string[]).includes(f.title)
-    );
-    expect(solanaFindings).toHaveLength(0);
-  });
+  for (const fixture of ["clean-anchor.diff", "clean-web3.diff", "clean-token-2022-validated.diff"]) {
+    it(`${fixture}: yields no Solana heuristic findings`, () => {
+      const diff = readFixture(fixture);
+      const result = runHeuristicReview({ mode: "review", subject: "t", diff });
+      const solanaFindings = result.findings.filter((f) =>
+        (ALL_SOLANA_TITLES as readonly string[]).includes(f.title)
+      );
+      expect(solanaFindings).toHaveLength(0);
+    });
+  }
 });
 
 describe("Solana heuristics — non-Solana diff", () => {
@@ -250,21 +328,9 @@ describe("Solana heuristics — non-Solana diff", () => {
   });
 });
 
-describe("Solana heuristics — KPI: >= 10 distinct vulnerability classes", () => {
-  it("all 10 vulnerable fixtures together produce >= 10 distinct Solana titles", () => {
-    const vulnerableFixtures = [
-      "unchecked-account.diff",
-      "raw-cpi.diff",
-      "skip-preflight.diff",
-      "panic.diff",
-      "non-canonical-bump.diff",
-      "manual-close.diff",
-      "unvalidated-token.diff",
-      "unchecked-arithmetic.diff",
-      "hardcoded-keypair.diff",
-      "constraint-removed.diff"
-    ];
-
+describe("Solana heuristics — KPI: distinct vulnerability classes", () => {
+  it("all vulnerable fixtures together produce every Solana title", () => {
+    const vulnerableFixtures = [...new Set(FIXTURE_CASES.map((entry) => entry.fixture))];
     const distinctTitles = new Set<string>();
 
     for (const fixture of vulnerableFixtures) {
@@ -277,10 +343,10 @@ describe("Solana heuristics — KPI: >= 10 distinct vulnerability classes", () =
       }
     }
 
-    expect(distinctTitles.size).toBeGreaterThanOrEqual(10);
+    expect(distinctTitles.size).toBe(ALL_SOLANA_TITLES.length);
   });
 
-  it("each of the 10 vulnerability classes is covered by exactly its dedicated fixture", () => {
+  it("each Solana vulnerability class is covered by its dedicated fixture", () => {
     for (const { fixture, title } of FIXTURE_CASES) {
       const diff = readFixture(fixture);
       const result = runHeuristicReview({ mode: "review", subject: "t", diff });

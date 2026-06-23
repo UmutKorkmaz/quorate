@@ -6,7 +6,11 @@ var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -964,7 +968,7 @@ var require_util = __commonJS({
     var net = require("node:net");
     var { Blob: Blob2 } = require("node:buffer");
     var nodeUtil = require("node:util");
-    var { stringify } = require("node:querystring");
+    var { stringify: stringify2 } = require("node:querystring");
     var { EventEmitter: EE } = require("node:events");
     var { InvalidArgumentError } = require_errors();
     var { headerNameLowerCasedRecord } = require_constants();
@@ -1024,7 +1028,7 @@ var require_util = __commonJS({
       if (url2.includes("?") || url2.includes("#")) {
         throw new Error('Query params cannot be passed when url already contains "?" or "#".');
       }
-      const stringified = stringify(queryParams);
+      const stringified = stringify2(queryParams);
       if (stringified) {
         url2 += "?" + stringified;
       }
@@ -2058,6 +2062,7 @@ var require_dispatcher_base = __commonJS({
       }
       get webSocketOptions() {
         return {
+          maxFragments: this[kWebSocketOptions].maxFragments ?? 131072,
           maxPayloadSize: this[kWebSocketOptions].maxPayloadSize ?? 128 * 1024 * 1024
         };
       }
@@ -3433,7 +3438,7 @@ var require_data_url = __commonJS({
       const buffer = Buffer.from(data, "base64");
       return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     }
-    function collectAnHTTPQuotedString(input, position, extractValue) {
+    function collectAnHTTPQuotedString(input, position, extractValue2) {
       const positionStart = position.position;
       let value = "";
       assert2(input[position.position] === '"');
@@ -3461,7 +3466,7 @@ var require_data_url = __commonJS({
           break;
         }
       }
-      if (extractValue) {
+      if (extractValue2) {
         return value;
       }
       return input.slice(positionStart, position.position);
@@ -5712,6 +5717,9 @@ var require_client_h1 = __commonJS({
     var FastBuffer = Buffer[Symbol.species];
     var addListener = util.addListener;
     var removeAllListeners = util.removeAllListeners;
+    var kIdleSocketValidation = /* @__PURE__ */ Symbol("kIdleSocketValidation");
+    var kIdleSocketValidationTimeout = /* @__PURE__ */ Symbol("kIdleSocketValidationTimeout");
+    var kSocketUsed = /* @__PURE__ */ Symbol("kSocketUsed");
     var extractBody;
     async function lazyllhttp() {
       const llhttpWasmData = process.env.JEST_WORKER_ID ? require_llhttp_wasm() : void 0;
@@ -5942,6 +5950,10 @@ var require_client_h1 = __commonJS({
         if (socket.destroyed) {
           return -1;
         }
+        if (client[kRunning] === 0) {
+          util.destroy(socket, new SocketError("bad response", util.getSocketInfo(socket)));
+          return -1;
+        }
         const request2 = client[kQueue][client[kRunningIdx]];
         if (!request2) {
           return -1;
@@ -6019,6 +6031,10 @@ var require_client_h1 = __commonJS({
       onHeadersComplete(statusCode, upgrade, shouldKeepAlive) {
         const { client, socket, headers, statusText } = this;
         if (socket.destroyed) {
+          return -1;
+        }
+        if (client[kRunning] === 0) {
+          util.destroy(socket, new SocketError("bad response", util.getSocketInfo(socket)));
           return -1;
         }
         const request2 = client[kQueue][client[kRunningIdx]];
@@ -6146,6 +6162,7 @@ var require_client_h1 = __commonJS({
         }
         request2.onComplete(headers);
         client[kQueue][client[kRunningIdx]++] = null;
+        socket[kSocketUsed] = true;
         if (socket[kWriting]) {
           assert2(client[kRunning] === 0);
           util.destroy(socket, new InformationalError("reset"));
@@ -6189,6 +6206,9 @@ var require_client_h1 = __commonJS({
       socket[kWriting] = false;
       socket[kReset] = false;
       socket[kBlocking] = false;
+      socket[kIdleSocketValidation] = 0;
+      socket[kIdleSocketValidationTimeout] = null;
+      socket[kSocketUsed] = false;
       socket[kParser] = new Parser(client, socket, llhttpInstance);
       addListener(socket, "error", function(err) {
         assert2(err.code !== "ERR_TLS_CERT_ALTNAME_INVALID");
@@ -6224,6 +6244,7 @@ var require_client_h1 = __commonJS({
       addListener(socket, "close", function() {
         const client2 = this[kClient];
         const parser = this[kParser];
+        clearIdleSocketValidation(this);
         if (parser) {
           if (!this[kError] && parser.statusCode && !parser.shouldKeepAlive) {
             this[kError] = parser.finish() || this[kError];
@@ -6275,7 +6296,7 @@ var require_client_h1 = __commonJS({
           return socket.destroyed;
         },
         busy(request2) {
-          if (socket[kWriting] || socket[kReset] || socket[kBlocking]) {
+          if (socket[kWriting] || socket[kReset] || socket[kBlocking] || socket[kIdleSocketValidation] === 1) {
             return true;
           }
           if (request2) {
@@ -6293,6 +6314,24 @@ var require_client_h1 = __commonJS({
         }
       };
     }
+    function clearIdleSocketValidation(socket) {
+      if (socket[kIdleSocketValidationTimeout]) {
+        clearTimeout(socket[kIdleSocketValidationTimeout]);
+        socket[kIdleSocketValidationTimeout] = null;
+      }
+      socket[kIdleSocketValidation] = 0;
+    }
+    function scheduleIdleSocketValidation(client, socket) {
+      socket[kIdleSocketValidation] = 1;
+      socket[kIdleSocketValidationTimeout] = setTimeout(() => {
+        socket[kIdleSocketValidationTimeout] = null;
+        socket[kIdleSocketValidation] = 2;
+        if (client[kSocket] === socket && !socket.destroyed) {
+          client[kResume]();
+        }
+      }, 0);
+      socket[kIdleSocketValidationTimeout].unref?.();
+    }
     function resumeH1(client) {
       const socket = client[kSocket];
       if (socket && !socket.destroyed) {
@@ -6304,6 +6343,29 @@ var require_client_h1 = __commonJS({
         } else if (socket[kNoRef] && socket.ref) {
           socket.ref();
           socket[kNoRef] = false;
+        }
+        if (client[kRunning] === 0 && client[kPending] > 0 && socket[kSocketUsed]) {
+          if (socket[kIdleSocketValidation] === 0) {
+            scheduleIdleSocketValidation(client, socket);
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+          if (socket[kIdleSocketValidation] === 1) {
+            socket[kParser].readMore();
+            if (socket.destroyed) {
+              return;
+            }
+            return;
+          }
+        }
+        if (client[kRunning] === 0) {
+          socket[kParser].readMore();
+          if (socket.destroyed) {
+            return;
+          }
         }
         if (client[kSize] === 0) {
           if (socket[kParser].timeoutType !== TIMEOUT_KEEP_ALIVE) {
@@ -6357,6 +6419,7 @@ var require_client_h1 = __commonJS({
         process.emitWarning(new RequestContentLengthMismatchError());
       }
       const socket = client[kSocket];
+      clearIdleSocketValidation(socket);
       const abort = (err) => {
         if (request2.aborted || request2.completed) {
           return;
@@ -15967,7 +16030,7 @@ var require_util6 = __commonJS({
         throw new Error("Invalid cookie max-age");
       }
     }
-    function stringify(cookie) {
+    function stringify2(cookie) {
       if (cookie.name.length === 0) {
         return null;
       }
@@ -16021,7 +16084,7 @@ var require_util6 = __commonJS({
       validateCookiePath,
       validateCookieValue,
       toIMFDate,
-      stringify
+      stringify: stringify2
     };
   }
 });
@@ -16141,18 +16204,14 @@ var require_parse = __commonJS({
       } else if (attributeNameLowercase === "httponly") {
         cookieAttributeList.httpOnly = true;
       } else if (attributeNameLowercase === "samesite") {
-        let enforcement = "Default";
         const attributeValueLowercase = attributeValue.toLowerCase();
-        if (attributeValueLowercase.includes("none")) {
-          enforcement = "None";
+        if (attributeValueLowercase === "none") {
+          cookieAttributeList.sameSite = "None";
+        } else if (attributeValueLowercase === "strict") {
+          cookieAttributeList.sameSite = "Strict";
+        } else if (attributeValueLowercase === "lax") {
+          cookieAttributeList.sameSite = "Lax";
         }
-        if (attributeValueLowercase.includes("strict")) {
-          enforcement = "Strict";
-        }
-        if (attributeValueLowercase.includes("lax")) {
-          enforcement = "Lax";
-        }
-        cookieAttributeList.sameSite = enforcement;
       } else {
         cookieAttributeList.unparsed ??= [];
         cookieAttributeList.unparsed.push(`${attributeName}=${attributeValue}`);
@@ -16171,7 +16230,7 @@ var require_cookies = __commonJS({
   "../../node_modules/undici/lib/web/cookies/index.js"(exports2, module2) {
     "use strict";
     var { parseSetCookie } = require_parse();
-    var { stringify } = require_util6();
+    var { stringify: stringify2 } = require_util6();
     var { webidl } = require_webidl();
     var { Headers: Headers2 } = require_headers();
     function getCookies(headers) {
@@ -16214,7 +16273,7 @@ var require_cookies = __commonJS({
       webidl.argumentLengthCheck(arguments, 2, "setCookie");
       webidl.brandCheck(headers, Headers2, { strict: false });
       cookie = webidl.converters.Cookie(cookie);
-      const str = stringify(cookie);
+      const str = stringify2(cookie);
       if (str) {
         headers.append("Set-Cookie", str);
       }
@@ -17174,6 +17233,10 @@ var require_receiver = __commonJS({
     var { closeWebSocketConnection } = require_connection();
     var { PerMessageDeflate } = require_permessage_deflate();
     var { MessageSizeExceededError } = require_errors();
+    function failWebsocketConnectionWithCode(ws, code, reason) {
+      closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason));
+      failWebsocketConnection(ws, reason);
+    }
     var ByteParser = class extends Writable {
       #buffers = [];
       #fragmentsBytes = 0;
@@ -17185,16 +17248,19 @@ var require_receiver = __commonJS({
       /** @type {Map<string, PerMessageDeflate>} */
       #extensions;
       /** @type {number} */
+      #maxFragments;
+      /** @type {number} */
       #maxPayloadSize;
       /**
        * @param {import('./websocket').WebSocket} ws
        * @param {Map<string, string>|null} extensions
-       * @param {{ maxPayloadSize?: number }} [options]
+       * @param {{ maxFragments?: number, maxPayloadSize?: number }} [options]
        */
       constructor(ws, extensions, options = {}) {
         super();
         this.ws = ws;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
+        this.#maxFragments = options.maxFragments ?? 0;
         this.#maxPayloadSize = options.maxPayloadSize ?? 0;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions, options));
@@ -17211,8 +17277,8 @@ var require_receiver = __commonJS({
         this.run(callback);
       }
       #validatePayloadLength() {
-        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength > this.#maxPayloadSize) {
-          failWebsocketConnection(this.ws, "Payload size exceeds maximum allowed size");
+        if (this.#maxPayloadSize > 0 && !isControlFrame(this.#info.opcode) && this.#info.payloadLength + this.#fragmentsBytes > this.#maxPayloadSize) {
+          failWebsocketConnectionWithCode(this.ws, 1009, "Payload size exceeds maximum allowed size");
           return false;
         }
         return true;
@@ -17328,9 +17394,11 @@ var require_receiver = __commonJS({
               this.#state = parserStates.INFO;
             } else {
               if (!this.#info.compressed) {
-                this.writeFragments(body);
+                if (!this.writeFragments(body)) {
+                  return;
+                }
                 if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                  failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+                  failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
                   return;
                 }
                 if (!this.#info.fragmented && this.#info.fin) {
@@ -17343,12 +17411,15 @@ var require_receiver = __commonJS({
                   this.#info.fin,
                   (error52, data) => {
                     if (error52) {
-                      failWebsocketConnection(this.ws, error52.message);
+                      const code = error52 instanceof MessageSizeExceededError ? 1009 : 1007;
+                      failWebsocketConnectionWithCode(this.ws, code, error52.message);
                       return;
                     }
-                    this.writeFragments(data);
+                    if (!this.writeFragments(data)) {
+                      return;
+                    }
                     if (this.#maxPayloadSize > 0 && this.#fragmentsBytes > this.#maxPayloadSize) {
-                      failWebsocketConnection(this.ws, new MessageSizeExceededError().message);
+                      failWebsocketConnectionWithCode(this.ws, 1009, new MessageSizeExceededError().message);
                       return;
                     }
                     if (!this.#info.fin) {
@@ -17406,8 +17477,13 @@ var require_receiver = __commonJS({
         return buffer;
       }
       writeFragments(fragment) {
+        if (this.#maxFragments > 0 && this.#fragments.length === this.#maxFragments) {
+          failWebsocketConnectionWithCode(this.ws, 1008, "Too many message fragments");
+          return false;
+        }
         this.#fragmentsBytes += fragment.length;
         this.#fragments.push(fragment);
+        return true;
       }
       consumeFragments() {
         const fragments = this.#fragments;
@@ -17857,8 +17933,11 @@ var require_websocket = __commonJS({
        */
       #onConnectionEstablished(response, parsedExtensions) {
         this[kResponse] = response;
-        const maxPayloadSize = this[kController]?.dispatcher?.webSocketOptions?.maxPayloadSize;
+        const webSocketOptions = this[kController]?.dispatcher?.webSocketOptions;
+        const maxFragments = webSocketOptions?.maxFragments;
+        const maxPayloadSize = webSocketOptions?.maxPayloadSize;
         const parser = new ByteParser(this, parsedExtensions, {
+          maxFragments,
           maxPayloadSize
         });
         parser.on("drain", onParserDrain);
@@ -19449,7 +19528,7 @@ var require_dist = __commonJS({
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.format = format;
-    exports2.parse = parse5;
+    exports2.parse = parse6;
     var TEXT_REGEXP = /^[\u0009\u0020-\u007e\u0080-\u00ff]*$/;
     var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
     var QUOTE_REGEXP = /[\\"]/g;
@@ -19476,7 +19555,7 @@ var require_dist = __commonJS({
       }
       return result;
     }
-    function parse5(header, options) {
+    function parse6(header, options) {
       const len = header.length;
       let index = skipOWS(header, 0, len);
       const valueStart = index;
@@ -21042,7 +21121,7 @@ var require_stringify = __commonJS({
         props.push(doc.directives.tagString(tag));
       return props.join(" ");
     }
-    function stringify(item, ctx, onComment, onChompKeep) {
+    function stringify2(item, ctx, onComment, onChompKeep) {
       if (identity.isPair(item))
         return item.toString(ctx, onComment, onChompKeep);
       if (identity.isAlias(item)) {
@@ -21071,7 +21150,7 @@ var require_stringify = __commonJS({
 ${ctx.indent}${str}`;
     }
     exports2.createStringifyContext = createStringifyContext;
-    exports2.stringify = stringify;
+    exports2.stringify = stringify2;
   }
 });
 
@@ -21081,7 +21160,7 @@ var require_stringifyPair = __commonJS({
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
-    var stringify = require_stringify();
+    var stringify2 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
       const { allNullValues, doc, indent, indentStep, options: { commentString, indentSeq, simpleKeys } } = ctx;
@@ -21103,7 +21182,7 @@ var require_stringifyPair = __commonJS({
       });
       let keyCommentDone = false;
       let chompKeep = false;
-      let str = stringify.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
+      let str = stringify2.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
       if (!explicitKey && !ctx.inFlow && str.length > 1024) {
         if (simpleKeys)
           throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
@@ -21155,7 +21234,7 @@ ${indent}:`;
         ctx.indent = ctx.indent.substring(2);
       }
       let valueCommentDone = false;
-      const valueStr = stringify.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
+      const valueStr = stringify2.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
       let ws = " ";
       if (keyComment || vsb || vcb) {
         ws = vsb ? "\n" : "";
@@ -21296,7 +21375,7 @@ var require_addPairToJSMap = __commonJS({
     "use strict";
     var log = require_log();
     var merge3 = require_merge();
-    var stringify = require_stringify();
+    var stringify2 = require_stringify();
     var identity = require_identity();
     var toJS = require_toJS();
     function addPairToJSMap(ctx, map2, { key, value }) {
@@ -21332,7 +21411,7 @@ var require_addPairToJSMap = __commonJS({
       if (typeof jsKey !== "object")
         return String(jsKey);
       if (identity.isNode(key) && ctx?.doc) {
-        const strCtx = stringify.createStringifyContext(ctx.doc, {});
+        const strCtx = stringify2.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
         for (const node of ctx.anchors.keys())
           strCtx.anchors.add(node.anchor);
@@ -21399,12 +21478,12 @@ var require_stringifyCollection = __commonJS({
   "../../node_modules/yaml/dist/stringify/stringifyCollection.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify = require_stringify();
+    var stringify2 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
       const flow = ctx.inFlow ?? collection.flow;
-      const stringify2 = flow ? stringifyFlowCollection : stringifyBlockCollection;
-      return stringify2(collection, ctx, options);
+      const stringify3 = flow ? stringifyFlowCollection : stringifyBlockCollection;
+      return stringify3(collection, ctx, options);
     }
     function stringifyBlockCollection({ comment, items }, ctx, { blockItemPrefix, flowChars, itemIndent, onChompKeep, onComment }) {
       const { indent, options: { commentString } } = ctx;
@@ -21429,7 +21508,7 @@ var require_stringifyCollection = __commonJS({
           }
         }
         chompKeep = false;
-        let str2 = stringify.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
+        let str2 = stringify2.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
         if (comment2)
           str2 += stringifyComment.lineComment(str2, itemIndent, commentString(comment2));
         if (chompKeep && comment2)
@@ -21496,7 +21575,7 @@ ${indent}${line}` : "\n";
         }
         if (comment)
           reqNewline = true;
-        let str = stringify.stringify(item, itemCtx, () => comment = null);
+        let str = stringify2.stringify(item, itemCtx, () => comment = null);
         reqNewline || (reqNewline = lines.length > linesAtValue || str.includes("\n"));
         if (i < items.length - 1) {
           str += ",";
@@ -22857,7 +22936,7 @@ var require_stringifyDocument = __commonJS({
   "../../node_modules/yaml/dist/stringify/stringifyDocument.js"(exports2) {
     "use strict";
     var identity = require_identity();
-    var stringify = require_stringify();
+    var stringify2 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyDocument(doc, options) {
       const lines = [];
@@ -22872,7 +22951,7 @@ var require_stringifyDocument = __commonJS({
       }
       if (hasDirectives)
         lines.push("---");
-      const ctx = stringify.createStringifyContext(doc, options);
+      const ctx = stringify2.createStringifyContext(doc, options);
       const { commentString } = ctx.options;
       if (doc.commentBefore) {
         if (lines.length !== 1)
@@ -22894,7 +22973,7 @@ var require_stringifyDocument = __commonJS({
           contentComment = doc.contents.comment;
         }
         const onChompKeep = contentComment ? void 0 : () => chompKeep = true;
-        let body = stringify.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
+        let body = stringify2.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
         if (contentComment)
           body += stringifyComment.lineComment(body, "", commentString(contentComment));
         if ((body[0] === "|" || body[0] === ">") && lines[lines.length - 1] === "---") {
@@ -22902,7 +22981,7 @@ var require_stringifyDocument = __commonJS({
         } else
           lines.push(body);
       } else {
-        lines.push(stringify.stringify(doc.contents, ctx));
+        lines.push(stringify2.stringify(doc.contents, ctx));
       }
       if (doc.directives?.docEnd) {
         if (doc.comment) {
@@ -25037,7 +25116,7 @@ var require_cst_scalar = __commonJS({
 var require_cst_stringify = __commonJS({
   "../../node_modules/yaml/dist/parse/cst-stringify.js"(exports2) {
     "use strict";
-    var stringify = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
+    var stringify2 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
     function stringifyToken(token) {
       switch (token.type) {
         case "block-scalar": {
@@ -25090,7 +25169,7 @@ var require_cst_stringify = __commonJS({
         res += stringifyToken(value);
       return res;
     }
-    exports2.stringify = stringify;
+    exports2.stringify = stringify2;
   }
 });
 
@@ -26801,7 +26880,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse5(src, reviver, options) {
+    function parse6(src, reviver, options) {
       let _reviver = void 0;
       if (typeof reviver === "function") {
         _reviver = reviver;
@@ -26820,7 +26899,7 @@ var require_public_api = __commonJS({
       }
       return doc.toJS(Object.assign({ reviver: _reviver }, options));
     }
-    function stringify(value, replacer, options) {
+    function stringify2(value, replacer, options) {
       let _replacer = null;
       if (typeof replacer === "function" || Array.isArray(replacer)) {
         _replacer = replacer;
@@ -26842,10 +26921,10 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports2.parse = parse5;
+    exports2.parse = parse6;
     exports2.parseAllDocuments = parseAllDocuments;
     exports2.parseDocument = parseDocument;
-    exports2.stringify = stringify;
+    exports2.stringify = stringify2;
   }
 });
 
@@ -47652,6 +47731,14 @@ var NON_REQUEST_PATH_RE = /(^|\/)(cli|bin|scripts?|tools?|tasks?)(\/|$)/i;
 var CONFIG_BUILD_FILE_RE = /(^|\/)[^/]*\.config\.[cm]?[jt]s$|(^|\/)(esbuild|rollup|webpack|vite|vitest|jest)\.[^/]*$/i;
 var JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
 var PROMPT_INTERPOLATION_RE = /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
+var SOLANA_CLIENT_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
+var ANCHOR_ACCOUNT_ATTR_RE = /#\s*\[\s*account\b/;
+var ANCHOR_CONSTRAINT_KEY_RE = /\b(?:has_one|constraint|address|seeds|bump|owner|signer|executable|zero|close|token::(?:mint|authority|token_program)|mint::(?:authority|decimals)|associated_token::(?:mint|authority|token_program)|extensions::[a-z_]+)\b/gi;
+var SOLANA_INVARIANT_RE = /(?:amount|balance|reserve|supply|vault|collateral|liquidity|fee|shares|debt|total)/i;
+var TOKEN_2022_RISK_RE = /\b(?:StateWithExtensions::<\s*(?:Mint|Account)\s*>\s*::\s*unpack|spl_token_2022::state::(?:Mint|Account)::unpack|Program\s*<\s*'info\s*,\s*Token2022\s*>|TOKEN_2022_PROGRAM_ID|Token2022)\b/;
+var TOKEN_EXTENSION_CHECK_RE = /\b(?:get_extension|get_extension_types|try_get_extension|ExtensionType::|transfer_hook|permanent_delegate|confidential_transfer|transfer_fee)\b/i;
+var IMPORT_OR_USE_RE = /^\s*(?:import|use)\b/;
+var COMMENT_ONLY_RE = /^\s*(?:\/\/|\/\*|\*|#)/;
 function isTestLikePath(file2) {
   if (!file2) return false;
   return TEST_PATH_RE.test(file2) || TEST_FILE_RE.test(file2);
@@ -47659,6 +47746,47 @@ function isTestLikePath(file2) {
 function isNonRequestPath(file2) {
   if (!file2) return false;
   return NON_REQUEST_PATH_RE.test(file2) || CONFIG_BUILD_FILE_RE.test(file2);
+}
+function linesByFile(lines) {
+  const result = /* @__PURE__ */ new Map();
+  for (const line of lines) {
+    if (!line.file) continue;
+    const bucket = result.get(line.file) ?? [];
+    bucket.push(line);
+    result.set(line.file, bucket);
+  }
+  return result;
+}
+function textByFile(grouped) {
+  const result = /* @__PURE__ */ new Map();
+  for (const [file2, lines] of grouped) {
+    result.set(file2, lines.map((line) => line.text).join("\n"));
+  }
+  return result;
+}
+function anchorConstraintKeys(text) {
+  const keys = /* @__PURE__ */ new Set();
+  for (const match of text.matchAll(ANCHOR_CONSTRAINT_KEY_RE)) {
+    keys.add(match[0].toLowerCase());
+  }
+  return keys;
+}
+function nearbyAddedText(target, grouped, distance = 6) {
+  if (!target.file || target.line === void 0) return "";
+  return (grouped.get(target.file) ?? []).filter(
+    (line) => line.line !== void 0 && Math.abs(line.line - target.line) <= distance
+  ).map((line) => line.text).join("\n");
+}
+function hasAnchorConstraintWeakening(removed, added) {
+  const removedKeys = anchorConstraintKeys(removed.text);
+  if (removedKeys.size === 0) return false;
+  const addedText = nearbyAddedText(removed, added);
+  if (!ANCHOR_ACCOUNT_ATTR_RE.test(addedText)) return false;
+  const addedKeys = anchorConstraintKeys(addedText);
+  for (const key of removedKeys) {
+    if (!addedKeys.has(key)) return true;
+  }
+  return false;
 }
 function applyInlineSuppressions(findings, lines) {
   const textByLoc = /* @__PURE__ */ new Map();
@@ -47691,6 +47819,8 @@ function runHeuristicReview(request2, role = "maintainer") {
   const startedAt = Date.now();
   const findings = [];
   const lines = addedLines(request2.diff ?? "");
+  const addedLinesByFile = linesByFile(lines);
+  const addedTextByFile = textByFile(addedLinesByFile);
   const testLikeByFile = /* @__PURE__ */ new Map();
   for (const line of lines) {
     const text = line.text;
@@ -47755,12 +47885,60 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "Raw invoke / invoke_signed bypasses Anchor's typed CPI safety checks. Verify the target program id and all account constraints before calling."
       });
     }
-    if (/\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") && /skipPreflight\s*:\s*true/.test(text)) {
+    if (line.file?.endsWith(".rs") && /\bremaining_accounts\b/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Unchecked remaining_accounts used in CPI",
+        body: "remaining_accounts are not validated by Anchor's account constraints. Require explicit owner/key/writable/signer checks before using them in CPI, token movement, or authority decisions."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /Program\s*<\s*'info\s*,\s*UncheckedAccount|program_id\s*:\s*ctx\.accounts\.[A-Za-z0-9_]+\.key\(\)|(?:^|[^A-Za-z0-9_])program\.key\(\)|CpiContext::new\s*\(\s*ctx\.accounts\.[A-Za-z0-9_]*(?:program|program_id)\.to_account_info\(\)/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "CPI program account not pinned",
+        body: "A CPI target program appears to come from caller-controlled accounts. Pin the program id to the expected system, token, associated-token, or application program before invoking it."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /skipPreflight\s*:\s*true/.test(text)) {
       findings.push({
         ...base,
         severity: "medium",
         title: "Preflight checks disabled",
         body: "skipPreflight: true skips transaction simulation, so failing transactions still pay fees and errors are masked. Remove this flag or restrict it to explicit debug builds."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\bconnection\s*\.\s*send(?:Raw)?Transaction\s*\(/.test(text) && !/\b(?:confirmTransaction|sendAndConfirmTransaction)\b/.test(addedTextByFile.get(fileKey) ?? "")) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Transaction sent without confirmation",
+        body: "A Solana transaction is sent without an adjacent confirmation step. Wait for confirmation using the same blockhash/lastValidBlockHeight and commitment before updating application state."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\bgetLatestBlockhash\s*\(/.test(text) && !/\blastValidBlockHeight\b/.test(addedTextByFile.get(fileKey) ?? text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Blockhash expiry not tracked",
+        body: "Fetching a recent blockhash without carrying lastValidBlockHeight makes retries and confirmation expiry ambiguous. Track both blockhash and lastValidBlockHeight when confirming transactions."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\.confirmTransaction\s*\(\s*(?!\{)[^,\n)]+(?:,\s*["'](?:processed|confirmed|finalized)["'])?\s*\)/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Confirmation missing blockhash expiry guard",
+        body: "signature-only confirmTransaction calls do not bind confirmation to the transaction's blockhash and lastValidBlockHeight. Use the blockhash-based confirmation strategy returned by getLatestBlockhash."
+      });
+    }
+    if (SOLANA_CLIENT_FILE_RE.test(line.file ?? "") && /\bget(?:RecentBlockhash|FeeCalculatorForBlockhash)\s*\(/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Deprecated blockhash freshness API",
+        body: "Deprecated blockhash freshness APIs do not provide the lastValidBlockHeight needed for expiry-aware confirmation. Use getLatestBlockhash and pass blockhash plus lastValidBlockHeight into confirmTransaction."
       });
     }
     if (line.file?.endsWith(".rs") && /\.unwrap\(\)|\.expect\(|panic!\(|unreachable!\(/.test(text)) {
@@ -47795,12 +47973,36 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "unpacking SPL token Account/Mint data without checking owner == token program and the expected mint enables account-substitution; validate owner and mint (and decimals) before trusting amounts."
       });
     }
+    if (line.file?.endsWith(".rs") && /\b(?:InterfaceAccount|Token2022|token_2022|spl_token_2022|TransferHook|PermanentDelegate|ConfidentialTransfer|MetadataPointer)\b/.test(text) && !IMPORT_OR_USE_RE.test(text) && !COMMENT_ONLY_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Token-2022 extension constraints missing",
+        body: "Token-2022 and interface accounts can carry extensions such as transfer hooks, permanent delegates, or confidential transfers. Validate the token program, mint, owner, decimals, and expected extension policy."
+      });
+    }
+    if ((line.file?.endsWith(".rs") || SOLANA_CLIENT_FILE_RE.test(line.file ?? "")) && TOKEN_2022_RISK_RE.test(text) && !IMPORT_OR_USE_RE.test(text) && !COMMENT_ONLY_RE.test(text) && !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Token-2022 extensions not validated",
+        body: "Token-2022 mints/accounts can carry extensions such as transfer fees, transfer hooks, permanent delegates, confidential transfers, or interest-bearing state. Inspect and allowlist expected extensions before trusting balances, decimals, authorities, or transfer semantics."
+      });
+    }
     if (line.file?.endsWith(".rs") && /(amount|balance|lamports|supply)\b[^;=]*[-+*]=(?!=)/.test(text) && !text.includes("checked_")) {
       findings.push({
         ...base,
         severity: "medium",
         title: "Unchecked arithmetic on funds",
         body: "balance/amount math without checked_add/checked_sub can overflow/underflow; use checked_* and handle None."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /\.(authority|owner|admin)\s*=\s*ctx\.accounts\.(?:new_|next_|pending_)[A-Za-z0-9_]+\.key\(\)/.test(text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Authority invariant changed",
+        body: "A persistent authority/owner/admin field is reassigned from a transaction account. Require an explicit signer check and invariant test proving the authority can only change through the intended admin path."
       });
     }
     if (/\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") && /fromSecretKey\s*\(|secretKey\s*[:=]\s*(\[|Uint8Array|new Uint8Array|bs58)/.test(text)) {
@@ -48549,12 +48751,28 @@ function runHeuristicReview(request2, role = "maintainer") {
   for (const line of removedLines(request2.diff ?? "")) {
     const text = line.text;
     const base = { file: line.file, line: line.line, providerId: "heuristic", role };
-    if (line.file?.endsWith(".rs") && /#\[account|has_one\s*=|constraint\s*=|address\s*=|seeds\s*=/.test(text)) {
+    if (line.file?.endsWith(".rs") && /#\s*\[\s*account|has_one\s*=|constraint\s*=|address\s*=|seeds\s*=|owner\s*=|\bbump\b|\bsigner\b|token::|mint::|associated_token::|extensions::/.test(text)) {
       findings.push({
         ...base,
         severity: "high",
         title: "Anchor account constraint removed",
         body: "a removed #[account(...)] constraint (has_one/constraint/address/seeds/signer) drops an authorization or validation check \u2014 confirm this is intentional."
+      });
+    }
+    if (line.file?.endsWith(".rs") && hasAnchorConstraintWeakening(line, addedLinesByFile)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Anchor account constraint weakened",
+        body: "an Anchor #[account(...)] constraint was replaced by a less restrictive attribute. Confirm the removed has_one, address, owner, signer, seeds, bump, or token constraint is enforced elsewhere before accepting the diff."
+      });
+    }
+    if (line.file?.endsWith(".rs") && /\b(?:require(?:_eq|_ne|_gt|_gte|_lt|_lte)?!|assert(?:_eq|_ne)?!)\s*\(/.test(text) && SOLANA_INVARIANT_RE.test(text)) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Solana invariant check removed",
+        body: "a removed require/assert check guarded a balance, reserve, supply, fee, debt, or authority invariant. Keep the invariant in code or replace it with an equivalent checked condition and regression test."
       });
     }
   }
@@ -49910,6 +50128,10 @@ function summarizeDiff(diff) {
   return [heading, "", ...bullets].join("\n");
 }
 
+// ../core/src/solana.ts
+var import_yaml3 = __toESM(require_dist2(), 1);
+var SOLANA_COUNCILS = new Set(PACKS.solana.councils.filter((council) => council !== "maintainer"));
+
 // ../core/src/suppression.ts
 var SUPPRESSION_VERSION = 1;
 var DEFAULT_SUPPRESSION_PATH = ".quorate/suppressions.json";
@@ -50448,23 +50670,30 @@ async function runAction(deps) {
   }
   const failOnOverride = input("fail-on");
   let gatePolicy;
+  let policyLoadFailed = false;
   try {
     const policyPath = input("policy-path") ?? DEFAULT_POLICY_PATH;
     const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
     gatePolicy = resolvePolicy(config2, { policy: basePolicy ?? void 0, failOn: failOnOverride });
     if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
   } catch (error52) {
+    const reason = error52 instanceof Error ? error52.message : String(error52);
     deps.warning?.(
-      `Could not load the merge policy (${error52 instanceof Error ? error52.message : String(error52)}) \u2014 using the github config gate.`
+      `Could not load the committed merge policy (${reason}). The check will fail \u2014 the policy's intended strictness is unknown and must not silently relax. Fix the policy file on the base branch.`
     );
     gatePolicy = resolvePolicy(config2, { failOn: failOnOverride });
+    policyLoadFailed = true;
   }
-  if (!gatePolicy.enabled) {
+  if (!policyLoadFailed && !gatePolicy.enabled) {
     deps.warning?.(
       "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) \u2014 no verdict can fail this check."
     );
   }
-  if (shouldFailForPolicy(report, gatePolicy)) {
+  if (policyLoadFailed) {
+    deps.setFailed(
+      "Quorate could not load the committed policy file \u2014 the merge gate's strictness is unknown. Fix the policy on the base branch."
+    );
+  } else if (shouldFailForPolicy(report, gatePolicy)) {
     deps.setFailed(`Quorate verdict ${report.verdict} is blocked by the merge policy (fail-on ${gatePolicy.failOn}).`);
   }
 }
@@ -50525,4 +50754,41 @@ content-type/dist/index.js:
 @octokit/request/dist-bundle/index.js:
   (* v8 ignore next -- @preserve *)
   (* v8 ignore else -- @preserve *)
+
+smol-toml/dist/date.js:
+smol-toml/dist/error.js:
+smol-toml/dist/primitive.js:
+smol-toml/dist/util.js:
+smol-toml/dist/extract.js:
+smol-toml/dist/struct.js:
+smol-toml/dist/parse.js:
+smol-toml/dist/stringify.js:
+smol-toml/dist/index.js:
+  (*!
+   * Copyright (c) Squirrel Chat et al., All rights reserved.
+   * SPDX-License-Identifier: BSD-3-Clause
+   *
+   * Redistribution and use in source and binary forms, with or without
+   * modification, are permitted provided that the following conditions are met:
+   *
+   * 1. Redistributions of source code must retain the above copyright notice, this
+   *    list of conditions and the following disclaimer.
+   * 2. Redistributions in binary form must reproduce the above copyright notice,
+   *    this list of conditions and the following disclaimer in the
+   *    documentation and/or other materials provided with the distribution.
+   * 3. Neither the name of the copyright holder nor the names of its contributors
+   *    may be used to endorse or promote products derived from this software without
+   *    specific prior written permission.
+   *
+   * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+   * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+   * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+   * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+   * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+   * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+   * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+   * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+   * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+   * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+   *)
 */

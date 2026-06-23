@@ -1,0 +1,9 @@
+diff --git a/app/src/confirm.ts b/app/src/confirm.ts
+--- a/app/src/confirm.ts
++++ b/app/src/confirm.ts
+@@ -1,3 +1,8 @@
++import { Connection } from "@solana/web3.js";
++
++export async function waitForSignature(connection: Connection, signature: string): Promise<void> {
++  await connection.confirmTransaction(signature, "confirmed");
++}

@@ -6,11 +6,15 @@ import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import {
   buildMultiPackConfig,
+  buildSolanaReleaseGate,
+  buildSolanaTestPlan,
   createDefaultConfig,
   detectAvailableProviders,
   detectPacks,
   fetchProviderModels,
   findConfigPath,
+  formatSolanaReleaseGate,
+  formatSolanaTestPlan,
   isLocalBaseUrl,
   isEmptyReviewDiff,
   loadConfig,
@@ -183,8 +187,20 @@ function ensureGitignored(cwd: string, entry: string): void {
 }
 
 function configFrom(program: Command): QuorateConfig {
+  const cwd = cwdFrom(program);
+  return loadConfig(configPathFrom(program, cwd), cwd);
+}
+
+function configPathFrom(program: Command, cwd: string): string | undefined {
   const opts = program.opts<GlobalOptions>();
-  return loadConfig(opts.config, cwdFrom(program));
+  if (opts.config) {
+    const explicitPath = resolve(cwd, opts.config);
+    if (!existsSync(explicitPath)) {
+      throw new Error(`Config file not found: ${opts.config}`);
+    }
+    return explicitPath;
+  }
+  return findConfigPath(cwd);
 }
 
 function applyProviderFilter(config: QuorateConfig, providerList?: string): QuorateConfig {
@@ -526,6 +542,57 @@ export function buildProgram(): Command {
       }
 
       printDoctor(config, cwd);
+    });
+
+  const solanaCmd = program
+    .command("solana")
+    .helpGroup("Setup:")
+    .description("Inspect Solana / Anchor release readiness and generate test plans.");
+
+  solanaCmd
+    .command("doctor")
+    .description("Run an offline Solana release gate over Anchor.toml, Cargo.toml, IDL, and Quorate config.")
+    .option("--json", "Print machine-readable JSON")
+    .option("--strict", "Exit non-zero on warnings as well as failures")
+    .action(async (options: { json?: boolean; strict?: boolean }) => {
+      const cwd = cwdFrom(program);
+      const configPath = configPathFrom(program, cwd);
+      const report = await buildSolanaReleaseGate({
+        cwd,
+        config: loadConfig(configPath, cwd),
+        configPath
+      });
+
+      if (options.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(formatSolanaReleaseGate(report));
+      }
+
+      if (report.summary.gate === "fail" || (options.strict && report.summary.gate === "warn")) {
+        process.exitCode = 1;
+      }
+    });
+
+  solanaCmd
+    .command("test-plan")
+    .description("Generate a Solana release test plan from the offline doctor signals.")
+    .option("--json", "Print machine-readable JSON")
+    .action(async (options: { json?: boolean }) => {
+      const cwd = cwdFrom(program);
+      const configPath = configPathFrom(program, cwd);
+      const report = await buildSolanaReleaseGate({
+        cwd,
+        config: loadConfig(configPath, cwd),
+        configPath
+      });
+      const plan = buildSolanaTestPlan(report);
+
+      if (options.json) {
+        console.log(JSON.stringify(plan, null, 2));
+      } else {
+        console.log(formatSolanaTestPlan(plan));
+      }
     });
 
   const setupCmd = program

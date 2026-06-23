@@ -116,7 +116,7 @@ npm run build:website`}</CodeBlock>
             title: "Hero & navigation",
             steps: "Load /. Read headline, subcopy, stats row (17+ agents, 5 roles, 1 verdict).",
             expected:
-              "Copy install CTA works; Live terminal demo anchor scrolls to #see-it-in-action; Manual testing link opens this page."
+              "Copy install CTA works; Solana app CTA scrolls to #solana-app-example; Manual testing link opens this page."
           },
           {
             title: "Install CTA",
@@ -126,7 +126,7 @@ npm run build:website`}</CodeBlock>
           {
             title: "Landing sections",
             steps:
-              "Scroll: See it in action → What is Quorate → Features → Providers → Quick start → GitHub Action → FAQ.",
+              "Scroll: Solana app example → See it in action → What is Quorate → Features → Providers → Quick start → GitHub Action → FAQ.",
             expected:
               "All sections render without layout shift; provider strip animates; FAQ accordions expand/collapse."
           },
@@ -182,7 +182,7 @@ npm run build:website`}</CodeBlock>
             title: "Chrome & frame",
             steps: "Inspect the terminal window below the hero.",
             expected:
-              "macOS-style traffic lights, title quorate — ~/Projects/my-app, Council shell badge, subtle glow and scanline overlay."
+              "macOS-style traffic lights, title quorate — ~/Projects/solana-escrow, Council shell badge, subtle glow and scanline overlay."
           },
           {
             title: "Phase: Welcome (~2.8s)",
@@ -200,19 +200,19 @@ npm run build:website`}</CodeBlock>
             title: "Phase: Diff loaded (~2.2s)",
             steps: "Observe DiffCard after palette.",
             expected:
-              "4 files changed, +128 −42; per-file lines (src/auth.ts, middleware, tests, package.json); status shows ⎇ git working tree."
+              "4 files changed, +128 −42; per-file lines (programs/escrow/src/lib.rs, accounts.rs, tests, app/actions/closeEscrow.ts); status shows ⎇ git working tree."
           },
           {
             title: "Phase: Council running (~3.4s)",
             steps: "Watch provider rows and status line.",
             expected:
-              "heuristic:maintainer ✔ 2 findings; claude:security braille running; codex:qa queued; elapsed MM:SS and esc to interrupt."
+              "heuristic:solana-security ✔ 2 findings; claude:anchor-accounts braille running; codex:transaction-safety queued; elapsed MM:SS and esc to interrupt."
           },
           {
             title: "Phase: Verdict (~4.2s, then loops)",
             steps: "Wait for FAIL card; confirm loop restarts.",
             expected:
-              "FAIL · 3 findings · agreement 67% with bar; HIGH finding at src/auth.ts:42; secondary WARN at tests/auth.test.ts:18; demo loops to Welcome."
+              "FAIL · 3 findings · agreement 67% with bar; HIGH finding at programs/escrow/src/lib.rs:88; secondary WARN at app/actions/closeEscrow.ts:41; demo loops to Welcome."
           },
           {
             title: "Aside panel sync",

@@ -487,28 +487,40 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   }
 
   // Resolve the merge policy: a standalone .quorate/policy.yml from the BASE ref
-  // wins, else the legacy github config. A malformed policy must not brick the
-  // gate — warn and fall back to the github-derived policy (fail-secure).
+  // wins, else the legacy github config. A MALFORMED committed policy is a broken
+  // gate contract — fail CLOSED: the review still runs (the comment is useful) but
+  // the check is failed, because the intended strictness (required roles, provider
+  // floor, agreement gate) is unknown and must not silently relax to the weaker
+  // github-config default. (Contrast with the baseline, where fail-open is strictly
+  // safer because it gates on MORE findings.)
   const failOnOverride = input("fail-on") as Severity | "never" | undefined;
   let gatePolicy: QuoratePolicy;
+  let policyLoadFailed = false;
   try {
     const policyPath = input("policy-path") ?? DEFAULT_POLICY_PATH;
     const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
     gatePolicy = resolvePolicy(config, { policy: basePolicy ?? undefined, failOn: failOnOverride });
     if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
   } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : String(error);
     deps.warning?.(
-      `Could not load the merge policy (${error instanceof Error ? error.message : String(error)}) — using the github config gate.`
+      `Could not load the committed merge policy (${reason}). The check will fail — the policy's intended strictness is unknown and must not silently relax. Fix the policy file on the base branch.`
     );
+    // Still derive a gate so the review/comment runs, but force the check to fail below.
     gatePolicy = resolvePolicy(config, { failOn: failOnOverride });
+    policyLoadFailed = true;
   }
 
-  if (!gatePolicy.enabled) {
+  if (!policyLoadFailed && !gatePolicy.enabled) {
     deps.warning?.(
       "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) — no verdict can fail this check."
     );
   }
-  if (shouldFailForPolicy(report, gatePolicy)) {
+  if (policyLoadFailed) {
+    deps.setFailed(
+      "Quorate could not load the committed policy file — the merge gate's strictness is unknown. Fix the policy on the base branch."
+    );
+  } else if (shouldFailForPolicy(report, gatePolicy)) {
     deps.setFailed(`Quorate verdict ${report.verdict} is blocked by the merge policy (fail-on ${gatePolicy.failOn}).`);
   }
 }

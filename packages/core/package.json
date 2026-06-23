@@ -20,8 +20,8 @@
     "prepack": "npm run build"
   },
   "dependencies": {
+    "smol-toml": "^1.7.0",
     "yaml": "^2.8.1",
     "zod": "^4.1.13"
-  },
-  "devDependencies": {}
+  }
 }

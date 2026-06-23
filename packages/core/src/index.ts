@@ -16,6 +16,7 @@ export * from "./prompt.js";
 export * from "./providers.js";
 export * from "./render.js";
 export * from "./review.js";
+export * from "./solana.js";
 export * from "./suppression.js";
 export * from "./theme.js";
 export * from "./types.js";

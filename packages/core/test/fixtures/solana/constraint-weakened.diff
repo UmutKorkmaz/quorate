@@ -1,0 +1,9 @@
+diff --git a/programs/governance/src/lib.rs b/programs/governance/src/lib.rs
+--- a/programs/governance/src/lib.rs
++++ b/programs/governance/src/lib.rs
+@@ -18,7 +18,7 @@ pub struct WithdrawTreasury<'info> {
+-    #[account(mut, has_one = authority, seeds = [b"treasury", authority.key().as_ref()], bump)]
++    #[account(mut)]
+     pub treasury: Account<'info, Treasury>,
+     pub authority: Signer<'info>,
+ }

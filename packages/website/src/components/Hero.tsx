@@ -1,9 +1,9 @@
 import { CopyButton } from "./CopyButton";
 
 const REVIEWERS = [
-  { id: "heuristic", role: "maintainer", state: "2 findings", tone: "pass" },
-  { id: "claude", role: "security", state: "1 finding", tone: "pass" },
-  { id: "codex", role: "qa", state: "merged", tone: "dim" }
+  { id: "heuristic", role: "solana-security", state: "2 findings", tone: "pass" },
+  { id: "claude", role: "anchor-accounts", state: "1 finding", tone: "pass" },
+  { id: "codex", role: "transaction-safety", state: "merged", tone: "dim" }
 ] as const;
 
 const TONE: Record<string, string> = {
@@ -35,7 +35,7 @@ export function Hero() {
         <div className="reveal is-visible text-center lg:text-left">
           <p className="hero-badge mx-auto lg:mx-0">
             <span className="text-quorate-amber">✦</span>
-            AI review council for your terminal
+            AI review council for any repo
           </p>
 
           <h1 className="display-hero mt-6 text-[2.9rem] leading-[1.04] md:text-6xl lg:text-[4.2rem]">
@@ -46,8 +46,10 @@ export function Hero() {
           </h1>
 
           <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-quorate-muted lg:mx-0">
-            Send a diff or a plan to several local AI reviewers. Quorate dedupes the
-            findings, ranks the real risks, and returns a single{" "}
+            Send any diff or plan to several local AI reviewers. Solana/Anchor is the
+            front-page example, but the same council workflow works across web, LLM,
+            infra, data, mobile, and other pack-driven codebases. Quorate dedupes the
+            findings and returns a single{" "}
             <span className="text-quorate-pass">PASS</span>,{" "}
             <span className="text-quorate-warn">WARN</span>, or{" "}
             <span className="text-quorate-fail">FAIL</span> — with file-and-line evidence.
@@ -56,10 +58,10 @@ export function Hero() {
           <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row lg:items-start lg:justify-start">
             <CopyButton text="npm install -g quorate" variant="hero" />
             <a
-              href="#see-it-in-action"
+              href="#solana-app-example"
               className="group inline-flex items-center gap-2 rounded-xl border border-quorate-border bg-quorate-surface/60 px-5 py-3 text-sm font-medium text-quorate-muted transition hover:border-quorate-accent/50 hover:text-quorate-accent"
             >
-              Run the council
+              Review a Solana app
               <span className="transition group-hover:translate-x-0.5">→</span>
             </a>
           </div>
@@ -67,7 +69,7 @@ export function Hero() {
           <p className="mt-5 text-sm leading-relaxed text-quorate-dim">
             Interactive shell · headless{" "}
             <code className="rounded bg-quorate-elevated px-1.5 py-0.5 text-quorate-accent">review</code>{" "}
-            for CI · a GitHub Action for PRs · honest{" "}
+            for CI · 18 domain packs · a GitHub Action for PRs · honest{" "}
             <span className="text-quorate-degraded">degraded</span> mode when only heuristics run
           </p>
         </div>
@@ -81,7 +83,7 @@ export function Hero() {
                 <span className="h-3 w-3 rounded-full bg-quorate-amber/80" />
                 <span className="h-3 w-3 rounded-full bg-quorate-pass/80" />
                 <span className="ml-2 font-mono text-xs text-quorate-dim">
-                  quorate — review · git working tree
+                  quorate — review · Solana escrow PR
                 </span>
               </div>
 
@@ -117,13 +119,13 @@ export function Hero() {
 
                 <div className="!mt-4 leading-relaxed">
                   <span className="font-bold text-quorate-fail">FAIL HIGH</span>{" "}
-                  <span className="font-bold text-gray-200">src/auth.ts:42</span>
+                  <span className="font-bold text-gray-200">programs/escrow/src/lib.rs:88</span>
                   <p className="mt-1 text-quorate-muted">
-                    Missing authorization check — token introspection result is trusted
-                    without verifying the audience claim.
+                    Anchor account constraint removed — close_escrow no longer proves
+                    the vault belongs to the escrow authority.
                   </p>
                   <p className="mt-1.5 text-xs text-quorate-dim">
-                    agreed by claude, codex · confidence 0.82
+                    agreed by claude, codex, heuristic · confidence 0.86
                   </p>
                 </div>
               </div>

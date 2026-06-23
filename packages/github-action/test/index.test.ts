@@ -376,6 +376,69 @@ describe("runAction baseline fail-secure", () => {
   });
 });
 
+describe("runAction policy fail-closed", () => {
+  function octokitWithPolicyContent(content: string | null) {
+    const rest = {
+      repos: {
+        getContent: async ({ path }: { path: string }) => {
+          if (path === ".quorate/policy.yml" && content !== null) {
+            return {
+              data: { type: "file", encoding: "base64", content: Buffer.from(content, "utf8").toString("base64") }
+            };
+          }
+          const error = new Error("Not Found") as Error & { status: number };
+          error.status = 404;
+          throw error;
+        }
+      },
+      pulls: {
+        listFiles: { id: "listFiles" },
+        listReviewComments: { id: "listReviewComments" },
+        createReview: async () => undefined
+      },
+      issues: {
+        listComments: { id: "listComments" },
+        createComment: async () => undefined,
+        updateComment: async () => undefined
+      }
+    };
+    const paginate = async <T>(endpoint: unknown): Promise<T[]> => {
+      if (endpoint === rest.pulls.listFiles) {
+        return [{ filename: "src/app.ts", status: "modified", patch: "@@ -1 +1 @@\n-old\n+new" }] as unknown as T[];
+      }
+      return [] as T[];
+    };
+    return { rest, paginate };
+  }
+
+  it("fails the check (does not silently relax) when the committed policy is malformed", async () => {
+    const warnings: string[] = [];
+    const octokit = octokitWithPolicyContent("not: valid: yaml: [unclosed");
+    const { deps, failed } = makeDeps({
+      getInput: (name) => ({ "github-token": "token-123", "post-comment": "false" } as Record<string, string>)[name],
+      getOctokit: () => octokit as never,
+      warning: (m) => warnings.push(m)
+    });
+
+    await expect(runAction(deps)).resolves.toBeUndefined();
+    // fail-closed: the check is failed because the gate contract is broken
+    expect(failed.some((m) => /could not load the committed policy/i.test(m))).toBe(true);
+    expect(warnings.join(" ")).toMatch(/strictness is unknown|silently relax/i);
+  });
+
+  it("does not fail when there is simply no policy committed (absence is not an error)", async () => {
+    const octokit = octokitWithPolicyContent(null);
+    const { deps, failed } = makeDeps({
+      getInput: (name) => ({ "github-token": "token-123", "post-comment": "false" } as Record<string, string>)[name],
+      getOctokit: () => octokit as never
+    });
+
+    await expect(runAction(deps)).resolves.toBeUndefined();
+    // No committed policy → derive from github config, no policy-load failure.
+    expect(failed.every((m) => /could not load the committed policy/i.test(m) === false)).toBe(true);
+  });
+});
+
 describe("runAction SARIF output", () => {
   const dirs: string[] = [];
   afterEach(() => {

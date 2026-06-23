@@ -38,3 +38,4 @@ findings.md
 # OS + agent session artifacts
 .DS_Store
 *-session.jsonl
+*this-session-is-being-continued-from-a-previous-c.txt

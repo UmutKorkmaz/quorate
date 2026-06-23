@@ -1,0 +1,9 @@
+diff --git a/programs/pool/src/lib.rs b/programs/pool/src/lib.rs
+--- a/programs/pool/src/lib.rs
++++ b/programs/pool/src/lib.rs
+@@ -88,7 +88,6 @@ pub fn rebalance(ctx: Context<Rebalance>) -> Result<()> {
+-    require_eq!(pool.reserve_a + pool.reserve_b, pool.total_liquidity, ErrorCode::InvariantBroken);
+     pool.reserve_a = new_reserve_a;
+     pool.reserve_b = new_reserve_b;
+     Ok(())
+ }

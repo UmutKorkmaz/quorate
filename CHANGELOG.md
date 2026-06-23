@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-06-23
+
+### Added
+
+- **Expanded Solana / Anchor coverage.** The Solana pack now covers 21 deterministic
+  classes, including `remaining_accounts`, unpinned CPI program accounts,
+  confirmation and blockhash-expiry regressions, Token-2022 extension policy,
+  authority invariant changes, weakened Anchor constraints, and removed invariant
+  checks.
+- **Solana release gate commands.** `quorate solana doctor` inspects Anchor,
+  Cargo, IDL, deployed-program evidence, verifiable-build evidence, and Quorate
+  config; `quorate solana test-plan` prints the next release-test commands.
+- **Solana-focused website and Action guidance.** The docs, GitHub Action README,
+  example workflow, and Packs page now lead with a concrete Solana app/release-gate
+  flow while keeping Quorate provider/model selection generic.
+
+### Fixed
+
+- Solana release checks compare IDL metadata against the provider cluster's
+  program ID instead of accepting any cluster in `Anchor.toml`.
+- Token-2022 heuristics no longer flag validated extension handling solely because
+  Token-2022 types are imported or used near explicit extension checks.
+
 ## [0.8.0] - 2026-06-11
 
 ### Added

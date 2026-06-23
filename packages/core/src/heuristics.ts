@@ -74,6 +74,18 @@ const CONFIG_BUILD_FILE_RE =
 const JS_TS_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
 const PROMPT_INTERPOLATION_RE =
   /(?:\b(?:const|let|var)\s+(?:prompt|systemPrompt|userPrompt)\s*=|\b(?:prompt|systemPrompt|userPrompt)\s*[=:]|\.(?:prompt|systemPrompt|userPrompt)\s*=)[^;\n]*\$\{/;
+const SOLANA_CLIENT_FILE_RE = /\.(ts|tsx|js|jsx|mjs)$/;
+const ANCHOR_ACCOUNT_ATTR_RE = /#\s*\[\s*account\b/;
+const ANCHOR_CONSTRAINT_KEY_RE =
+  /\b(?:has_one|constraint|address|seeds|bump|owner|signer|executable|zero|close|token::(?:mint|authority|token_program)|mint::(?:authority|decimals)|associated_token::(?:mint|authority|token_program)|extensions::[a-z_]+)\b/gi;
+const SOLANA_INVARIANT_RE =
+  /(?:amount|balance|reserve|supply|vault|collateral|liquidity|fee|shares|debt|total)/i;
+const TOKEN_2022_RISK_RE =
+  /\b(?:StateWithExtensions::<\s*(?:Mint|Account)\s*>\s*::\s*unpack|spl_token_2022::state::(?:Mint|Account)::unpack|Program\s*<\s*'info\s*,\s*Token2022\s*>|TOKEN_2022_PROGRAM_ID|Token2022)\b/;
+const TOKEN_EXTENSION_CHECK_RE =
+  /\b(?:get_extension|get_extension_types|try_get_extension|ExtensionType::|transfer_hook|permanent_delegate|confidential_transfer|transfer_fee)\b/i;
+const IMPORT_OR_USE_RE = /^\s*(?:import|use)\b/;
+const COMMENT_ONLY_RE = /^\s*(?:\/\/|\/\*|\*|#)/;
 
 function isTestLikePath(file?: string): boolean {
   if (!file) return false;
@@ -90,6 +102,59 @@ function isTestLikePath(file?: string): boolean {
 function isNonRequestPath(file?: string): boolean {
   if (!file) return false;
   return NON_REQUEST_PATH_RE.test(file) || CONFIG_BUILD_FILE_RE.test(file);
+}
+
+function linesByFile(lines: DiffLine[]): Map<string, DiffLine[]> {
+  const result = new Map<string, DiffLine[]>();
+  for (const line of lines) {
+    if (!line.file) continue;
+    const bucket = result.get(line.file) ?? [];
+    bucket.push(line);
+    result.set(line.file, bucket);
+  }
+  return result;
+}
+
+function textByFile(grouped: Map<string, DiffLine[]>): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const [file, lines] of grouped) {
+    result.set(file, lines.map((line) => line.text).join("\n"));
+  }
+  return result;
+}
+
+function anchorConstraintKeys(text: string): Set<string> {
+  const keys = new Set<string>();
+  for (const match of text.matchAll(ANCHOR_CONSTRAINT_KEY_RE)) {
+    keys.add(match[0].toLowerCase());
+  }
+  return keys;
+}
+
+function nearbyAddedText(target: DiffLine, grouped: Map<string, DiffLine[]>, distance = 6): string {
+  if (!target.file || target.line === undefined) return "";
+  return (grouped.get(target.file) ?? [])
+    .filter(
+      (line) =>
+        line.line !== undefined &&
+        Math.abs(line.line - target.line!) <= distance
+    )
+    .map((line) => line.text)
+    .join("\n");
+}
+
+function hasAnchorConstraintWeakening(removed: DiffLine, added: Map<string, DiffLine[]>): boolean {
+  const removedKeys = anchorConstraintKeys(removed.text);
+  if (removedKeys.size === 0) return false;
+
+  const addedText = nearbyAddedText(removed, added);
+  if (!ANCHOR_ACCOUNT_ATTR_RE.test(addedText)) return false;
+
+  const addedKeys = anchorConstraintKeys(addedText);
+  for (const key of removedKeys) {
+    if (!addedKeys.has(key)) return true;
+  }
+  return false;
 }
 
 /**
@@ -131,6 +196,8 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
   const startedAt = Date.now();
   const findings: Finding[] = [];
   const lines = addedLines(request.diff ?? "");
+  const addedLinesByFile = linesByFile(lines);
+  const addedTextByFile = textByFile(addedLinesByFile);
   const testLikeByFile = new Map<string, boolean>();
 
   for (const line of lines) {
@@ -220,7 +287,35 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
     }
 
     if (
-      /\.(ts|tsx|js|jsx|mjs)$/.test(line.file ?? "") &&
+      line.file?.endsWith(".rs") &&
+      /\bremaining_accounts\b/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Unchecked remaining_accounts used in CPI",
+        body:
+          "remaining_accounts are not validated by Anchor's account constraints. Require explicit owner/key/writable/signer " +
+          "checks before using them in CPI, token movement, or authority decisions."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /Program\s*<\s*'info\s*,\s*UncheckedAccount|program_id\s*:\s*ctx\.accounts\.[A-Za-z0-9_]+\.key\(\)|(?:^|[^A-Za-z0-9_])program\.key\(\)|CpiContext::new\s*\(\s*ctx\.accounts\.[A-Za-z0-9_]*(?:program|program_id)\.to_account_info\(\)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "CPI program account not pinned",
+        body:
+          "A CPI target program appears to come from caller-controlled accounts. Pin the program id to the expected " +
+          "system, token, associated-token, or application program before invoking it."
+      });
+    }
+
+    if (
+      SOLANA_CLIENT_FILE_RE.test(line.file ?? "") &&
       /skipPreflight\s*:\s*true/.test(text)
     ) {
       findings.push({
@@ -230,6 +325,64 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
         body:
           "skipPreflight: true skips transaction simulation, so failing transactions still pay fees and errors are masked. " +
           "Remove this flag or restrict it to explicit debug builds."
+      });
+    }
+
+    if (
+      SOLANA_CLIENT_FILE_RE.test(line.file ?? "") &&
+      /\bconnection\s*\.\s*send(?:Raw)?Transaction\s*\(/.test(text) &&
+      !/\b(?:confirmTransaction|sendAndConfirmTransaction)\b/.test(addedTextByFile.get(fileKey) ?? "")
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Transaction sent without confirmation",
+        body:
+          "A Solana transaction is sent without an adjacent confirmation step. Wait for confirmation using the " +
+          "same blockhash/lastValidBlockHeight and commitment before updating application state."
+      });
+    }
+
+    if (
+      SOLANA_CLIENT_FILE_RE.test(line.file ?? "") &&
+      /\bgetLatestBlockhash\s*\(/.test(text) &&
+      !/\blastValidBlockHeight\b/.test(addedTextByFile.get(fileKey) ?? text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Blockhash expiry not tracked",
+        body:
+          "Fetching a recent blockhash without carrying lastValidBlockHeight makes retries and confirmation expiry " +
+          "ambiguous. Track both blockhash and lastValidBlockHeight when confirming transactions."
+      });
+    }
+
+    if (
+      SOLANA_CLIENT_FILE_RE.test(line.file ?? "") &&
+      /\.confirmTransaction\s*\(\s*(?!\{)[^,\n)]+(?:,\s*["'](?:processed|confirmed|finalized)["'])?\s*\)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Confirmation missing blockhash expiry guard",
+        body:
+          "signature-only confirmTransaction calls do not bind confirmation to the transaction's blockhash and " +
+          "lastValidBlockHeight. Use the blockhash-based confirmation strategy returned by getLatestBlockhash."
+      });
+    }
+
+    if (
+      SOLANA_CLIENT_FILE_RE.test(line.file ?? "") &&
+      /\bget(?:RecentBlockhash|FeeCalculatorForBlockhash)\s*\(/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Deprecated blockhash freshness API",
+        body:
+          "Deprecated blockhash freshness APIs do not provide the lastValidBlockHeight needed for expiry-aware confirmation. " +
+          "Use getLatestBlockhash and pass blockhash plus lastValidBlockHeight into confirmTransaction."
       });
     }
 
@@ -291,6 +444,41 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     if (
       line.file?.endsWith(".rs") &&
+      /\b(?:InterfaceAccount|Token2022|token_2022|spl_token_2022|TransferHook|PermanentDelegate|ConfidentialTransfer|MetadataPointer)\b/.test(text) &&
+      !IMPORT_OR_USE_RE.test(text) &&
+      !COMMENT_ONLY_RE.test(text) &&
+      !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Token-2022 extension constraints missing",
+        body:
+          "Token-2022 and interface accounts can carry extensions such as transfer hooks, permanent delegates, or " +
+          "confidential transfers. Validate the token program, mint, owner, decimals, and expected extension policy."
+      });
+    }
+
+    if (
+      (line.file?.endsWith(".rs") || SOLANA_CLIENT_FILE_RE.test(line.file ?? "")) &&
+      TOKEN_2022_RISK_RE.test(text) &&
+      !IMPORT_OR_USE_RE.test(text) &&
+      !COMMENT_ONLY_RE.test(text) &&
+      !TOKEN_EXTENSION_CHECK_RE.test(addedTextByFile.get(fileKey) ?? text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Token-2022 extensions not validated",
+        body:
+          "Token-2022 mints/accounts can carry extensions such as transfer fees, transfer hooks, permanent delegates, " +
+          "confidential transfers, or interest-bearing state. Inspect and allowlist expected extensions before trusting balances, " +
+          "decimals, authorities, or transfer semantics."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
       /(amount|balance|lamports|supply)\b[^;=]*[-+*]=(?!=)/.test(text) &&
       !text.includes("checked_")
     ) {
@@ -301,6 +489,20 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
         body:
           "balance/amount math without checked_add/checked_sub can overflow/underflow; " +
           "use checked_* and handle None."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /\.(authority|owner|admin)\s*=\s*ctx\.accounts\.(?:new_|next_|pending_)[A-Za-z0-9_]+\.key\(\)/.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Authority invariant changed",
+        body:
+          "A persistent authority/owner/admin field is reassigned from a transaction account. Require an explicit signer " +
+          "check and invariant test proving the authority can only change through the intended admin path."
       });
     }
 
@@ -1677,7 +1879,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     if (
       line.file?.endsWith(".rs") &&
-      /#\[account|has_one\s*=|constraint\s*=|address\s*=|seeds\s*=/.test(text)
+      /#\s*\[\s*account|has_one\s*=|constraint\s*=|address\s*=|seeds\s*=|owner\s*=|\bbump\b|\bsigner\b|token::|mint::|associated_token::|extensions::/.test(text)
     ) {
       findings.push({
         ...base,
@@ -1686,6 +1888,35 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
         body:
           "a removed #[account(...)] constraint (has_one/constraint/address/seeds/signer) drops an authorization or " +
           "validation check — confirm this is intentional."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      hasAnchorConstraintWeakening(line, addedLinesByFile)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Anchor account constraint weakened",
+        body:
+          "an Anchor #[account(...)] constraint was replaced by a less restrictive attribute. Confirm the removed has_one, " +
+          "address, owner, signer, seeds, bump, or token constraint is enforced elsewhere before accepting the diff."
+      });
+    }
+
+    if (
+      line.file?.endsWith(".rs") &&
+      /\b(?:require(?:_eq|_ne|_gt|_gte|_lt|_lte)?!|assert(?:_eq|_ne)?!)\s*\(/.test(text) &&
+      SOLANA_INVARIANT_RE.test(text)
+    ) {
+      findings.push({
+        ...base,
+        severity: "high",
+        title: "Solana invariant check removed",
+        body:
+          "a removed require/assert check guarded a balance, reserve, supply, fee, debt, or authority invariant. " +
+          "Keep the invariant in code or replace it with an equivalent checked condition and regression test."
       });
     }
   }

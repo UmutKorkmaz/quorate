@@ -100,6 +100,8 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | `quorate provider models <id\|preset>` | List an endpoint's live models (`GET {baseUrl}/models`). | `--json` |
 | `quorate provider set-model <id> [model]` | Switch an api provider's model — interactive picker when no model given. | — |
 | `quorate provider remove <id>` / `presets` | Remove a provider; list API presets. | — |
+| `quorate solana doctor` | Offline Solana release gate over Anchor.toml, Cargo.toml, IDL, deployed-program evidence, and Quorate config. | `--json`, `--strict` |
+| `quorate solana test-plan` | Generate the next Solana release-test commands from the doctor signals. | `--json` |
 | `quorate init` | Write a starter `.quorate.yml` (real providers disabled). | `-f, --force` |
 
 `--diff`, `--base/--head`, and `--pr` select the diff source; `--json` streams NDJSON
@@ -117,7 +119,7 @@ agents you enable). `quorate packs` lists them.
 
 | Pack | `init --pack` | Classes | Catches (examples) |
 | --- | --- | --- | --- |
-| **Solana / Anchor** | `solana` | 10 | unchecked accounts, raw CPI, skipPreflight, non-canonical bump, manual close, constraint removal |
+| **Solana / Anchor** | `solana` | 21 | unchecked accounts, remaining_accounts, CPI program pinning, confirmation/blockhash expiry, Token-2022, weakened constraints |
 | **EVM / Solidity** | `evm` | 10 | tx.origin auth, delegatecall, selfdestruct, unchecked call, reentrancy surface, unchecked ERC20 |
 | **Move (Sui/Aptos)** | `move` | 10 | public entry auth, borrow_global_mut, shared objects, copy/drop abilities, privileged fns |
 | **IaC (Terraform/K8s)** | `iac` | 11 | public ACLs, 0.0.0.0/0 ingress, encryption off, privileged containers, host namespaces |
