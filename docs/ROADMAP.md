@@ -1,6 +1,6 @@
 # Quorate Feature Roadmap
 
-**As of:** v0.9.0 · 2026-06-13
+**As of:** v0.10.0 · 2026-06-24
 **Method:** grounded against the live codebase (19-agent capability map + architecture pass), not a wishlist.
 
 Quorate is already a strong *reviewer* — multi-agent council, dedup, agreement/confidence,
@@ -58,6 +58,16 @@ one → earn trust → control cost → improve precision → extend reach.
   The store is read from the **base ref**; a malformed store warns and gates on
   all findings (fail-secure). Keys off K0's `fingerprintFinding`. 35 tests.
 
+- **M2 · Review history + stats — DONE** (`packages/core/src/history.ts`,
+  CLI `quorate history|stats`). A local append-only JSONL store at
+  `~/.quorate/history/<repoHash>.jsonl` (outside the repo, never in git) records
+  every review keyed by the K0 `reviewId`. `quorate history` shows recent runs
+  newest-first; `quorate stats [--since]` aggregates verdict distribution,
+  degraded runs, noisiest files, recurring findings, and per-provider reliability.
+  Pure core projection/aggregation; CLI owns the I/O (fire-and-forget append,
+  corrupt-line-skipping read). Suppressed findings are excluded from counts.
+  18 tests. History is CLI-local in this PR.
+
 - **M1 · Export pipeline — DONE** (`packages/core/src/export.ts`, CLI `review
   --write-sarif|--write-junit|--write-html|--write-md`, Action `sarif-file` input + `sarif-path`
   output). Pure `CouncilReport → string` exporters: SARIF 2.1.0 (Code Scanning / GitLab),
@@ -65,6 +75,32 @@ one → earn trust → control cost → improve precision → extend reach.
   `findingRuleId` (one stable rule per finding class) and carries `quorateFingerprint`; HTML/XML
   are injection-safe (escaped) and HTML caps at 500 rows. The Action writes SARIF and exposes its
   path for a downstream `upload-sarif` step (a composite action can't upload itself). 17 tests.
+
+- **M2 · Budget guardrails + cost summary — DONE** (`packages/core/src/budget.ts`,
+  `.quorate.yml budget:`). Reviews compute file/line/token budget summaries before provider calls,
+  optionally strip generated/lockfile diff blocks, and fail before spending provider time when
+  `maxFiles`, `maxChangedLines`, or priced `maxCostUsd` caps are exceeded. CLI and Action reports
+  carry the budget summary.
+
+- **M3 · Provider test — DONE** (CLI `quorate provider test <id> [--json]`). API providers check
+  model/key readiness and `/models` reachability; CLI providers check executable/headless arg
+  readiness; mock providers report built-in availability.
+
+- **M3 · PR context injection — DONE** (`--no-pr-context` for CLI `--pr`, Action
+  `include-pr-context`). PR title/body/commits are redacted, byte-capped, and injected as
+  untrusted read-only context.
+
+- **ReviewGraph surfaces — DONE** (`packages/core/src/reviewgraph.ts`, CLI/Action
+  `--write-reviewgraph` / `reviewgraph-file`). Exports provider/finding nodes and agreement edges
+  as JSON and can include a compact agreement section in Markdown comments.
+
+- **PlanCourt gate workflow — DONE** (`quorate plan --gate`, `setup plan-gate`). Plan-mode reports
+  can write JSON/Markdown/ReviewGraph artifacts, persist `.quorate/last-plan-report.json`, and
+  use VerdictGate policy for non-zero exits.
+
+- **Custom pack format — DONE** (`packages/core/src/custom-packs.ts`, CLI `quorate pack
+  scaffold|list`). `.quorate/packs/*.yml` v1 files add councils, role guidance, and bounded regex
+  heuristics; the Action loads them from the PR base ref only.
 
 ## Two keystones (build these first — they unblock half the list)
 

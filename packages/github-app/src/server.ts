@@ -64,7 +64,8 @@ async function handlePullRequestEvent(
   appId: string,
   privateKey: string
 ): Promise<void> {
-  const { action, pull_request: pr, repository, installation } = event.payload;
+  const payload = event.payload as typeof event.payload & { installation?: { id: number } };
+  const { action, pull_request: pr, repository, installation } = payload;
   if (!["opened", "synchronize", "reopened"].includes(action)) return;
   if (!installation) {
     logger.warn("pull_request event missing installation payload — skipping");

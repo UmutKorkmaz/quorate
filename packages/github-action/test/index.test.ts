@@ -470,3 +470,59 @@ describe("runAction SARIF output", () => {
     expect(outputs["sarif-path"]).toBeUndefined();
   });
 });
+
+describe("runAction v0.10 surfaces", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
+    dirs.length = 0;
+  });
+
+  it("fails before provider execution when the base config budget is exceeded", async () => {
+    const config = `
+councils: [maintainer]
+providers:
+  - id: heuristic
+    type: mock
+    enabled: true
+    roles: [maintainer]
+budget:
+  maxChangedLines: 1
+github:
+  commentMode: update
+  failOn: high
+  runnerMode: auto
+`;
+    const octokit = makeOctokit();
+    octokit.rest.repos.getContent = async ({ path }: { path: string }) => {
+      if (path === ".quorate.yml") {
+        return { data: { type: "file", encoding: "base64", content: Buffer.from(config).toString("base64") } } as never;
+      }
+      const error = new Error("Not Found") as Error & { status: number };
+      error.status = 404;
+      throw error;
+    };
+    const { deps, failed, outputs, summaryRaw } = makeDeps({ getOctokit: () => octokit as never });
+
+    await runAction(deps);
+
+    expect(outputs.verdict).toBe("fail");
+    expect(failed.join(" ")).toMatch(/budget/i);
+    expect(summaryRaw.join("\n")).toMatch(/Budget exceeded/i);
+  });
+
+  it("writes a ReviewGraph file and sets reviewgraph-path", async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), "quorate-reviewgraph-"));
+    dirs.push(dir);
+    const graphPath = resolve(dir, "graph.json");
+    const { deps, outputs } = makeDeps({
+      getInput: (name) =>
+        ({ "github-token": "token-123", "post-comment": "false", "reviewgraph-file": graphPath } as Record<string, string>)[name]
+    });
+
+    await runAction(deps);
+
+    expect(outputs["reviewgraph-path"]).toBe(graphPath);
+    expect(JSON.parse(readFileSync(graphPath, "utf8")).providers).toBeDefined();
+  });
+});

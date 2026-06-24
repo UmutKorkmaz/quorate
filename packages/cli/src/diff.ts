@@ -97,3 +97,47 @@ export function readDiff(options: DiffOptions, cwd = process.cwd()): string {
   const unstaged = runGit(["diff", ...DIFF_PATHSPEC], cwd);
   return [staged, unstaged].filter(Boolean).join("\n");
 }
+
+export interface GhPullRequestContext {
+  number?: number;
+  title?: string;
+  body?: string;
+  url?: string;
+  commits?: Array<{ sha?: string; message?: string }>;
+  issues?: Array<{ number?: number; title?: string; url?: string }>;
+}
+
+export function readPullRequestContext(pr: string, cwd = process.cwd()): GhPullRequestContext | undefined {
+  if (!/^\d+$/.test(pr)) return undefined;
+  try {
+    const raw = run(
+      "gh",
+      [
+        "pr",
+        "view",
+        pr,
+        "--json",
+        "number,title,body,url,commits,closingIssuesReferences"
+      ],
+      cwd
+    );
+    const parsed = JSON.parse(raw) as {
+      number?: number;
+      title?: string;
+      body?: string;
+      url?: string;
+      commits?: Array<{ oid?: string; messageHeadline?: string }>;
+      closingIssuesReferences?: Array<{ number?: number; title?: string; url?: string }>;
+    };
+    return {
+      number: parsed.number,
+      title: parsed.title,
+      body: parsed.body,
+      url: parsed.url,
+      commits: parsed.commits?.map((commit) => ({ sha: commit.oid, message: commit.messageHeadline })),
+      issues: parsed.closingIssuesReferences
+    };
+  } catch {
+    return undefined;
+  }
+}
