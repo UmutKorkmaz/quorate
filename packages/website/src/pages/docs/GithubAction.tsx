@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.9.0
+      - uses: UmutKorkmaz/quorate@v0.10.0
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
 
@@ -177,6 +177,34 @@ jobs:
           </tr>
           <tr>
             <td>
+              <code>include-pr-context</code>
+            </td>
+            <td>
+              <InlineCode>false</InlineCode>
+            </td>
+            <td>Include redacted PR title/body/commits as untrusted read-only prompt context.</td>
+          </tr>
+          <tr>
+            <td>
+              <code>reviewgraph</code>
+            </td>
+            <td>
+              <InlineCode>false</InlineCode>
+            </td>
+            <td>Include ReviewGraph agreement evidence in the PR comment and job summary.</td>
+          </tr>
+          <tr>
+            <td>
+              <code>reviewgraph-file</code>
+            </td>
+            <td>—</td>
+            <td>
+              Path to write ReviewGraph JSON; the path is exposed as the{" "}
+              <code>reviewgraph-path</code> output.
+            </td>
+          </tr>
+          <tr>
+            <td>
               <code>mode</code>
             </td>
             <td>
@@ -208,7 +236,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: quorate
-        uses: UmutKorkmaz/quorate@v0.9.0
+        uses: UmutKorkmaz/quorate@v0.10.0
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -218,6 +246,8 @@ jobs:
           fail-on: high
           inline-comments: true
           sarif-file: quorate.sarif
+          reviewgraph: true
+          reviewgraph-file: quorate.reviewgraph.json
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
@@ -258,7 +288,7 @@ jobs:
 steps:
   - uses: actions/checkout@v4
   - id: quorate
-    uses: UmutKorkmaz/quorate@v0.9.0
+    uses: UmutKorkmaz/quorate@v0.10.0
     with:
       github-token: \${{ secrets.GITHUB_TOKEN }}
       sarif-file: quorate.sarif
@@ -363,7 +393,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.9.0
+- uses: UmutKorkmaz/quorate@v0.10.0
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:
@@ -392,7 +422,7 @@ providers:
     apiKeyEnv: GLM_API_KEY
     roles: [architect, security, performance]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.9.0
+- uses: UmutKorkmaz/quorate@v0.10.0
   env:
     GLM_API_KEY: \${{ secrets.GLM_API_KEY }}
   with:

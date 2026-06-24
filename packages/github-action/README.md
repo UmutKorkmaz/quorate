@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.9.0
+      - uses: UmutKorkmaz/quorate@v0.10.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -62,7 +62,7 @@ providers:
 Then pass the key through as an environment variable:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v0.9.0
+      - uses: UmutKorkmaz/quorate@v0.10.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -103,7 +103,7 @@ committing.
 
 ```yaml
       - id: quorate
-        uses: UmutKorkmaz/quorate@v0.9.0
+        uses: UmutKorkmaz/quorate@v0.10.0
         with: { github-token: ${{ secrets.GITHUB_TOKEN }} }
       - if: steps.quorate.outputs.verdict == 'fail'
         run: echo "Quorate found ${{ steps.quorate.outputs.findings }} findings"

@@ -1,6 +1,6 @@
 {
   "name": "@quorate/github-action",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "main": "./dist/index.js",
   "private": true,
   "files": [
@@ -13,6 +13,6 @@
   "dependencies": {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@quorate/core": "0.9.0"
+    "@quorate/core": "0.10.0"
   }
 }

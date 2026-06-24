@@ -5,6 +5,15 @@ councils:
   - performance
   - maintainer
 
+# Optional preflight guardrails. If a cap is exceeded, Quorate stops before
+# calling providers. skipGenerated strips common lockfiles/generated bundles
+# from the reviewed diff before prompts are built.
+# budget:
+#   maxFiles: 40
+#   maxChangedLines: 1200
+#   maxCostUsd: 0.50
+#   skipGenerated: true
+
 providers:
   - id: heuristic
     type: mock
@@ -177,6 +186,8 @@ providers:
   #   baseUrl: http://localhost:8000/v1
   #   model: Qwen/Qwen2.5-Coder-7B-Instruct
   #   apiKeyEnv: VLLM_API_KEY          # omit for an unsecured local server
+  #   cost:
+  #     inputUsdPer1M: 0.20            # optional: enables maxCostUsd estimates
   #   roles: [architect, security, qa, maintainer]
   #   timeoutMs: 180000
 

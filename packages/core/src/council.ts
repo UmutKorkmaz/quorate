@@ -304,10 +304,15 @@ export async function runCouncil(
     at: new Date().toISOString()
   });
 
-  // Carry per-role guidance (from config/packs) into every provider prompt.
-  const reviewRequest: CouncilRequest = config.roleGuidance
-    ? { ...request, roleGuidance: config.roleGuidance }
-    : request;
+  // Carry per-role guidance and trusted custom heuristics into every provider
+  // prompt / heuristic lane.
+  const reviewRequest: CouncilRequest = {
+    ...request,
+    roleGuidance: config.roleGuidance
+      ? { ...(request.roleGuidance ?? {}), ...config.roleGuidance }
+      : request.roleGuidance,
+    customHeuristics: config.customHeuristics ?? request.customHeuristics
+  };
 
   const settled = await Promise.allSettled(
     lanes.map((lane) => runProviderWithEvents(lane.provider, lane.role, reviewRequest, ctx))
@@ -390,6 +395,7 @@ export async function runCouncil(
       ranProviders,
       degraded,
       mergedBy,
+      budget: request.budget,
       reviewId: computeReviewId({
         mode: request.mode,
         subject: request.subject,

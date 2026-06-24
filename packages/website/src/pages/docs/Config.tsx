@@ -104,7 +104,8 @@ providers:
       <CodeBlock language="bash">{`quorate provider add ollama --preset ollama --model qwen2.5-coder:7b
 quorate provider add reviewer --type api \\
   --base-url http://localhost:8000/v1 --model Qwen/Qwen2.5-Coder-32B-Instruct \\
-  --api-key-env VLLM_API_KEY --roles security,architect`}</CodeBlock>
+  --api-key-env VLLM_API_KEY --roles security,architect
+quorate provider test reviewer --json`}</CodeBlock>
       <p>
         16 presets — local servers (<InlineCode>ollama</InlineCode>,{" "}
         <InlineCode>lmstudio</InlineCode>, <InlineCode>vllm</InlineCode>,{" "}
@@ -116,6 +117,36 @@ quorate provider add reviewer --type api \\
         <InlineCode>mistral</InlineCode>, <InlineCode>gemini</InlineCode>,{" "}
         <InlineCode>zai</InlineCode>).
       </p>
+
+      <h2>Budget guardrails</h2>
+      <p>
+        Add a <InlineCode>budget</InlineCode> block to stop oversized reviews before any
+        provider call. Reports include the resulting file, line, token, and priced-input summary.
+      </p>
+      <CodeBlock language="yaml">{`budget:
+  maxFiles: 40
+  maxChangedLines: 1200
+  maxCostUsd: 0.50
+  skipGenerated: true
+
+providers:
+  - id: reviewer
+    type: api
+    model: vendor/model
+    baseUrl: https://api.example.test/v1
+    apiKeyEnv: REVIEWER_KEY
+    cost:
+      inputUsdPer1M: 0.20`}</CodeBlock>
+
+      <h2>Custom packs</h2>
+      <p>
+        Workspace packs in <InlineCode>.quorate/packs/*.yml</InlineCode> can add council
+        roles, role guidance, and regex heuristics. In GitHub Actions they are loaded from the
+        pull request base ref, never from the PR head.
+      </p>
+      <CodeBlock language="bash">{`quorate pack scaffold org-rules
+git add -f .quorate/packs/org-rules.yml
+quorate pack list --json`}</CodeBlock>
 
       <h2>Hosted gateways at a glance</h2>
       <p>

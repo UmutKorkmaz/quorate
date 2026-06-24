@@ -83,6 +83,22 @@ inputs:
       docs/products/VERDICT-GATE.md.
     required: false
     default: .quorate/policy.yml
+  include-pr-context:
+    description: >-
+      Include redacted PR title/body/commit context in reviewer prompts. The
+      context is treated as untrusted read-only text and byte-capped.
+    required: false
+    default: "false"
+  reviewgraph:
+    description: Include ReviewGraph agreement evidence in the PR comment and job summary.
+    required: false
+    default: "false"
+  reviewgraph-file:
+    description: >-
+      Path to write ReviewGraph agreement evidence as JSON. Empty disables the
+      sidecar export.
+    required: false
+    default: ""
   sarif-file:
     description: >-
       Path to write a SARIF 2.1.0 report. The written path is exposed as the
@@ -97,6 +113,8 @@ outputs:
     description: Number of findings in the report.
   sarif-path:
     description: Absolute path of the written SARIF file (when sarif-file is set).
+  reviewgraph-path:
+    description: Absolute path of the written ReviewGraph JSON file (when reviewgraph-file is set).
 runs:
   using: node20
   main: packages/github-action/dist/index.js

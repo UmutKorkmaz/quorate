@@ -6,13 +6,16 @@ import { stdin, stdout } from "node:process";
 import { Command } from "commander";
 import {
   buildMultiPackConfig,
+  analyzeReviewBudget,
   buildSolanaReleaseGate,
   buildSolanaTestPlan,
+  buildPullRequestContext,
   createDefaultConfig,
   detectAvailableProviders,
   detectPacks,
   fetchProviderModels,
   findConfigPath,
+  formatBudgetSummary,
   formatSolanaReleaseGate,
   formatSolanaTestPlan,
   isLocalBaseUrl,
@@ -27,11 +30,13 @@ import {
   renderHtml,
   renderJunit,
   renderMarkdownReport,
+  renderReviewGraph,
   renderSarif,
   resolvePolicy,
   runCouncil,
   serializeConfig,
   shouldFailForPolicy,
+  type CouncilRequest,
   type CouncilReport,
   type ProviderConfig,
   type QuorateConfig,
@@ -45,6 +50,13 @@ import {
   removeSuppressionFromStore,
   writeSuppression
 } from "./suppress-command.js";
+import {
+  appendHistory,
+  computeStats,
+  formatHistoryTable,
+  formatStatsReport,
+  readHistory
+} from "./history-command.js";
 import { listExpired } from "@quorate/core";
 import {
   buildRiskReport,
@@ -62,7 +74,7 @@ import {
 import { createFixSnapshot, finalizeFix, listFixes, revertFix } from "./fix.js";
 import { buildFixPrompt, extractHunk } from "./fix-prompt.js";
 import { runWriteAgent, WRITE_AGENT_PROFILES, writeAgentProfile } from "./fix-agent.js";
-import { readDiff } from "./diff.js";
+import { readDiff, readPullRequestContext } from "./diff.js";
 import { buildDoctorBundle } from "./doctor-bundle.js";
 import { printDoctor } from "./doctor.js";
 import { latestSession, loadSession, type PersistedSession } from "./sessions.js";
@@ -72,6 +84,12 @@ import { launchInkShell } from "./tui/index.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
+import {
+  applyWorkspaceCustomPacks,
+  loadWorkspaceCustomPacks,
+  writeCustomPackScaffold
+} from "./custom-packs.js";
+import { formatProviderTestResult, testProvider } from "./provider-test.js";
 
 interface GlobalOptions {
   config?: string;
@@ -188,7 +206,7 @@ function ensureGitignored(cwd: string, entry: string): void {
 
 function configFrom(program: Command): QuorateConfig {
   const cwd = cwdFrom(program);
-  return loadConfig(configPathFrom(program, cwd), cwd);
+  return applyWorkspaceCustomPacks(loadConfig(configPathFrom(program, cwd), cwd), cwd);
 }
 
 function configPathFrom(program: Command, cwd: string): string | undefined {
@@ -253,6 +271,47 @@ export function providerPresetRows(): ProviderPresetRow[] {
       local: isLocalBaseUrl(baseUrl)
     };
   });
+}
+
+interface PackCatalogRow {
+  id: string;
+  description: string;
+  councils: string[];
+  classes: number;
+  source: "built-in" | "custom";
+}
+
+function packCatalogRows(cwd: string): PackCatalogRow[] {
+  const builtIn = Object.entries(PACKS).map(([id, pack]) => ({
+    id,
+    description: pack.description,
+    councils: pack.councils,
+    classes: PACK_COVERAGE[id]?.length ?? 0,
+    source: "built-in" as const
+  }));
+  const custom = loadWorkspaceCustomPacks(cwd).map((definition) => ({
+    id: definition.pack.id,
+    description: definition.pack.description,
+    councils: definition.pack.councils,
+    classes: definition.heuristics.length,
+    source: "custom" as const
+  }));
+  return [...builtIn, ...custom];
+}
+
+function printPackCatalog(rows: PackCatalogRow[]): void {
+  const total = rows.reduce((sum, entry) => sum + entry.classes, 0);
+  const width = Math.max(...rows.map((entry) => entry.id.length));
+  console.log(paint(PALETTE.dim, `${rows.length} domain packs · ${total} heuristic classes · zero-config with \`quorate init --auto\``));
+  console.log("");
+  for (const entry of rows) {
+    console.log(
+      `  ${paint(PALETTE.accent, entry.id.padEnd(width))}  ${entry.description}  ${paint(PALETTE.dim, `(${entry.classes} classes, ${entry.source})`)}`
+    );
+    console.log(`  ${" ".repeat(width)}  ${paint(PALETTE.dim, "councils:")} ${entry.councils.join(", ")}`);
+  }
+  console.log("");
+  console.log(paint(PALETTE.dim, "Scaffold one: ") + "quorate init --pack <id[,id]>  " + paint(PALETTE.dim, "·  Auto-detect: ") + "quorate init --auto");
 }
 
 export interface NormalizeAddedProviderRolesResult {
@@ -470,35 +529,42 @@ export function buildProgram(): Command {
     .description("List available domain packs (councils, heuristics, per-role guidance).")
     .option("--json", "Print the pack catalog as JSON")
     .action((options: { json?: boolean }) => {
-      const entries = Object.entries(PACKS);
+      const cwd = cwdFrom(program);
+      const allEntries = packCatalogRows(cwd);
       if (options.json) {
-        console.log(
-          JSON.stringify(
-            entries.map(([id, pack]) => ({
-              id,
-              description: pack.description,
-              councils: pack.councils,
-              classes: PACK_COVERAGE[id]?.length ?? 0
-            })),
-            null,
-            2
-          )
-        );
+        console.log(JSON.stringify(allEntries, null, 2));
         return;
       }
-      const total = entries.reduce((sum, [id]) => sum + (PACK_COVERAGE[id]?.length ?? 0), 0);
-      const width = Math.max(...entries.map(([id]) => id.length));
-      console.log(paint(PALETTE.dim, `${entries.length} domain packs · ${total} heuristic classes · zero-config with \`quorate init --auto\``));
-      console.log("");
-      for (const [id, pack] of entries) {
-        const count = PACK_COVERAGE[id]?.length ?? 0;
-        console.log(
-          `  ${paint(PALETTE.accent, id.padEnd(width))}  ${pack.description}  ${paint(PALETTE.dim, `(${count} classes)`)}`
-        );
-        console.log(`  ${" ".repeat(width)}  ${paint(PALETTE.dim, "councils:")} ${pack.councils.join(", ")}`);
+      printPackCatalog(allEntries);
+    });
+
+  const packCmd = program
+    .command("pack")
+    .helpGroup("Setup:")
+    .description("Manage custom review packs in .quorate/packs/.");
+
+  packCmd
+    .command("list")
+    .description("List built-in and workspace custom packs.")
+    .option("--json", "Print machine-readable JSON")
+    .action((options: { json?: boolean }) => {
+      const rows = packCatalogRows(cwdFrom(program));
+      if (options.json) {
+        console.log(JSON.stringify(rows, null, 2));
+        return;
       }
-      console.log("");
-      console.log(paint(PALETTE.dim, "Scaffold one: ") + "quorate init --pack <id[,id]>  " + paint(PALETTE.dim, "·  Auto-detect: ") + "quorate init --auto");
+      printPackCatalog(rows);
+    });
+
+  packCmd
+    .command("scaffold <id>")
+    .description("Create .quorate/packs/<id>.yml with a custom pack template.")
+    .option("--force", "Overwrite an existing custom pack file")
+    .action((id: string, options: { force?: boolean }) => {
+      const cwd = cwdFrom(program);
+      const target = writeCustomPackScaffold(cwd, id, Boolean(options.force));
+      console.log(`Wrote ${relative(cwd, target)}.`);
+      console.log("Commit it with: git add -f .quorate/packs");
     });
 
   program
@@ -653,6 +719,40 @@ export function buildProgram(): Command {
     });
 
   setupCmd
+    .command("plan-gate")
+    .description("Write a reusable PlanCourt prompt template under .quorate/commands/.")
+    .option("--force", "Overwrite an existing template")
+    .action((options: { force?: boolean }) => {
+      const cwd = cwdFrom(program);
+      const target = resolve(cwd, ".quorate", "commands", "plan-gate.md");
+      if (existsSync(target) && !options.force) {
+        console.error(`${relative(cwd, target)} already exists. Use --force to overwrite it.`);
+        process.exitCode = 1;
+        return;
+      }
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(
+        target,
+        [
+          "---",
+          "description: Gate an implementation plan before code changes",
+          "argument-hint: [plan or RFC text]",
+          "mode: plan",
+          "---",
+          "Evaluate this implementation plan before any code is written.",
+          "",
+          "Focus on architecture risk, security impact, test strategy, rollout safety, and hidden maintenance cost.",
+          "",
+          "{{args}}",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+      console.log(`Wrote ${relative(cwd, target)}.`);
+      console.log("Use it in the TUI with QUORATE_TRUST_WORKSPACE=1 quorate, or run: quorate plan --gate \"<plan>\".");
+    });
+
+  setupCmd
     .command("github-app")
     .description("How to install the hosted Quorate GitHub App.")
     .action(() => {
@@ -728,20 +828,21 @@ export function buildProgram(): Command {
         }
       }
       const configPath = findConfigPath(cwd) ?? resolve(cwd, ".quorate.yml");
-      const config = existsSync(configPath)
+      const storedConfig = existsSync(configPath)
         ? loadConfig(configPath, cwd)
         : createDefaultConfig(detectAvailableProviders());
-      const normalized = normalizeAddedProviderRoles(provider, config, typeof options.roles === "string");
+      const configForRoles = applyWorkspaceCustomPacks(storedConfig, cwd);
+      const normalized = normalizeAddedProviderRoles(provider, configForRoles, typeof options.roles === "string");
       provider = normalized.provider;
-      const index = config.providers.findIndex((entry) => entry.id === id);
+      const index = storedConfig.providers.findIndex((entry) => entry.id === id);
       if (index >= 0 && !options.force) {
         throw new Error(`Provider "${id}" already exists in ${configPath}. Use --force to replace it.`);
       }
       const providers =
         index >= 0
-          ? config.providers.map((entry, i) => (i === index ? provider : entry))
-          : [...config.providers, provider];
-      writeFileSync(configPath, serializeConfig({ ...config, providers }), "utf8");
+          ? storedConfig.providers.map((entry, i) => (i === index ? provider : entry))
+          : [...storedConfig.providers, provider];
+      writeFileSync(configPath, serializeConfig({ ...storedConfig, providers }), "utf8");
       ensureGitignored(cwd, ".quorate/");
 
       const detail = provider.type === "api" ? `api · ${provider.model}` : `cli · ${provider.command}`;
@@ -832,6 +933,23 @@ export function buildProgram(): Command {
     });
 
   providerCmd
+    .command("test <id>")
+    .description("Check provider readiness (CLI executable or API /models connectivity).")
+    .option("--json", "Print machine-readable JSON")
+    .action(async (id: string, options: { json?: boolean }) => {
+      const config = configFrom(program);
+      const provider = config.providers.find((entry) => entry.id === id);
+      if (!provider) throw new Error(`No provider "${id}" in the active config.`);
+      const result = await testProvider(provider);
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(formatProviderTestResult(result));
+      }
+      if (result.status === "error") process.exitCode = 1;
+    });
+
+  providerCmd
     .command("set-roles <id> <roles>")
     .description("Replace a provider's council roles (comma-separated, e.g. security,qa).")
     .action((id: string, rolesArg: string) => {
@@ -901,6 +1019,9 @@ export function buildProgram(): Command {
     .option("--write-junit <path>", "Write a JUnit XML report (CI test dashboards)")
     .option("--write-html <path>", "Write a standalone HTML report")
     .option("--write-md <path>", "Write the Markdown report to a file")
+    .option("--write-reviewgraph <path>", "Write ReviewGraph agreement evidence as JSON")
+    .option("--reviewgraph", "Include ReviewGraph agreement evidence in Markdown output")
+    .option("--no-pr-context", "Do not include PR title/body/commits when --pr is used")
     .option("--baseline", "Gate only on findings absent from the committed baseline")
     .option("--baseline-path <path>", "Baseline file to gate against (default .quorate.baseline.json)")
     .option("--suppress-path <path>", "Suppression store to apply (default .quorate/suppressions.json)")
@@ -909,19 +1030,48 @@ export function buildProgram(): Command {
       const cwd = cwdFrom(program);
       let config = applyProviderFilter(configFrom(program), options.providers);
       if (options.merge) config = { ...config, merge: { provider: options.merge } };
-      const diff = readDiff(options, cwd);
+      let diff = readDiff(options, cwd);
       if (isEmptyReviewDiff("review", diff)) {
         console.error("No changes to review. Pass --diff <file>, --base/--head, or --pr <number>.");
         process.exitCode = 1;
         return;
       }
-      const request = {
+      const prContext =
+        options.pr && options.prContext !== false
+          ? buildPullRequestContext(readPullRequestContext(options.pr, cwd) ?? { number: Number(options.pr) })
+          : undefined;
+      const request: CouncilRequest = {
         mode: "review" as const,
         subject: options.subject,
         diff,
         repoPath: cwd,
+        context: prContext,
         pullRequest: options.pr ? { number: Number(options.pr) } : undefined
       };
+      const budget = analyzeReviewBudget({
+        diff,
+        config,
+        request: {
+          mode: request.mode,
+          subject: request.subject,
+          repoPath: request.repoPath,
+          pullRequest: request.pullRequest,
+          context: request.context
+        }
+      });
+      diff = budget.diff;
+      request.diff = diff;
+      request.budget = budget.summary;
+      if (isEmptyReviewDiff("review", diff)) {
+        console.error("No reviewable changes remain after budget/generated-file filtering.");
+        process.exitCode = 1;
+        return;
+      }
+      if (!budget.ok) {
+        console.error(formatBudgetSummary(budget.summary));
+        process.exitCode = 1;
+        return;
+      }
 
       // When --baseline is set, suppress findings already in the committed
       // baseline and recompute the verdict on what remains. The notes (missing
@@ -972,7 +1122,8 @@ export function buildProgram(): Command {
       writeExport(options.writeSarif, renderSarif(report, { toolVersion: readVersion() }));
       writeExport(options.writeJunit, renderJunit(report));
       writeExport(options.writeHtml, renderHtml(report));
-      writeExport(options.writeMd, renderMarkdownReport(report));
+      writeExport(options.writeMd, renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
+      writeExport(options.writeReviewgraph, renderReviewGraph(report));
 
       // Persist the RAW report for `quorate fix` and `quorate baseline` (same
       // file the TUI writes) — never the baseline-filtered view, or a follow-up
@@ -983,9 +1134,13 @@ export function buildProgram(): Command {
         `${JSON.stringify(rawReport ?? report, null, 2)}\n`,
         "utf8"
       );
+      // Append to the per-repo history store (best-effort, never throws). The
+      // gated report is what the team saw and the gate acted on; suppressed
+      // findings are excluded from the counts by toHistoryEntry.
+      appendHistory(cwd, report);
 
       if (!options.json) {
-        console.log(renderMarkdownReport(report));
+        console.log(renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
       }
 
       // Gate on the resolved policy: a standalone .quorate/policy.yml wins,
@@ -1156,6 +1311,50 @@ export function buildProgram(): Command {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
       }
+    });
+
+  program
+    .command("history")
+    .helpGroup("Review:")
+    .description("Show recent reviews (newest-first). Stored at ~/.quorate/history/.")
+    .option("--limit <n>", "Maximum number of entries to show", "20")
+    .option("--json", "Print machine-readable JSON")
+    .action(async (options) => {
+      const cwd = cwdFrom(program);
+      const limit = Number(options.limit);
+      if (!Number.isInteger(limit) || limit < 0) {
+        console.error("--limit must be a non-negative integer.");
+        process.exitCode = 1;
+        return;
+      }
+      const entries = await readHistory(cwd, { limit });
+      if (options.json) {
+        console.log(JSON.stringify(entries, null, 2));
+        return;
+      }
+      console.log(formatHistoryTable(entries, limit));
+    });
+
+  program
+    .command("stats")
+    .helpGroup("Review:")
+    .description("Aggregate review trends: verdicts, noisiest files, recurring findings, provider reliability.")
+    .option("--since <iso-date>", "Only count reviews from this date onward")
+    .option("--json", "Print machine-readable JSON")
+    .action(async (options) => {
+      const cwd = cwdFrom(program);
+      if (options.since !== undefined && Number.isNaN(Date.parse(options.since))) {
+        console.error("--since must be a valid ISO date.");
+        process.exitCode = 1;
+        return;
+      }
+      const entries = await readHistory(cwd);
+      const stats = computeStats(entries, { since: options.since });
+      if (options.json) {
+        console.log(JSON.stringify(stats, null, 2));
+        return;
+      }
+      console.log(formatStatsReport(stats));
     });
 
   const policyCmd = program
@@ -1368,6 +1567,12 @@ export function buildProgram(): Command {
     .argument("<prompt...>", "Plan prompt")
     .option("--providers <ids>", "Comma-separated provider ids to enable for this run")
     .option("--json", "Stream NDJSON events to stdout (final line is the report JSON)")
+    .option("--write-json <path>", "Write the JSON plan report to a file")
+    .option("--write-md <path>", "Write the Markdown plan report to a file")
+    .option("--write-reviewgraph <path>", "Write ReviewGraph agreement evidence as JSON")
+    .option("--reviewgraph", "Include ReviewGraph agreement evidence in Markdown output")
+    .option("--gate", "Exit non-zero when the resolved VerdictGate policy blocks the plan")
+    .option("--fail-on <severity>", "Override the gate threshold (critical…info, or never)")
     .action(async (promptParts: string[], options) => {
       const cwd = cwdFrom(program);
       const config = applyProviderFilter(configFrom(program), options.providers);
@@ -1381,8 +1586,29 @@ export function buildProgram(): Command {
           })
         : await runCouncil(request, config);
 
+      const writeExport = (path: string | undefined, content: string): void => {
+        if (!path) return;
+        const target = resolve(cwd, path);
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, content, "utf8");
+      };
+      writeExport(options.writeJson, `${JSON.stringify(report, null, 2)}\n`);
+      writeExport(options.writeMd, renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
+      writeExport(options.writeReviewgraph, renderReviewGraph(report));
+
+      mkdirSync(resolve(cwd, ".quorate"), { recursive: true });
+      writeFileSync(resolve(cwd, ".quorate", "last-plan-report.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
       if (!options.json) {
-        console.log(renderMarkdownReport(report));
+        console.log(renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
+      }
+
+      if (options.gate) {
+        const policy = resolvePolicy(config, {
+          policy: loadPolicyFile(cwd) ?? undefined,
+          failOn: options.failOn as Severity | "never" | undefined
+        });
+        if (shouldFailForPolicy(report, policy)) process.exitCode = 1;
       }
     });
 

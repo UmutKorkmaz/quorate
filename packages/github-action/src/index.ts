@@ -1,21 +1,27 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import {
+  analyzeReviewBudget,
   applyBaseline,
+  applyCustomPackDefinitions,
   applySuppressions,
+  buildPullRequestContext,
   createDefaultConfig,
   DEFAULT_BASELINE_PATH,
   DEFAULT_POLICY_PATH,
   DEFAULT_SUPPRESSION_PATH,
   detectPacks,
+  formatBudgetSummary,
   isBaselineStale,
   listExpired,
   PACKS,
   PACK_IDS,
   parseBaseline,
   parseConfig,
+  parseCustomPackYaml,
   parsePolicyYaml,
   parseSuppressionStore,
+  renderReviewGraph,
   renderMarkdownReport,
   renderSarif,
   resolvePolicy,
@@ -24,6 +30,7 @@ import {
   summarizeDiff,
   type BaselineStore,
   type CouncilReport,
+  type CustomPackDefinition,
   type QuorateConfig,
   type QuoratePolicy,
   type Severity,
@@ -51,6 +58,7 @@ export interface ActionContext {
     pull_request?: {
       number: number;
       title?: string;
+      body?: string;
       html_url?: string;
       base?: { sha?: string; ref?: string };
       head?: { sha?: string };
@@ -209,6 +217,41 @@ export function applyOverrides(
   };
 }
 
+async function buildActionPullRequestContext(
+  client: Octokit,
+  input: {
+    owner: string;
+    repo: string;
+    pullNumber: number;
+    pullRequest: NonNullable<ActionContext["payload"]["pull_request"]>;
+  }
+): Promise<string> {
+  let commits: Array<{ sha?: string; message?: string }> = [];
+  const listCommits = (client.rest.pulls as { listCommits?: unknown }).listCommits;
+  if (listCommits) {
+    try {
+      const paginate = client.paginate as unknown as <T>(endpoint: unknown, parameters: Record<string, unknown>) => Promise<T[]>;
+      const rows = await paginate<{ sha?: string; commit?: { message?: string } }>(listCommits, {
+        owner: input.owner,
+        repo: input.repo,
+        pull_number: input.pullNumber,
+        per_page: 100
+      });
+      commits = rows.map((row) => ({ sha: row.sha, message: row.commit?.message }));
+    } catch {
+      commits = [];
+    }
+  }
+
+  return buildPullRequestContext({
+    number: input.pullNumber,
+    title: input.pullRequest.title,
+    body: input.pullRequest.body,
+    url: input.pullRequest.html_url,
+    commits
+  });
+}
+
 /**
  * Load the Quorate config from the pull request's BASE branch (trusted), never
  * from the PR head. A pull request must not be able to supply the config that
@@ -328,6 +371,46 @@ export async function loadBasePolicy(
   return null;
 }
 
+export async function loadBaseCustomPacks(
+  client: Octokit,
+  params: { owner: string; repo: string; ref: string; path?: string }
+): Promise<CustomPackDefinition[]> {
+  const root = params.path ?? ".quorate/packs";
+  let entries: Array<{ type?: string; path?: string; name?: string }>;
+  try {
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path: root,
+      ref: params.ref
+    });
+    entries = Array.isArray(res.data) ? res.data as Array<{ type?: string; path?: string; name?: string }> : [];
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) return [];
+    throw error;
+  }
+
+  const definitions: CustomPackDefinition[] = [];
+  for (const entry of entries) {
+    const path = entry.path ?? `${root}/${entry.name ?? ""}`;
+    if (entry.type !== "file" || !/\.ya?ml$/i.test(path)) continue;
+    const res = await client.rest.repos.getContent({
+      owner: params.owner,
+      repo: params.repo,
+      path,
+      ref: params.ref
+    });
+    const data = res.data;
+    if (!Array.isArray(data) && data.type === "file" && typeof (data as { content?: string }).content === "string") {
+      const file = data as { content: string; encoding?: string };
+      const decoded = Buffer.from(file.content, file.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      definitions.push(parseCustomPackYaml(decoded, path));
+    }
+  }
+  return definitions;
+}
+
 /**
  * Dependency-injected orchestration for the action. Behavior mirrors the real
  * entry point exactly; {@link run} simply wires up @actions/core and
@@ -352,7 +435,9 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   const baseRef = resolveBaseRef(deps.context);
   const configPath = input("config-path");
   const candidates = configPath ? [configPath] : [".quorate.yml", ".quorate.yaml", "quorate.config.yml"];
-  const baseConfig = applyOverrides(await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates }), {
+  const loadedBaseConfig = await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates });
+  const customPackDefinitions = await loadBaseCustomPacks(client, { owner, repo, ref: baseRef });
+  const baseConfig = applyOverrides(applyCustomPackDefinitions(loadedBaseConfig, customPackDefinitions), {
     providers: input("providers"),
     failOn: input("fail-on"),
     runnerMode: input("runner-mode"),
@@ -363,12 +448,65 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   // Layer domain pack(s) — explicit list or "auto" detected from the PR's files.
   const config = applyPacks(baseConfig, input("pack"), changedFilesFromDiff(diff));
+  const prContext = parseBoolean(input("include-pr-context"), false)
+    ? await buildActionPullRequestContext(client, { owner, repo, pullNumber, pullRequest })
+    : undefined;
+  const budget = analyzeReviewBudget({
+    diff,
+    config,
+    request: {
+      mode: "review",
+      subject: `PR #${pullNumber}: ${pullRequest.title ?? "Untitled pull request"}`,
+      repoPath: process.cwd(),
+      pullRequest: {
+        number: pullNumber,
+        title: pullRequest.title,
+        url: pullRequest.html_url
+      },
+      context: prContext
+    }
+  });
+  if (!budget.ok || budget.diff.trim().length === 0) {
+    const budgetReason =
+      budget.diff.trim().length === 0
+        ? "No reviewable changes remain after generated-file filtering."
+        : "Quorate stopped before provider execution because the configured review budget was exceeded.";
+    const body = [
+      "<!-- quorate-report -->",
+      "# Quorate Report",
+      "",
+      "Verdict: **FAIL**",
+      "",
+      budgetReason,
+      "",
+      "```",
+      formatBudgetSummary(budget.summary),
+      "```"
+    ].join("\n");
+    deps.setOutput("verdict", "fail");
+    deps.setOutput("findings", "0");
+    deps.summary.addRaw(body);
+    await deps.summary.write();
+    if (parseBoolean(input("post-comment"), true) && config.github.commentMode !== "off") {
+      await upsertReportComment(client, {
+        owner,
+        repo,
+        issueNumber: pullNumber,
+        body,
+        mode: config.github.commentMode
+      });
+    }
+    deps.setFailed(budget.diff.trim().length === 0 ? "No reviewable changes remain after filtering." : "Quorate review budget exceeded.");
+    return;
+  }
   const rawReport = await runCouncil(
     {
       mode: "review",
       subject: `PR #${pullNumber}: ${pullRequest.title ?? "Untitled pull request"}`,
-      diff,
+      diff: budget.diff,
       repoPath: process.cwd(),
+      context: prContext,
+      budget: budget.summary,
       pullRequest: {
         number: pullNumber,
         title: pullRequest.title,
@@ -431,8 +569,9 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     );
   }
 
-  const summary = summarizeDiff(diff);
-  const body = renderMarkdownReport(report, { includeMarker: true, summary });
+  const summary = summarizeDiff(budget.diff);
+  const includeReviewGraph = parseBoolean(input("reviewgraph"), false);
+  const body = renderMarkdownReport(report, { includeMarker: true, summary, includeReviewGraph });
 
   deps.setOutput("verdict", report.verdict);
   deps.setOutput("findings", String(report.findings.length));
@@ -453,6 +592,21 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     } catch (error: unknown) {
       deps.warning?.(
         `Could not write SARIF to ${sarifFile} (${error instanceof Error ? error.message : String(error)}).`
+      );
+    }
+  }
+
+  const reviewGraphFile = input("reviewgraph-file");
+  if (reviewGraphFile) {
+    try {
+      const target = resolve(process.cwd(), reviewGraphFile);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, renderReviewGraph(report), "utf8");
+      deps.setOutput("reviewgraph-path", target);
+      deps.info?.(`Wrote ReviewGraph report to ${reviewGraphFile} (set reviewgraph-path output).`);
+    } catch (error: unknown) {
+      deps.warning?.(
+        `Could not write ReviewGraph to ${reviewGraphFile} (${error instanceof Error ? error.message : String(error)}).`
       );
     }
   }

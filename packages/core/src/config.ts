@@ -28,7 +28,13 @@ const providerSchema = z.object({
   installHint: z.string().optional(),
   baseUrl: z.string().url().optional(),
   model: z.string().min(1).optional(),
-  apiKeyEnv: z.string().min(1).optional()
+  apiKeyEnv: z.string().min(1).optional(),
+  cost: z
+    .object({
+      inputUsdPer1M: z.number().nonnegative().optional(),
+      outputUsdPer1M: z.number().nonnegative().optional()
+    })
+    .optional()
 });
 
 const configSchema = z.object({
@@ -47,6 +53,14 @@ const configSchema = z.object({
         .optional()
     })
     .default({}),
+  budget: z
+    .object({
+      maxFiles: z.number().int().positive().optional(),
+      maxChangedLines: z.number().int().positive().optional(),
+      maxCostUsd: z.number().nonnegative().optional(),
+      skipGenerated: z.boolean().optional()
+    })
+    .optional(),
   merge: z.object({ provider: z.string().min(1) }).optional(),
   roleGuidance: z.record(z.string(), z.string()).optional()
 });
@@ -63,6 +77,7 @@ export function parseConfig(source: string): QuorateConfig {
       ...defaults.github,
       ...userConfig.github
     },
+    budget: userConfig.budget,
     merge: userConfig.merge,
     roleGuidance: userConfig.roleGuidance
   };
@@ -89,7 +104,8 @@ export function loadConfig(configPath?: string, cwd = process.cwd()): QuorateCon
 }
 
 export function serializeConfig(config: QuorateConfig): string {
-  return YAML.stringify(config, {
+  const { customHeuristics: _customHeuristics, ...serializable } = config;
+  return YAML.stringify(serializable, {
     lineWidth: 100
   });
 }
