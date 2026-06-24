@@ -91,17 +91,19 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | Command | What it does | Key flags |
 | --- | --- | --- |
 | `quorate` / `quorate shell` | Open the interactive shell (default). | `--providers <ids>`, `--mode review\|plan`, `--continue`, `--resume [id]`, `--classic` |
-| `quorate review` | One-shot review of a diff. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--subject <text>`, `--providers <ids>`, `--merge <id>`, `--json`, `--write-json <path>` |
-| `quorate plan "<text>"` | Evaluate an implementation/architecture plan. | `--providers <ids>`, `--json` |
+| `quorate review` | One-shot review of a diff. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--subject <text>`, `--providers <ids>`, `--merge <id>`, `--json`, `--write-json <path>`, `--write-reviewgraph <path>`, `--reviewgraph`, `--no-pr-context` |
+| `quorate plan "<text>"` | Evaluate an implementation/architecture plan. | `--providers <ids>`, `--json`, `--gate`, `--write-json <path>`, `--write-md <path>`, `--write-reviewgraph <path>` |
 | `quorate fix` | Delegate a finding to a write-mode agent — snapshotted, watchable, revertible. | `--list`, `--finding <n>`, `--provider <id>`, `--revert [fixId]`, `--force`, `--no-review` |
 | `quorate doctor` | Council-readiness verdict: environment + provider grid + next step. | `--json`, `--bundle`, `--bundle-file <path>` |
 | `quorate providers` | List configured providers and availability. | `--json` |
 | `quorate provider add <id>` | Add a provider to `.quorate.yml` — picks the model from the live list on a TTY. | `--preset <name>`, `--type`, `--base-url`, `--model`, `--api-key-env`, `--command`, `--args`, `--roles`, `--no-pick`, `-f` |
+| `quorate provider test <id>` | Check provider readiness before a review. | `--json` |
 | `quorate provider models <id\|preset>` | List an endpoint's live models (`GET {baseUrl}/models`). | `--json` |
 | `quorate provider set-model <id> [model]` | Switch an api provider's model — interactive picker when no model given. | — |
 | `quorate provider remove <id>` / `presets` | Remove a provider; list API presets. | — |
 | `quorate solana doctor` | Offline Solana release gate over Anchor.toml, Cargo.toml, IDL, deployed-program evidence, and Quorate config. | `--json`, `--strict` |
 | `quorate solana test-plan` | Generate the next Solana release-test commands from the doctor signals. | `--json` |
+| `quorate pack scaffold <id>` | Create a custom pack template in `.quorate/packs/<id>.yml`. | `--force` |
 | `quorate init` | Write a starter `.quorate.yml` (real providers disabled). | `-f, --force` |
 
 `--diff`, `--base/--head`, and `--pr` select the diff source; `--json` streams NDJSON
@@ -142,6 +144,21 @@ Every pack ships a vulnerable/clean demo corpus proving each class is detected
 with zero false positives on clean code, a docs page (`/docs/<pack>`), and a
 ready-to-copy GitHub Action example. A pack is **data, not a code path** — adding
 an ecosystem is one registry entry, so the set grows without rewrites.
+
+### Custom packs
+
+Project-specific rules live in `.quorate/packs/*.yml`. A v1 custom pack can add
+council roles, role guidance, and simple regex heuristics that run inside the
+built-in heuristic reviewer:
+
+```bash
+quorate pack scaffold org-rules
+git add -f .quorate/packs/org-rules.yml
+quorate packs --json
+```
+
+In GitHub Actions, custom packs are loaded from the PR base ref, never from the
+PR head, so a pull request cannot weaken the gate that reviews itself.
 
 ## Fix findings — and revert them
 
@@ -285,6 +302,7 @@ quorate provider add ollama --preset ollama --model qwen2.5-coder:7b
 quorate provider add reviewer --type api \
   --base-url http://localhost:8000/v1 --model Qwen/Qwen2.5-Coder-32B-Instruct \
   --api-key-env VLLM_API_KEY --roles security,architect
+quorate provider test reviewer --json
 ```
 
 Presets cover **ollama · lmstudio · vllm · llamacpp · hf-router · openrouter ·
@@ -318,6 +336,32 @@ quorate review                             # runs the configured provider roles
 
 Swap `zai`/`glm-5.1` and the env var for your own provider, token, and model.
 GLM is this repo's selected example, not a Quorate requirement.
+
+### Budget guardrails
+
+Add a `budget:` block to stop oversized reviews before any provider call. This is
+especially useful in Actions, where a generated file or lockfile can otherwise
+spend tokens and slow the gate.
+
+```yaml
+budget:
+  maxFiles: 40
+  maxChangedLines: 1200
+  maxCostUsd: 0.50        # enforced only for providers with cost hints
+  skipGenerated: true     # strips lockfiles/generated bundles from the reviewed diff
+
+providers:
+  - id: reviewer
+    type: api
+    model: vendor/model
+    baseUrl: https://api.example.test/v1
+    apiKeyEnv: REVIEWER_KEY
+    cost:
+      inputUsdPer1M: 0.20
+```
+
+Every report includes the file/line/token budget summary. If a cap is exceeded,
+the CLI or Action exits before providers run.
 
 ## Terminal & theming
 
@@ -375,7 +419,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.9.0
+      - uses: UmutKorkmaz/quorate@v0.10.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -390,7 +434,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v0.9.0
+      - uses: UmutKorkmaz/quorate@v0.10.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -413,10 +457,15 @@ full CI provider guide.
 | `inline-comments` | `false` | Post findings as inline review comments on changed lines. |
 | `inline-comment-limit` | `10` | Max inline comments per run. |
 | `runner-mode` | `auto` | Restrict providers by type: `auto` (all), `cli` (local agents only), `api` (HTTP endpoints only). The heuristic always runs. |
+| `include-pr-context` | `false` | Include redacted PR title/body/commits as untrusted read-only prompt context. |
+| `reviewgraph` | `false` | Include ReviewGraph agreement evidence in the PR comment and job summary. |
+| `reviewgraph-file` | — | Write ReviewGraph JSON and expose `reviewgraph-path`. |
+| `sarif-file` | — | Write SARIF and expose `sarif-path` for `upload-sarif`. |
 | `mode` | `review` | Council mode — only `review` is implemented for the Action. |
 
 **Outputs:** `verdict` (the final verdict — lowercase `pass`, `warn`, or `fail`) and
-`findings` (the finding count) — use them to gate later steps.
+`findings` (the finding count), plus `sarif-path` / `reviewgraph-path` when those
+sidecar files are enabled — use them to gate later steps.
 
 **Security:** the Action loads `.quorate.yml` from the pull request's **base
 branch**, never from the PR head — a pull request cannot supply the config that

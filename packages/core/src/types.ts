@@ -32,6 +32,11 @@ export interface ProviderConfig {
   model?: string;
   /** Name of the env var holding the bearer token. Optional — local runners need none. */
   apiKeyEnv?: string;
+  /** Optional pricing hints used by review-budget estimates. Values are USD per 1M tokens. */
+  cost?: {
+    inputUsdPer1M?: number;
+    outputUsdPer1M?: number;
+  };
 }
 
 export interface GithubConfig {
@@ -60,14 +65,58 @@ export interface QuoratePolicy {
   minRealProviders: number;
 }
 
+export interface QuorateBudgetConfig {
+  /** Maximum number of changed files that may be reviewed in one run. */
+  maxFiles?: number;
+  /** Maximum number of added + removed diff lines that may be reviewed in one run. */
+  maxChangedLines?: number;
+  /** Maximum estimated input cost for priced providers. Requires provider cost hints. */
+  maxCostUsd?: number;
+  /** Drop generated/lockfile diff blocks before prompting providers. */
+  skipGenerated?: boolean;
+}
+
+export interface ReviewBudgetProviderEstimate {
+  providerId: string;
+  role: string;
+  inputTokens: number;
+  inputCostUsd?: number;
+}
+
+export interface ReviewBudgetSummary {
+  changedFiles: number;
+  changedLines: number;
+  addedLines: number;
+  removedLines: number;
+  skippedGeneratedFiles: string[];
+  promptBytes: number;
+  estimatedInputTokens: number;
+  estimatedInputCostUsd?: number;
+  providerEstimates: ReviewBudgetProviderEstimate[];
+  exceeded: string[];
+}
+
+export interface CustomHeuristicRule {
+  packId: string;
+  title: string;
+  severity: Severity;
+  body: string;
+  fileRe: RegExp | null;
+  textRe: RegExp;
+}
+
 export interface QuorateConfig {
   councils: string[];
   providers: ProviderConfig[];
   github: GithubConfig;
+  /** Optional review-budget guardrails. */
+  budget?: QuorateBudgetConfig;
   /** Optional master agent that semantically merges duplicate findings. */
   merge?: { provider: string };
   /** Per-role reviewer guidance appended to that role's prompt (packs fill this). */
   roleGuidance?: Record<string, string>;
+  /** Regex heuristics loaded from trusted custom packs. */
+  customHeuristics?: CustomHeuristicRule[];
 }
 
 export interface DetectedProvider {
@@ -91,6 +140,12 @@ export interface CouncilRequest {
   };
   /** Per-role reviewer guidance (from config/pack), injected into prompts. */
   roleGuidance?: Record<string, string>;
+  /** Read-only, untrusted pull-request context. Redacted and byte-capped before use. */
+  context?: string;
+  /** Budget summary computed before provider prompts are sent. */
+  budget?: ReviewBudgetSummary;
+  /** Regex heuristics loaded from trusted custom packs. */
+  customHeuristics?: CustomHeuristicRule[];
 }
 
 export interface Finding {
@@ -168,6 +223,8 @@ export interface CouncilReport {
      * toward the verdict or merge gate. See `applySuppressions`.
      */
     suppressedFindings?: number;
+    /** Optional review-budget summary for this run. */
+    budget?: ReviewBudgetSummary;
   };
 }
 

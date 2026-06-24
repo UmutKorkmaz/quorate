@@ -1,4 +1,5 @@
 import { githubConfigToPolicy, shouldFailForPolicy } from "./policy.js";
+import { renderReviewGraphMarkdown } from "./reviewgraph.js";
 import type { CouncilReport, Finding, GithubConfig, Severity } from "./types.js";
 
 export const reportCommentMarker = "<!-- quorate-report -->";
@@ -37,7 +38,7 @@ function findingRow(finding: Finding): string {
 
 export function renderMarkdownReport(
   report: CouncilReport,
-  options: { includeMarker?: boolean; summary?: string } = {}
+  options: { includeMarker?: boolean; summary?: string; includeReviewGraph?: boolean } = {}
 ): string {
   const hasSummary = typeof options.summary === "string" && options.summary.trim().length > 0;
   const lines = [
@@ -57,6 +58,9 @@ export function renderMarkdownReport(
     report.metadata.suppressedFindings
       ? `\n_(${report.metadata.suppressedFindings} finding${report.metadata.suppressedFindings === 1 ? "" : "s"} accepted as suppressed — visible but not gating)_`
       : undefined,
+    report.metadata.budget
+      ? `\n_Budget: ${report.metadata.budget.changedFiles} file${report.metadata.budget.changedFiles === 1 ? "" : "s"}, ${report.metadata.budget.changedLines} changed line${report.metadata.budget.changedLines === 1 ? "" : "s"}, ${report.metadata.budget.estimatedInputTokens} estimated input token${report.metadata.budget.estimatedInputTokens === 1 ? "" : "s"}${report.metadata.budget.estimatedInputCostUsd !== undefined ? `, $${report.metadata.budget.estimatedInputCostUsd.toFixed(4)} estimated priced input` : ""}._`
+      : undefined,
     hasSummary ? "" : undefined,
     hasSummary ? "## Summary" : undefined,
     hasSummary ? "" : undefined,
@@ -74,6 +78,10 @@ export function renderMarkdownReport(
       "--- | --- | --- | --- | --- | --- | ---",
       ...report.findings.map(findingRow)
     );
+  }
+
+  if (options.includeReviewGraph) {
+    lines.push("", "## ReviewGraph", "", renderReviewGraphMarkdown(report));
   }
 
   lines.push("", "## Provider Runs", "", "Provider | Role | Status | Summary", "--- | --- | --- | ---");

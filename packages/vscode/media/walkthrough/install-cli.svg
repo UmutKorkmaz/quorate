@@ -15,11 +15,11 @@
   <text x="80" y="106" font-family="monospace" font-size="14" fill="#e2e8f0">npm i -g quorate</text>
   <!-- Output lines -->
   <text x="64" y="130" font-family="monospace" font-size="12" fill="#7c8597">added 1 package in 3s</text>
-  <text x="64" y="150" font-family="monospace" font-size="12" fill="#34d399">✓ quorate@0.9.0 installed</text>
+  <text x="64" y="150" font-family="monospace" font-size="12" fill="#34d399">✓ quorate@0.10.0 installed</text>
   <!-- Second prompt -->
   <text x="64" y="180" font-family="monospace" font-size="14" fill="#6e97ff">$</text>
   <text x="80" y="180" font-family="monospace" font-size="14" fill="#e2e8f0">quorate --version</text>
-  <text x="64" y="200" font-family="monospace" font-size="12" fill="#7c8597">0.9.0</text>
+  <text x="64" y="200" font-family="monospace" font-size="12" fill="#7c8597">0.10.0</text>
   <!-- Blinking cursor -->
   <rect x="64" y="224" width="8" height="14" fill="#6e97ff" opacity="0.8"/>
 </svg>

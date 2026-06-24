@@ -1,0 +1,182 @@
+import { estimateReviewPromptBytes } from "./prompt.js";
+import type {
+  CouncilRequest,
+  ProviderConfig,
+  QuorateBudgetConfig,
+  QuorateConfig,
+  ReviewBudgetSummary
+} from "./types.js";
+
+interface DiffBlock {
+  path: string;
+  lines: string[];
+  added: number;
+  removed: number;
+}
+
+const GENERATED_PATH_RE =
+  /(^|\/)(dist|build|coverage|generated|vendor)\//i;
+const GENERATED_FILE_RE =
+  /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock|poetry\.lock)$|\.min\.(?:js|css)$|(?:^|\/).*\.generated\.[^.]+$/i;
+
+function isGeneratedPath(path: string): boolean {
+  return GENERATED_PATH_RE.test(path) || GENERATED_FILE_RE.test(path);
+}
+
+function pathFromDiffGit(line: string): string | undefined {
+  const match = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+  return match?.[2];
+}
+
+function splitDiffBlocks(diff: string): DiffBlock[] {
+  const blocks: DiffBlock[] = [];
+  let current: DiffBlock | undefined;
+  let pendingPath: string | undefined;
+
+  const open = (path: string, firstLine: string): void => {
+    current = { path, lines: [firstLine], added: 0, removed: 0 };
+    blocks.push(current);
+  };
+
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      pendingPath = pathFromDiffGit(line);
+      open(pendingPath ?? "", line);
+      continue;
+    }
+    if (line.startsWith("+++ b/")) {
+      const path = line.slice("+++ b/".length).trim();
+      if (current) current.path = path;
+      else open(path, line);
+      pendingPath = undefined;
+    } else if (!current && pendingPath) {
+      open(pendingPath, line);
+      pendingPath = undefined;
+    } else if (current) {
+      if (line.startsWith("+") && !line.startsWith("+++")) current.added += 1;
+      else if (line.startsWith("-") && !line.startsWith("---")) current.removed += 1;
+      current.lines.push(line);
+    } else {
+      open("", line);
+    }
+  }
+
+  return blocks.filter((block) => block.lines.some((line) => line.trim().length > 0));
+}
+
+function enabledProviderLanes(config: QuorateConfig): Array<{ provider: ProviderConfig; role: string }> {
+  const enabled = config.providers.filter((provider) => provider.enabled !== false);
+  const providers = enabled.length > 0 ? enabled : config.providers.filter((provider) => provider.id === "heuristic");
+  const lanes: Array<{ provider: ProviderConfig; role: string }> = [];
+  for (const provider of providers) {
+    const roles = provider.roles && provider.roles.length > 0 ? provider.roles : [config.councils[0] ?? "maintainer"];
+    for (const role of roles) lanes.push({ provider, role });
+  }
+  return lanes;
+}
+
+function estimateTokens(bytes: number): number {
+  return Math.ceil(bytes / 4);
+}
+
+export interface ReviewBudgetAnalysis {
+  diff: string;
+  summary: ReviewBudgetSummary;
+  ok: boolean;
+}
+
+export function analyzeReviewBudget(input: {
+  diff: string;
+  config: QuorateConfig;
+  request: Omit<CouncilRequest, "diff" | "budget">;
+}): ReviewBudgetAnalysis {
+  const budget: QuorateBudgetConfig = input.config.budget ?? {};
+  const blocks = splitDiffBlocks(input.diff);
+  const skippedGeneratedFiles = budget.skipGenerated
+    ? Array.from(new Set(blocks.filter((block) => block.path && isGeneratedPath(block.path)).map((block) => block.path)))
+    : [];
+  const skipped = new Set(skippedGeneratedFiles);
+  const reviewedBlocks =
+    budget.skipGenerated && skipped.size > 0
+      ? blocks.filter((block) => !skipped.has(block.path))
+      : blocks;
+  const reviewedDiff =
+    budget.skipGenerated && skipped.size > 0
+      ? reviewedBlocks.map((block) => block.lines.join("\n")).join("\n")
+      : input.diff;
+
+  const files = new Set(reviewedBlocks.map((block) => block.path).filter((path) => path && path !== "/dev/null"));
+  const added = reviewedBlocks.reduce((sum, block) => sum + block.added, 0);
+  const removed = reviewedBlocks.reduce((sum, block) => sum + block.removed, 0);
+  const diffBytes = Buffer.byteLength(reviewedDiff, "utf8");
+  const providerEstimates = enabledProviderLanes(input.config).map(({ provider, role }) => {
+    const promptBytes = estimateReviewPromptBytes({ provider, role, request: input.request, diffBytes });
+    const inputTokens = estimateTokens(promptBytes);
+    const price = provider.cost?.inputUsdPer1M;
+    return {
+      providerId: provider.id,
+      role,
+      inputTokens,
+      ...(price !== undefined ? { inputCostUsd: (inputTokens / 1_000_000) * price } : {})
+    };
+  });
+
+  const promptBytes = providerEstimates.reduce((sum, row) => sum + row.inputTokens * 4, 0);
+  const estimatedInputTokens = providerEstimates.reduce((sum, row) => sum + row.inputTokens, 0);
+  const priced = providerEstimates.filter((row) => row.inputCostUsd !== undefined);
+  const estimatedInputCostUsd =
+    priced.length > 0
+      ? priced.reduce((sum, row) => sum + (row.inputCostUsd ?? 0), 0)
+      : undefined;
+
+  const changedFiles = files.size;
+  const changedLines = added + removed;
+  const exceeded: string[] = [];
+  if (budget.maxFiles !== undefined && changedFiles > budget.maxFiles) {
+    exceeded.push(`changed files ${changedFiles} > budget.maxFiles ${budget.maxFiles}`);
+  }
+  if (budget.maxChangedLines !== undefined && changedLines > budget.maxChangedLines) {
+    exceeded.push(`changed lines ${changedLines} > budget.maxChangedLines ${budget.maxChangedLines}`);
+  }
+  if (
+    budget.maxCostUsd !== undefined &&
+    estimatedInputCostUsd !== undefined &&
+    estimatedInputCostUsd > budget.maxCostUsd
+  ) {
+    exceeded.push(
+      `estimated input cost $${estimatedInputCostUsd.toFixed(4)} > budget.maxCostUsd $${budget.maxCostUsd.toFixed(4)}`
+    );
+  }
+
+  const summary: ReviewBudgetSummary = {
+    changedFiles,
+    changedLines,
+    addedLines: added,
+    removedLines: removed,
+    skippedGeneratedFiles,
+    promptBytes,
+    estimatedInputTokens,
+    ...(estimatedInputCostUsd !== undefined ? { estimatedInputCostUsd } : {}),
+    providerEstimates,
+    exceeded
+  };
+
+  return { diff: reviewedDiff, summary, ok: exceeded.length === 0 };
+}
+
+export function formatBudgetSummary(summary: ReviewBudgetSummary): string {
+  const lines = [
+    `Budget: ${summary.changedFiles} file(s), ${summary.changedLines} changed line(s), ${summary.estimatedInputTokens} estimated input token(s).`
+  ];
+  if (summary.estimatedInputCostUsd !== undefined) {
+    lines.push(`Estimated priced input cost: $${summary.estimatedInputCostUsd.toFixed(4)}.`);
+  }
+  if (summary.skippedGeneratedFiles.length > 0) {
+    lines.push(`Skipped generated files: ${summary.skippedGeneratedFiles.join(", ")}.`);
+  }
+  if (summary.exceeded.length > 0) {
+    lines.push("Budget exceeded:");
+    for (const item of summary.exceeded) lines.push(`  - ${item}`);
+  }
+  return lines.join("\n");
+}

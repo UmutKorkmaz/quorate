@@ -1,4 +1,4 @@
-import type { CouncilRequest, Finding, ProviderResult } from "./types.js";
+import type { CouncilRequest, CustomHeuristicRule, Finding, ProviderResult } from "./types.js";
 import { PACK_HEURISTIC_RULES } from "./pack-heuristics.js";
 
 export interface DiffLine {
@@ -199,6 +199,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
   const addedLinesByFile = linesByFile(lines);
   const addedTextByFile = textByFile(addedLinesByFile);
   const testLikeByFile = new Map<string, boolean>();
+  const heuristicRules: CustomHeuristicRule[] = [...PACK_HEURISTIC_RULES, ...(request.customHeuristics ?? [])];
 
   for (const line of lines) {
     const text = line.text;
@@ -210,7 +211,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       testLike = isTestLikePath(line.file);
       testLikeByFile.set(fileKey, testLike);
     }
-    for (const rule of PACK_HEURISTIC_RULES) {
+    for (const rule of heuristicRules) {
       // The "Synchronous fs call in a request path" rule only applies to
       // long-lived server code; in test helpers and short-lived processes
       // (CLI/scripts/config) sync fs is the correct idiom, so skip it there.
