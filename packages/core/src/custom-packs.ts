@@ -136,10 +136,10 @@ export function customPackScaffold(id: string): string {
       },
       heuristics: [
         {
-          title: "Example risky pattern",
+          title: "Example unsafe helper",
           severity: "medium",
           file_pattern: "\\.(ts|js)$",
-          pattern: "TODO\\(",
+          pattern: "unsafeHelper\\(",
           body: "Replace this example rule with a concrete project-specific risk pattern."
         }
       ]

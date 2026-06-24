@@ -5,8 +5,8 @@ export type CheckRunConclusion = "success" | "failure" | "neutral";
 
 /** Map Quorate verdicts to GitHub Check Run conclusions. */
 export function verdictToConclusion(verdict: CouncilReport["verdict"]): CheckRunConclusion {
-  if (verdict === "PASS") return "success";
-  if (verdict === "FAIL") return "failure";
+  if (verdict === "pass") return "success";
+  if (verdict === "fail") return "failure";
   return "neutral"; // WARN
 }
 
@@ -28,8 +28,8 @@ const annotationLevels: AnnotationLevel = {
 type GitHubAnnotationLevel = "warning" | "failure" | "notice";
 
 function severityToAnnotationLevel(severity: Finding["severity"]): GitHubAnnotationLevel {
-  if (severity === "error") return annotationLevels.failure;
-  if (severity === "warning") return annotationLevels.warning;
+  if (severity === "critical" || severity === "high") return annotationLevels.failure;
+  if (severity === "medium") return annotationLevels.warning;
   return annotationLevels.notice;
 }
 

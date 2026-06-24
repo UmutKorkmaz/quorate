@@ -92,17 +92,19 @@ async function readTailLines(path: string, limit: number): Promise<string[]> {
   const info = await stat(path);
   let position = info.size;
   let buffer = "";
+  let lineBreaks = 0;
   const targetLines = Math.max(limit * MAX_TAIL_LINES_MULTIPLIER, limit);
   const handle = await open(path, "r");
   try {
     while (position > 0) {
       const size = Math.min(READ_CHUNK_BYTES, position);
       position -= size;
-      const chunk = Buffer.alloc(size);
-      await handle.read(chunk, 0, size, position);
-      buffer = `${chunk.toString("utf8")}${buffer}`;
-      const lineCount = buffer.split(/\r?\n/).filter(Boolean).length;
-      if (lineCount >= targetLines) break;
+      const chunk = Buffer.allocUnsafe(size);
+      const { bytesRead } = await handle.read(chunk, 0, size, position);
+      const text = chunk.toString("utf8", 0, bytesRead);
+      lineBreaks += (text.match(/\n/g) ?? []).length;
+      buffer = `${text}${buffer}`;
+      if (lineBreaks >= targetLines) break;
     }
   } finally {
     await handle.close();

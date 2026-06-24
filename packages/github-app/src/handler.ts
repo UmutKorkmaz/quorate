@@ -76,13 +76,16 @@ export async function handlePullRequest(deps: HandlerDeps): Promise<HandlePullRe
 
     // Post or update the PR comment (best-effort; a failure must not break the Check Run).
     try {
-      await upsertReportComment(octokit as never, {
-        owner,
-        repo,
-        issueNumber: pullNumber,
-        body,
-        mode: config.github?.commentMode ?? "update"
-      });
+      const commentMode = config.github?.commentMode ?? "update";
+      if (commentMode !== "off") {
+        await upsertReportComment(octokit as never, {
+          owner,
+          repo,
+          issueNumber: pullNumber,
+          body,
+          mode: commentMode
+        });
+      }
     } catch (commentErr: unknown) {
       logger.warn("Failed to post PR comment (non-fatal)", {
         error: commentErr instanceof Error ? commentErr.message : String(commentErr)

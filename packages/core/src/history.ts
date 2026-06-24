@@ -159,9 +159,10 @@ export interface ComputeStatsOptions {
 /** Aggregate history entries into trend stats. */
 export function computeStats(entries: HistoryEntry[], options: ComputeStatsOptions = {}): HistoryStats {
   const sinceMs = options.since !== undefined ? Date.parse(options.since) : Number.NaN;
-  const windowed = dedupeHistoryEntries(entries).filter(
-    (entry) => !Number.isNaN(sinceMs) ? Date.parse(entry.generatedAt) >= sinceMs : true
-  );
+  const candidates = Number.isNaN(sinceMs)
+    ? entries
+    : entries.filter((entry) => Date.parse(entry.generatedAt) >= sinceMs);
+  const windowed = dedupeHistoryEntries(candidates);
 
   const verdictCounts: Record<Verdict, number> = { pass: 0, warn: 0, fail: 0 };
   const severityCounts: Partial<Record<Severity, number>> = {};

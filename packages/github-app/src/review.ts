@@ -293,13 +293,16 @@ export async function reviewPullRequest(deps: AppDeps): Promise<CheckRunResult> 
 
     // 6. Upsert PR summary comment (best-effort).
     try {
-      await upsertReportComment(octokit as never, {
-        owner,
-        repo,
-        issueNumber: pullNumber,
-        body: prCommentBody,
-        mode: config.github?.commentMode ?? "update"
-      });
+      const commentMode = config.github?.commentMode ?? "update";
+      if (commentMode !== "off") {
+        await upsertReportComment(octokit as never, {
+          owner,
+          repo,
+          issueNumber: pullNumber,
+          body: prCommentBody,
+          mode: commentMode
+        });
+      }
     } catch (commentErr: unknown) {
       logger.warn("Failed to post PR comment (non-fatal)", {
         error: commentErr instanceof Error ? commentErr.message : String(commentErr)

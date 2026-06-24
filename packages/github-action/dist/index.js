@@ -31563,7 +31563,8 @@ function createDefaultConfig(detected = detectAvailableProviders()) {
 }
 
 // ../core/src/prompt.ts
-function buildReviewPrompt(provider, role, request2) {
+var DIFF_SECTION_PREFIX = "\n\nDiff:\n";
+function buildReviewPromptBase(provider, role, request2) {
   const header = [
     `You are the ${role} member of Quorate.`,
     `Mode: ${request2.mode}`,
@@ -31587,13 +31588,17 @@ ${guidance}` : "";
     request2.context,
     "</pr_context>"
   ].join("\n") : "";
-  const diffSection = request2.diff ? `
-
-Diff:
-${request2.diff}` : "";
   return `${header}${guidanceBlock}${contextSection}
 
-Provider: ${provider.id}${diffSection}`;
+Provider: ${provider.id}`;
+}
+function buildReviewPrompt(provider, role, request2) {
+  const base = buildReviewPromptBase(provider, role, request2);
+  return request2.diff ? `${base}${DIFF_SECTION_PREFIX}${request2.diff}` : base;
+}
+function estimateReviewPromptBytes(input) {
+  const base = buildReviewPromptBase(input.provider, input.role, input.request);
+  return Buffer.byteLength(base, "utf8") + (input.diffBytes > 0 ? Buffer.byteLength(DIFF_SECTION_PREFIX, "utf8") + input.diffBytes : 0);
 }
 
 // ../core/src/types.ts
@@ -49396,7 +49401,7 @@ function splitDiffBlocks(diff) {
   let current;
   let pendingPath;
   const open2 = (path, firstLine) => {
-    current = { path, lines: [firstLine] };
+    current = { path, lines: [firstLine], added: 0, removed: 0 };
     blocks.push(current);
   };
   for (const line of diff.split(/\r?\n/)) {
@@ -49414,34 +49419,14 @@ function splitDiffBlocks(diff) {
       open2(pendingPath, line);
       pendingPath = void 0;
     } else if (current) {
+      if (line.startsWith("+") && !line.startsWith("+++")) current.added += 1;
+      else if (line.startsWith("-") && !line.startsWith("---")) current.removed += 1;
       current.lines.push(line);
     } else {
       open2("", line);
     }
   }
   return blocks.filter((block) => block.lines.some((line) => line.trim().length > 0));
-}
-function diffLineCounts(diff) {
-  const files = /* @__PURE__ */ new Set();
-  let pendingPath;
-  let added = 0;
-  let removed = 0;
-  for (const line of diff.split(/\r?\n/)) {
-    if (line.startsWith("diff --git ")) {
-      pendingPath = pathFromDiffGit(line);
-    } else if (line.startsWith("+++ b/")) {
-      const path = line.slice("+++ b/".length).trim();
-      if (path && path !== "/dev/null") files.add(path);
-      pendingPath = void 0;
-    } else if (line.startsWith("+") && !line.startsWith("+++")) {
-      added += 1;
-      if (pendingPath) files.add(pendingPath);
-    } else if (line.startsWith("-") && !line.startsWith("---")) {
-      removed += 1;
-      if (pendingPath) files.add(pendingPath);
-    }
-  }
-  return { files, added, removed };
 }
 function enabledProviderLanes(config2) {
   const enabled = config2.providers.filter((provider) => provider.enabled !== false);
@@ -49459,13 +49444,16 @@ function estimateTokens(bytes) {
 function analyzeReviewBudget(input) {
   const budget = input.config.budget ?? {};
   const blocks = splitDiffBlocks(input.diff);
-  const skippedGeneratedFiles = budget.skipGenerated ? blocks.filter((block) => block.path && isGeneratedPath(block.path)).map((block) => block.path) : [];
+  const skippedGeneratedFiles = budget.skipGenerated ? Array.from(new Set(blocks.filter((block) => block.path && isGeneratedPath(block.path)).map((block) => block.path))) : [];
   const skipped = new Set(skippedGeneratedFiles);
-  const reviewedDiff = budget.skipGenerated && skipped.size > 0 ? blocks.filter((block) => !skipped.has(block.path)).map((block) => block.lines.join("\n")).join("\n") : input.diff;
-  const counts = diffLineCounts(reviewedDiff);
+  const reviewedBlocks = budget.skipGenerated && skipped.size > 0 ? blocks.filter((block) => !skipped.has(block.path)) : blocks;
+  const reviewedDiff = budget.skipGenerated && skipped.size > 0 ? reviewedBlocks.map((block) => block.lines.join("\n")).join("\n") : input.diff;
+  const files = new Set(reviewedBlocks.map((block) => block.path).filter((path) => path && path !== "/dev/null"));
+  const added = reviewedBlocks.reduce((sum, block) => sum + block.added, 0);
+  const removed = reviewedBlocks.reduce((sum, block) => sum + block.removed, 0);
+  const diffBytes = Buffer.byteLength(reviewedDiff, "utf8");
   const providerEstimates = enabledProviderLanes(input.config).map(({ provider, role }) => {
-    const prompt = buildReviewPrompt(provider, role, { ...input.request, diff: reviewedDiff });
-    const promptBytes2 = Buffer.byteLength(prompt, "utf8");
+    const promptBytes2 = estimateReviewPromptBytes({ provider, role, request: input.request, diffBytes });
     const inputTokens = estimateTokens(promptBytes2);
     const price = provider.cost?.inputUsdPer1M;
     return {
@@ -49479,8 +49467,8 @@ function analyzeReviewBudget(input) {
   const estimatedInputTokens = providerEstimates.reduce((sum, row) => sum + row.inputTokens, 0);
   const priced = providerEstimates.filter((row) => row.inputCostUsd !== void 0);
   const estimatedInputCostUsd = priced.length > 0 ? priced.reduce((sum, row) => sum + (row.inputCostUsd ?? 0), 0) : void 0;
-  const changedFiles = counts.files.size;
-  const changedLines = counts.added + counts.removed;
+  const changedFiles = files.size;
+  const changedLines = added + removed;
   const exceeded = [];
   if (budget.maxFiles !== void 0 && changedFiles > budget.maxFiles) {
     exceeded.push(`changed files ${changedFiles} > budget.maxFiles ${budget.maxFiles}`);
@@ -49496,8 +49484,8 @@ function analyzeReviewBudget(input) {
   const summary2 = {
     changedFiles,
     changedLines,
-    addedLines: counts.added,
-    removedLines: counts.removed,
+    addedLines: added,
+    removedLines: removed,
     skippedGeneratedFiles,
     promptBytes,
     estimatedInputTokens,
@@ -50610,7 +50598,7 @@ var VERDICT_COLOR = {
 var SEVERITY_COLOR = PALETTE.severity;
 
 // src/index.ts
-var import_node_fs2 = require("node:fs");
+var import_promises2 = require("node:fs/promises");
 var import_node_path3 = require("node:path");
 
 // package.json
@@ -50952,10 +50940,11 @@ async function loadBaseCustomPacks(client, params) {
     if (status === 404) return [];
     throw error52;
   }
-  const definitions = [];
-  for (const entry of entries) {
+  const packPaths = entries.flatMap((entry) => {
     const path = entry.path ?? `${root}/${entry.name ?? ""}`;
-    if (entry.type !== "file" || !/\.ya?ml$/i.test(path)) continue;
+    return entry.type === "file" && /\.ya?ml$/i.test(path) ? [path] : [];
+  });
+  const definitions = await Promise.all(packPaths.map(async (path) => {
     const res = await client.rest.repos.getContent({
       owner: params.owner,
       repo: params.repo,
@@ -50966,10 +50955,11 @@ async function loadBaseCustomPacks(client, params) {
     if (!Array.isArray(data) && data.type === "file" && typeof data.content === "string") {
       const file2 = data;
       const decoded = Buffer.from(file2.content, file2.encoding === "base64" ? "base64" : "utf8").toString("utf8");
-      definitions.push(parseCustomPackYaml(decoded, path));
+      return parseCustomPackYaml(decoded, path);
     }
-  }
-  return definitions;
+    return void 0;
+  }));
+  return definitions.filter((definition) => definition !== void 0);
 }
 async function runAction(deps) {
   const input = (name) => normalizeInput(deps.getInput(name));
@@ -51115,8 +51105,8 @@ async function runAction(deps) {
   if (sarifFile) {
     try {
       const target = (0, import_node_path3.resolve)(process.cwd(), sarifFile);
-      (0, import_node_fs2.mkdirSync)((0, import_node_path3.dirname)(target), { recursive: true });
-      (0, import_node_fs2.writeFileSync)(target, renderSarif(report, { toolVersion: package_default.version }), "utf8");
+      await (0, import_promises2.mkdir)((0, import_node_path3.dirname)(target), { recursive: true });
+      await (0, import_promises2.writeFile)(target, renderSarif(report, { toolVersion: package_default.version }), "utf8");
       deps.setOutput("sarif-path", target);
       deps.info?.(`Wrote SARIF report to ${sarifFile} (set sarif-path output).`);
     } catch (error52) {
@@ -51129,8 +51119,8 @@ async function runAction(deps) {
   if (reviewGraphFile) {
     try {
       const target = (0, import_node_path3.resolve)(process.cwd(), reviewGraphFile);
-      (0, import_node_fs2.mkdirSync)((0, import_node_path3.dirname)(target), { recursive: true });
-      (0, import_node_fs2.writeFileSync)(target, renderReviewGraph(report), "utf8");
+      await (0, import_promises2.mkdir)((0, import_node_path3.dirname)(target), { recursive: true });
+      await (0, import_promises2.writeFile)(target, renderReviewGraph(report), "utf8");
       deps.setOutput("reviewgraph-path", target);
       deps.info?.(`Wrote ReviewGraph report to ${reviewGraphFile} (set reviewgraph-path output).`);
     } catch (error52) {

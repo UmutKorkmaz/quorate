@@ -37,7 +37,7 @@ import {
   type SuppressionStore
 } from "@quorate/core";
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 // esbuild inlines this JSON at build time, so the Action's SARIF carries the
 // same tool version the CLI records.
@@ -391,10 +391,12 @@ export async function loadBaseCustomPacks(
     throw error;
   }
 
-  const definitions: CustomPackDefinition[] = [];
-  for (const entry of entries) {
+  const packPaths = entries.flatMap((entry) => {
     const path = entry.path ?? `${root}/${entry.name ?? ""}`;
-    if (entry.type !== "file" || !/\.ya?ml$/i.test(path)) continue;
+    return entry.type === "file" && /\.ya?ml$/i.test(path) ? [path] : [];
+  });
+
+  const definitions = await Promise.all(packPaths.map(async (path) => {
     const res = await client.rest.repos.getContent({
       owner: params.owner,
       repo: params.repo,
@@ -405,10 +407,11 @@ export async function loadBaseCustomPacks(
     if (!Array.isArray(data) && data.type === "file" && typeof (data as { content?: string }).content === "string") {
       const file = data as { content: string; encoding?: string };
       const decoded = Buffer.from(file.content, file.encoding === "base64" ? "base64" : "utf8").toString("utf8");
-      definitions.push(parseCustomPackYaml(decoded, path));
+      return parseCustomPackYaml(decoded, path);
     }
-  }
-  return definitions;
+    return undefined;
+  }));
+  return definitions.filter((definition): definition is CustomPackDefinition => definition !== undefined);
 }
 
 /**
@@ -585,8 +588,8 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   if (sarifFile) {
     try {
       const target = resolve(process.cwd(), sarifFile);
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, renderSarif(report, { toolVersion: pkg.version }), "utf8");
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, renderSarif(report, { toolVersion: pkg.version }), "utf8");
       deps.setOutput("sarif-path", target);
       deps.info?.(`Wrote SARIF report to ${sarifFile} (set sarif-path output).`);
     } catch (error: unknown) {
@@ -600,8 +603,8 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   if (reviewGraphFile) {
     try {
       const target = resolve(process.cwd(), reviewGraphFile);
-      mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(target, renderReviewGraph(report), "utf8");
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, renderReviewGraph(report), "utf8");
       deps.setOutput("reviewgraph-path", target);
       deps.info?.(`Wrote ReviewGraph report to ${reviewGraphFile} (set reviewgraph-path output).`);
     } catch (error: unknown) {

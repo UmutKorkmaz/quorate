@@ -1,5 +1,5 @@
 import { appendFileSync, mkdtempSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -71,10 +71,10 @@ describe("appendHistory / readHistory", () => {
     expect(entries[1].verdict).toBe("fail");
   });
 
-  it("writes the history file with user-only permissions", async () => {
+  it("writes the history file with user-only permissions where the platform supports POSIX modes", async () => {
     await appendHistoryNow(dir, report([]));
     const mode = statSync(historyPath(dir)).mode & 0o777;
-    expect(mode).toBe(0o600);
+    expect(mode).toBe(platform() === "win32" ? 0o666 : 0o600);
   });
 
   it("is a no-op when fire-and-forget append fails", () => {

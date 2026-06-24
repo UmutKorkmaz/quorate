@@ -10,7 +10,7 @@ const diff = [
   "@@ -1 +1,2 @@",
   "-old",
   "+new",
-  "+console.log('x')",
+  "+const value = 1",
   "diff --git a/package-lock.json b/package-lock.json",
   "--- a/package-lock.json",
   "+++ b/package-lock.json",

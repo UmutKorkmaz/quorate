@@ -1,4 +1,4 @@
-import { buildReviewPrompt } from "./prompt.js";
+import { estimateReviewPromptBytes } from "./prompt.js";
 import type {
   CouncilRequest,
   ProviderConfig,
@@ -10,6 +10,8 @@ import type {
 interface DiffBlock {
   path: string;
   lines: string[];
+  added: number;
+  removed: number;
 }
 
 const GENERATED_PATH_RE =
@@ -32,7 +34,7 @@ function splitDiffBlocks(diff: string): DiffBlock[] {
   let pendingPath: string | undefined;
 
   const open = (path: string, firstLine: string): void => {
-    current = { path, lines: [firstLine] };
+    current = { path, lines: [firstLine], added: 0, removed: 0 };
     blocks.push(current);
   };
 
@@ -51,6 +53,8 @@ function splitDiffBlocks(diff: string): DiffBlock[] {
       open(pendingPath, line);
       pendingPath = undefined;
     } else if (current) {
+      if (line.startsWith("+") && !line.startsWith("+++")) current.added += 1;
+      else if (line.startsWith("-") && !line.startsWith("---")) current.removed += 1;
       current.lines.push(line);
     } else {
       open("", line);
@@ -58,31 +62,6 @@ function splitDiffBlocks(diff: string): DiffBlock[] {
   }
 
   return blocks.filter((block) => block.lines.some((line) => line.trim().length > 0));
-}
-
-function diffLineCounts(diff: string): { files: Set<string>; added: number; removed: number } {
-  const files = new Set<string>();
-  let pendingPath: string | undefined;
-
-  let added = 0;
-  let removed = 0;
-  for (const line of diff.split(/\r?\n/)) {
-    if (line.startsWith("diff --git ")) {
-      pendingPath = pathFromDiffGit(line);
-    } else if (line.startsWith("+++ b/")) {
-      const path = line.slice("+++ b/".length).trim();
-      if (path && path !== "/dev/null") files.add(path);
-      pendingPath = undefined;
-    } else if (line.startsWith("+") && !line.startsWith("+++")) {
-      added += 1;
-      if (pendingPath) files.add(pendingPath);
-    } else if (line.startsWith("-") && !line.startsWith("---")) {
-      removed += 1;
-      if (pendingPath) files.add(pendingPath);
-    }
-  }
-
-  return { files, added, removed };
 }
 
 function enabledProviderLanes(config: QuorateConfig): Array<{ provider: ProviderConfig; role: string }> {
@@ -114,18 +93,24 @@ export function analyzeReviewBudget(input: {
   const budget: QuorateBudgetConfig = input.config.budget ?? {};
   const blocks = splitDiffBlocks(input.diff);
   const skippedGeneratedFiles = budget.skipGenerated
-    ? blocks.filter((block) => block.path && isGeneratedPath(block.path)).map((block) => block.path)
+    ? Array.from(new Set(blocks.filter((block) => block.path && isGeneratedPath(block.path)).map((block) => block.path)))
     : [];
   const skipped = new Set(skippedGeneratedFiles);
+  const reviewedBlocks =
+    budget.skipGenerated && skipped.size > 0
+      ? blocks.filter((block) => !skipped.has(block.path))
+      : blocks;
   const reviewedDiff =
     budget.skipGenerated && skipped.size > 0
-      ? blocks.filter((block) => !skipped.has(block.path)).map((block) => block.lines.join("\n")).join("\n")
+      ? reviewedBlocks.map((block) => block.lines.join("\n")).join("\n")
       : input.diff;
 
-  const counts = diffLineCounts(reviewedDiff);
+  const files = new Set(reviewedBlocks.map((block) => block.path).filter((path) => path && path !== "/dev/null"));
+  const added = reviewedBlocks.reduce((sum, block) => sum + block.added, 0);
+  const removed = reviewedBlocks.reduce((sum, block) => sum + block.removed, 0);
+  const diffBytes = Buffer.byteLength(reviewedDiff, "utf8");
   const providerEstimates = enabledProviderLanes(input.config).map(({ provider, role }) => {
-    const prompt = buildReviewPrompt(provider, role, { ...input.request, diff: reviewedDiff });
-    const promptBytes = Buffer.byteLength(prompt, "utf8");
+    const promptBytes = estimateReviewPromptBytes({ provider, role, request: input.request, diffBytes });
     const inputTokens = estimateTokens(promptBytes);
     const price = provider.cost?.inputUsdPer1M;
     return {
@@ -144,8 +129,8 @@ export function analyzeReviewBudget(input: {
       ? priced.reduce((sum, row) => sum + (row.inputCostUsd ?? 0), 0)
       : undefined;
 
-  const changedFiles = counts.files.size;
-  const changedLines = counts.added + counts.removed;
+  const changedFiles = files.size;
+  const changedLines = added + removed;
   const exceeded: string[] = [];
   if (budget.maxFiles !== undefined && changedFiles > budget.maxFiles) {
     exceeded.push(`changed files ${changedFiles} > budget.maxFiles ${budget.maxFiles}`);
@@ -166,8 +151,8 @@ export function analyzeReviewBudget(input: {
   const summary: ReviewBudgetSummary = {
     changedFiles,
     changedLines,
-    addedLines: counts.added,
-    removedLines: counts.removed,
+    addedLines: added,
+    removedLines: removed,
     skippedGeneratedFiles,
     promptBytes,
     estimatedInputTokens,
