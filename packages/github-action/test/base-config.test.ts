@@ -43,6 +43,25 @@ describe("loadBaseConfig", () => {
     expect(codex?.enabled).toBe(true);
   });
 
+  it("loads Webacy integration settings from the base branch config", async () => {
+    const yaml = [
+      "councils:",
+      "  - web3-due-diligence",
+      "  - maintainer",
+      "integrations:",
+      "  webacy:",
+      "    enabled: true",
+      "    chains: [eth, base, sol]",
+      "    allowlist:",
+      "      domains: [trusted.example]"
+    ].join("\n");
+
+    const config = await loadBaseConfig(fakeClient({ ".quorate.yml": yaml }), params);
+    expect(config.integrations?.webacy?.enabled).toBe(true);
+    expect(config.integrations?.webacy?.chains).toEqual(["eth", "base", "sol"]);
+    expect(config.integrations?.webacy?.allowlist.domains).toEqual(["trusted.example"]);
+  });
+
   it("falls back to the safe default when the base has no config", async () => {
     const config = await loadBaseConfig(fakeClient({}), params);
     // Default config keeps real providers disabled and only the heuristic enabled.

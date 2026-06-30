@@ -2,8 +2,8 @@ import { CopyButton } from "./CopyButton";
 
 const REVIEWERS = [
   { id: "heuristic", role: "solana-security", state: "2 findings", tone: "pass" },
-  { id: "claude", role: "anchor-accounts", state: "1 finding", tone: "pass" },
-  { id: "codex", role: "transaction-safety", state: "merged", tone: "dim" }
+  { id: "reviewer-a", role: "anchor-accounts", state: "1 finding", tone: "pass" },
+  { id: "reviewer-b", role: "transaction-safety", state: "merged", tone: "dim" }
 ] as const;
 
 const TONE: Record<string, string> = {
@@ -69,7 +69,7 @@ export function Hero() {
           <p className="mt-5 text-sm leading-relaxed text-quorate-dim">
             Interactive shell · headless{" "}
             <code className="rounded bg-quorate-elevated px-1.5 py-0.5 text-quorate-accent">review</code>{" "}
-            for CI · 18 domain packs · a GitHub Action for PRs · honest{" "}
+            for CI · 19 domain packs · a GitHub Action for PRs · honest{" "}
             <span className="text-quorate-degraded">degraded</span> mode when only heuristics run
           </p>
         </div>
@@ -125,7 +125,7 @@ export function Hero() {
                     the vault belongs to the escrow authority.
                   </p>
                   <p className="mt-1.5 text-xs text-quorate-dim">
-                    agreed by claude, codex, heuristic · confidence 0.86
+                    agreed by 3 reviewers · confidence 0.86
                   </p>
                 </div>
               </div>

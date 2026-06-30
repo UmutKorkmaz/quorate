@@ -178,6 +178,19 @@ describe("detectPacks", () => {
     expect(result).toContain("move");
   });
 
+  it("detects web3-dd from Web3 client dependencies", () => {
+    const result = detectPacks({
+      files: ["src/app.ts"],
+      dependencies: ["@solana/web3.js", "viem"]
+    });
+    expect(result).toContain("web3-dd");
+  });
+
+  it("detects web3-dd from Solidity and Move sources", () => {
+    expect(detectPacks({ files: ["contracts/Vault.sol"] })).toContain("web3-dd");
+    expect(detectPacks({ files: ["sources/coin.move"] })).toContain("web3-dd");
+  });
+
   it("detects move from Move.toml", () => {
     const result = detectPacks({ files: ["Move.toml"] });
     expect(result).toContain("move");

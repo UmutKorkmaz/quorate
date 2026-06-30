@@ -13,8 +13,9 @@ we investigate and prepare a fix.
 
 | Version | Supported |
 | --- | --- |
-| 0.3.x | Yes |
-| < 0.3 | No |
+| 1.x | Yes |
+| 0.10.x | Yes |
+| < 0.10 | No |
 
 ## Provider safety model
 

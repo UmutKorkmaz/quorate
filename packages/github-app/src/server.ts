@@ -226,7 +226,7 @@ export function startServer(): void {
       }
       return;
     }
-    if (req.method === "GET" && req.url === "/health") {
+    if (req.method === "GET" && (req.url === "/health" || req.url === "/healthz")) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ status: "ok", version: "0.1.0" }));
       return;

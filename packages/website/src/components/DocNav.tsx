@@ -13,6 +13,7 @@ export const DOC_PATHS = [
   "/docs/solana",
   "/docs/evm",
   "/docs/move",
+  "/docs/web3-dd",
   // Apps & APIs
   "/docs/web",
   "/docs/graphql",
@@ -51,6 +52,7 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/solana": "Solana / Anchor",
   "/docs/evm": "EVM / Solidity",
   "/docs/move": "Move (Sui / Aptos)",
+  "/docs/web3-dd": "Web3 DD / Webacy",
   "/docs/web": "Web & API (OWASP)",
   "/docs/graphql": "GraphQL API",
   "/docs/accessibility": "Accessibility (WCAG)",
@@ -96,7 +98,8 @@ const SECTIONS = [
     links: [
       { to: "/docs/solana", label: "Solana / Anchor" },
       { to: "/docs/evm", label: "EVM / Solidity" },
-      { to: "/docs/move", label: "Move (Sui / Aptos)" }
+      { to: "/docs/move", label: "Move (Sui / Aptos)" },
+      { to: "/docs/web3-dd", label: "Web3 DD / Webacy" }
     ]
   },
   {
