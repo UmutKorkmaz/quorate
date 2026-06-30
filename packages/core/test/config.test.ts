@@ -71,4 +71,38 @@ github:
     expect(config.github.inlineCommentLimit).toBeUndefined();
     expect(config.github.gate).toBeUndefined();
   });
+
+  it("parses Webacy integration settings with safe defaults", () => {
+    const config = parseConfig(`
+integrations:
+  webacy:
+    enabled: true
+    chains: [eth, base, sol]
+    failOn:
+      riskLevel: high
+      sanctioned: true
+      maliciousUrl: true
+    warnOn:
+      riskLevel: medium
+    allowlist:
+      addresses:
+        - "0x0000000000000000000000000000000000000000"
+      domains:
+        - docs.example.com
+`);
+
+    expect(config.integrations?.webacy).toMatchObject({
+      enabled: true,
+      apiKeyEnv: "WEBACY_API_KEY",
+      chains: ["eth", "base", "sol"],
+      failOn: { riskLevel: "high", sanctioned: true, maliciousUrl: true },
+      warnOn: { riskLevel: "medium" },
+      allowlist: {
+        addresses: ["0x0000000000000000000000000000000000000000"],
+        domains: ["docs.example.com"],
+        urls: []
+      },
+      cache: { ttlHours: 24 }
+    });
+  });
 });

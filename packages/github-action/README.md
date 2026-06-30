@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.10.0
+      - uses: UmutKorkmaz/quorate@v1.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -62,7 +62,7 @@ providers:
 Then pass the key through as an environment variable:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v0.10.0
+      - uses: UmutKorkmaz/quorate@v1.0.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -82,7 +82,7 @@ committing.
 | `github-token` | — | Token to read PR files and write comments. |
 | `config-path` | `.quorate.yml` | Config file, read from the **base** branch. |
 | `providers` | — | Comma-separated provider ids to enable for this run. |
-| `pack` | — | Domain pack(s) to layer on: a list (e.g. `solana,web`) or `auto` to detect from the PR's changed files. |
+| `pack` | — | Domain pack(s) to layer on: a list (e.g. `solana,web3-dd`) or `auto` to detect from the PR's changed files. |
 | `fail-on` | `high` | Minimum severity that fails the check (`critical`…`info`, or `never`). |
 | `post-comment` | `true` | Post/update the Quorate summary comment. |
 | `inline-comments` | `false` | Post findings as inline review comments on changed lines. |
@@ -103,7 +103,7 @@ committing.
 
 ```yaml
       - id: quorate
-        uses: UmutKorkmaz/quorate@v0.10.0
+        uses: UmutKorkmaz/quorate@v1.0.0
         with: { github-token: ${{ secrets.GITHUB_TOKEN }} }
       - if: steps.quorate.outputs.verdict == 'fail'
         run: echo "Quorate found ${{ steps.quorate.outputs.findings }} findings"
@@ -168,6 +168,46 @@ build or preview-deploy job runs. Add `sarif-file` plus `upload-sarif` if you wa
 the same Solana findings in GitHub Code Scanning.
 
 Full reference: [umutkorkmaz.github.io/quorate/docs/solana](https://umutkorkmaz.github.io/quorate/docs/solana).
+
+## Web3 DD / Webacy
+
+Pair `web3-dd` with `solana`, `evm`, or `move` when a dApp PR can introduce wallet
+addresses, token contracts, program ids, claim URLs, approvals, raw transaction
+paths, or typed-data signing changes. Static Web3 DD checks run when the pack is
+selected. DD.xyz/Webacy enrichment is opt-in through `integrations.webacy` in the
+base-branch `.quorate.yml`:
+
+```yaml
+integrations:
+  webacy:
+    enabled: true
+    apiKeyEnv: WEBACY_API_KEY
+    chains: [eth, base, sol]
+    failOn:
+      riskLevel: high
+      sanctioned: true
+      maliciousUrl: true
+    warnOn:
+      riskLevel: medium
+```
+
+Then pass the key as a normal secret:
+
+```yaml
+      - uses: UmutKorkmaz/quorate@v1.0.0
+        env:
+          WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          runner-mode: api
+          pack: solana,web3-dd
+          fail-on: high
+```
+
+Quorate sends extracted indicators only — address, chain, or URL — not the full
+source file or full diff. Full reference:
+[umutkorkmaz.github.io/quorate/docs/web3-dd](https://umutkorkmaz.github.io/quorate/docs/web3-dd).
 
 ## EVM / Solidity
 

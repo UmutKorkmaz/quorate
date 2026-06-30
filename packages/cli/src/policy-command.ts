@@ -33,7 +33,7 @@ merge_gate:
 
 verdict:
   fail_on: high              # critical/high findings block
-  fail_on_degraded: false    # set true to block heuristic-only runs
+  fail_on_degraded: true     # block degraded or heuristic-only runs
 
 agreement:
   min_agreement: 2           # a finding must be raised by >= 2 providers to gate
@@ -42,7 +42,7 @@ agreement:
 roles_required: []           # e.g. [security, maintainer]
 
 providers:
-  min_real_providers: 0      # set >= 1 to require a non-heuristic reviewer
+  min_real_providers: 1      # require a non-heuristic reviewer for blocking CI
 `;
 
 export interface PolicyInitResult {

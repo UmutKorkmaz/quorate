@@ -27,17 +27,18 @@ describe("applyPacks", () => {
   });
 
   it("layers an explicit pack list onto the config councils + roleGuidance", () => {
-    const out = applyPacks(base(), "solana,web", []);
+    const out = applyPacks(base(), "solana,web3-dd", []);
     expect(out.councils).toContain("solana-security");
-    expect(out.councils).toContain("ssrf");
+    expect(out.councils).toContain("web3-due-diligence");
     expect(out.councils).toContain("maintainer");
     expect(out.roleGuidance?.["solana-security"]).toBeTruthy();
-    expect(out.roleGuidance?.["ssrf"]).toBeTruthy();
+    expect(out.roleGuidance?.["web3-due-diligence"]).toBeTruthy();
   });
 
   it("auto-detects packs from changed files", () => {
     const out = applyPacks(base(), "auto", ["app/Token.sol", ".github/workflows/ci.yml"]);
     expect(out.councils).toContain("evm-security");
+    expect(out.councils).toContain("web3-due-diligence");
     expect(out.councils).toContain("workflow-security");
   });
 

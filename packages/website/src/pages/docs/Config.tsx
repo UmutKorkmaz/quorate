@@ -138,6 +138,35 @@ providers:
     cost:
       inputUsdPer1M: 0.20`}</CodeBlock>
 
+      <h2>Optional Webacy/DD.xyz evidence</h2>
+      <p>
+        <InlineCode>integrations.webacy</InlineCode> enables the Web3 DD pack to query
+        DD.xyz/Webacy for extracted addresses and URLs. It is not a model provider and does not
+        change your AI routing; the API key is read from an environment variable.
+      </p>
+      <CodeBlock language="yaml">{`integrations:
+  webacy:
+    enabled: true
+    apiKeyEnv: WEBACY_API_KEY
+    chains: [eth, base, sol]
+    failOn:
+      riskLevel: high
+      sanctioned: true
+      maliciousUrl: true
+    warnOn:
+      riskLevel: medium
+    allowlist:
+      addresses: []
+      domains: []
+      urls: []
+    cache:
+      ttlHours: 24`}</CodeBlock>
+      <p>
+        In GitHub Actions, pass <InlineCode>WEBACY_API_KEY</InlineCode> through
+        <InlineCode>env</InlineCode>. Quorate sends extracted indicators only, not the full source
+        file or full diff.
+      </p>
+
       <h2>Custom packs</h2>
       <p>
         Workspace packs in <InlineCode>.quorate/packs/*.yml</InlineCode> can add council

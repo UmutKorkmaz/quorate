@@ -26,9 +26,10 @@ The heuristic reviewer runs with zero setup; provider keys enable full AI review
 | `quorate-solana.yml` | `solana` | Solana / Anchor |
 | `quorate-evm.yml` | `evm` | EVM / Solidity |
 | `quorate-move.yml` | `move` | Move (Sui / Aptos) |
+| `quorate-web3-dd.yml` | `solana,web3-dd` | Web3 DD / Webacy evidence |
 | `quorate-iac.yml` | `iac` | Infrastructure / IaC |
 | `quorate-llm.yml` | `llm` | AI / LLM apps |
-| `quorate-ci-supplychain.yml` | `ci-supplychain` | CI/CD & supply chain |
+| `quorate-ci-supplychain.yml` | `ci` | CI/CD & supply chain |
 | `quorate-fintech.yml` | `fintech` | Fintech / PCI |
 | `quorate-web.yml` | `web` | Web & API (OWASP) |
 | `quorate-healthcare.yml` | `healthcare` | Healthcare / HIPAA |

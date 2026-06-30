@@ -1,0 +1,48 @@
+# Quorate — Web3 DD / Webacy review example
+#
+# HOW TO USE:
+#   1. Run `quorate init --pack solana,web3-dd` (or evm,web3-dd / move,web3-dd)
+#      in your repo root.
+#   2. Add the integrations.webacy block shown below to .quorate.yml and commit
+#      it to your base branch.
+#   3. Add WEBACY_API_KEY plus your AI provider key to repository or organization
+#      secrets.
+#   4. Copy this file into your repo as .github/workflows/quorate.yml.
+#
+# The static Web3 DD scanner runs when the pack is selected. Webacy/DD.xyz
+# enrichment runs only when integrations.webacy.enabled is true and WEBACY_API_KEY
+# is available.
+#
+# .quorate.yml:
+# integrations:
+#   webacy:
+#     enabled: true
+#     apiKeyEnv: WEBACY_API_KEY
+#     chains: [eth, base, sol]
+#     failOn:
+#       riskLevel: high
+#       sanctioned: true
+#       maliciousUrl: true
+#     warnOn:
+#       riskLevel: medium
+
+name: Quorate — Web3 DD review
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: UmutKorkmaz/quorate@v1.0.0
+        env:
+          WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          runner-mode: api
+          pack: solana,web3-dd
+          fail-on: high
+          inline-comments: true

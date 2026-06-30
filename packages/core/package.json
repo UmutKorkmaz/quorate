@@ -1,6 +1,6 @@
 {
   "name": "@quorate/core",
-  "version": "0.10.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,6 +20,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
+    "@webacy-xyz/sdk-threat": "^1.8.0",
     "smol-toml": "^1.7.0",
     "yaml": "^2.8.1",
     "zod": "^4.1.13"

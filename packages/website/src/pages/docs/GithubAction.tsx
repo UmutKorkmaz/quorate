@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.10.0
+      - uses: UmutKorkmaz/quorate@v1.0.0
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
 
@@ -236,7 +236,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: quorate
-        uses: UmutKorkmaz/quorate@v0.10.0
+        uses: UmutKorkmaz/quorate@v1.0.0
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -274,6 +274,41 @@ jobs:
         change is safe. See <Link to="/docs/solana">Solana / Anchor</Link> for the checklist.
       </p>
 
+      <h2>Web3 DD with DD.xyz/Webacy</h2>
+      <p>
+        Add <InlineCode>web3-dd</InlineCode> when a dApp PR can introduce wallet-facing
+        addresses, token contracts, program ids, claim URLs, approvals, raw transactions, or
+        typed-data signing changes. The Webacy integration is opt-in and uses a normal secret
+        passed through <InlineCode>env</InlineCode>.
+      </p>
+      <CodeBlock language="yaml">{`# .quorate.yml, committed on the base branch
+integrations:
+  webacy:
+    enabled: true
+    apiKeyEnv: WEBACY_API_KEY
+    chains: [eth, base, sol]
+    failOn:
+      riskLevel: high
+      sanctioned: true
+      maliciousUrl: true
+    warnOn:
+      riskLevel: medium
+
+# workflow step
+- uses: UmutKorkmaz/quorate@v1.0.0
+  env:
+    WEBACY_API_KEY: \${{ secrets.WEBACY_API_KEY }}
+    OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
+  with:
+    github-token: \${{ secrets.GITHUB_TOKEN }}
+    runner-mode: api
+    pack: solana,web3-dd
+    fail-on: high`}</CodeBlock>
+      <p>
+        Quorate sends extracted indicators only — address, chain, or URL — not the full source file
+        or full diff. See <Link to="/docs/web3-dd">Web3 DD / Webacy</Link> for the full config.
+      </p>
+
       <h2>SARIF → GitHub Code Scanning</h2>
       <p>
         Write a SARIF report and hand it to GitHub&apos;s <InlineCode>upload-sarif</InlineCode> action
@@ -288,7 +323,7 @@ jobs:
 steps:
   - uses: actions/checkout@v4
   - id: quorate
-    uses: UmutKorkmaz/quorate@v0.10.0
+    uses: UmutKorkmaz/quorate@v1.0.0
     with:
       github-token: \${{ secrets.GITHUB_TOKEN }}
       sarif-file: quorate.sarif
@@ -393,7 +428,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.10.0
+- uses: UmutKorkmaz/quorate@v1.0.0
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:
@@ -422,7 +457,7 @@ providers:
     apiKeyEnv: GLM_API_KEY
     roles: [architect, security, performance]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v0.10.0
+- uses: UmutKorkmaz/quorate@v1.0.0
   env:
     GLM_API_KEY: \${{ secrets.GLM_API_KEY }}
   with:

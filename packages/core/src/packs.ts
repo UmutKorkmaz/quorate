@@ -138,6 +138,30 @@ const move: QuoratePack = {
   }
 };
 
+const web3Dd: QuoratePack = {
+  id: "web3-dd",
+  description: "Web3 due diligence pack for DD.xyz/Webacy-backed address, URL, approval, and signing risk",
+  councils: [
+    "web3-due-diligence",
+    "wallet-safety",
+    "transaction-safety",
+    "phishing-safety",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "web3-due-diligence":
+      "Review added wallet, token, contract, program, and URL indicators as due-diligence evidence. Verify chain, ownership, trust boundaries, and whether Webacy/DD risk evidence should block the merge.",
+    "wallet-safety":
+      "Scrutinize any wallet-facing change that introduces addresses, approvals, delegates, or spenders. Flag unlimited allowances, unverified spender addresses, and flows that make users authorize unclear permissions.",
+    "transaction-safety":
+      "Review raw transaction, typed-data, signing, simulation, and submission paths. Confirm chain ids, verifying contracts, recipients, values, and confirmation handling are explicit and tested.",
+    "phishing-safety":
+      "Check external URLs, token metadata endpoints, claim pages, explorers, and RPC endpoints for phishing or malware risk. Prefer trusted domains and explicit allowlists for production endpoints.",
+    "maintainer":
+      "Assess whether the due-diligence controls are documented, testable, and maintainable. Confirm risky indicators are configurable rather than scattered as unexplained literals."
+  }
+};
+
 const ci: QuoratePack = {
   id: "ci",
   description: "CI/CD and supply-chain security review council",
@@ -523,7 +547,7 @@ const graphql: QuoratePack = {
 };
 
 export const PACKS: Record<string, QuoratePack> = {
-  solana, evm, iac, llm, move, ci, fintech, web, healthcare, mobile,
+  solana, evm, move, "web3-dd": web3Dd, iac, llm, ci, fintech, web, healthcare, mobile,
   accessibility, "data-sql": dataSql, k8s, privacy, mlops, embedded, performance, graphql
 };
 export const PACK_IDS = Object.keys(PACKS);
@@ -675,6 +699,16 @@ export function detectPacks(signals: {
     matched.add("move");
   }
 
+  // ── Web3 DD: stronger web3 app signals. Avoid plain *.rs here because many
+  // Rust repos are not Solana clients/programs.
+  if (
+    lowerFiles.some((f) => f.endsWith(".sol") || f.endsWith(".move")) ||
+    lowerFiles.some((f) => f.endsWith("anchor.toml") || f.endsWith("move.toml")) ||
+    lowerFiles.some((f) => /(^|\/)(wagmi|viem|ethers|web3|solana|wallet|token|mint|program)\b/.test(f))
+  ) {
+    matched.add("web3-dd");
+  }
+
   // ── IaC: *.tf / *.tfvars OR k8s/kubernetes/deploy YAML.
   if (
     lowerFiles.some((f) => f.endsWith(".tf") || f.endsWith(".tfvars")) ||
@@ -788,6 +822,12 @@ export function detectPacks(signals: {
     const fintechPattern = /^stripe$|^braintree$|^@stripe|^plaid$|^square$/;
     if (lowerDeps.some((d) => fintechPattern.test(d))) {
       matched.add("fintech");
+    }
+
+    const web3Pattern =
+      /^@solana\/web3\.js$|^@coral-xyz\/anchor$|^ethers$|^viem$|^wagmi$|^web3$|^@mysten\/sui$|^aptos$/;
+    if (lowerDeps.some((d) => web3Pattern.test(d))) {
+      matched.add("web3-dd");
     }
 
     const healthcarePattern = /^fhir$|^hl7$|^@medplum|^cerner$|^epic$/;

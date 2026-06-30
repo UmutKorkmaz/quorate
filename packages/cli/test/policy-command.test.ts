@@ -35,6 +35,8 @@ describe("writeStarterPolicy / loadPolicyFile", () => {
     // the starter file must parse cleanly
     const parsed = parsePolicyYaml(readFileSync(path, "utf8"));
     expect(parsed.failOn).toBe("high");
+    expect(parsed.failOnDegraded).toBe(true);
+    expect(parsed.minRealProviders).toBe(1);
     expect(loadPolicyFile(dir)?.failOn).toBe("high");
   });
 
