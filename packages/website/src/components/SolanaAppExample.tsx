@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.10.0
+      - uses: UmutKorkmaz/quorate@v1.0.0
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}
           fail-on: high`;
@@ -104,7 +104,7 @@ export function SolanaAppExample() {
                   longer proves the vault belongs to the escrow authority.
                 </p>
                 <p className="mt-3 font-mono text-xs text-quorate-dim">
-                  agreed by claude, codex, heuristic
+                  agreed by 3 reviewers
                 </p>
               </div>
 

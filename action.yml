@@ -26,7 +26,7 @@ inputs:
   pack:
     description: >-
       Domain pack(s) to layer onto the review: a comma-separated list (e.g.
-      "solana,web") or "auto" to detect from the pull request's changed files.
+      "solana,web3-dd") or "auto" to detect from the pull request's changed files.
       Adds pack councils + per-role reviewer guidance on top of the base config;
       the deterministic heuristics for a language always run regardless.
     required: false

@@ -101,8 +101,8 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
     removed: 23,
     running: [
       { id: "heuristic", role: "solana-security", state: "done", note: "0 findings" },
-      { id: "claude", role: "anchor-accounts", state: "running", note: "" },
-      { id: "codex", role: "transaction-safety", state: "queued", note: "" }
+      { id: "reviewer-a", role: "anchor-accounts", state: "running", note: "" },
+      { id: "reviewer-b", role: "transaction-safety", state: "queued", note: "" }
     ],
     verdict: "pass",
     findingCount: 0,
@@ -114,7 +114,7 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         severityColor: "text-quorate-pass",
         location: "programs/escrow/src/state.rs",
         body: "Pure account-state refactor with full coverage - every reviewer agrees the change is safe to merge.",
-        meta: "agreed by claude, codex, heuristic · confidence 0.94"
+        meta: "agreed by 3 reviewers · confidence 0.94"
       }
     ]
   },
@@ -129,8 +129,8 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
     removed: 8,
     running: [
       { id: "heuristic", role: "solana-security", state: "done", note: "1 finding" },
-      { id: "claude", role: "anchor-accounts", state: "running", note: "" },
-      { id: "codex", role: "transaction-safety", state: "queued", note: "" }
+      { id: "reviewer-a", role: "anchor-accounts", state: "running", note: "" },
+      { id: "reviewer-b", role: "transaction-safety", state: "queued", note: "" }
     ],
     verdict: "warn",
     findingCount: 1,
@@ -142,7 +142,7 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         severityColor: "text-quorate-medium",
         location: "app/actions/createEscrow.ts:61",
         body: "Transaction send path does not wait for confirmation before updating app state.",
-        meta: "agreed by claude · confidence 0.71"
+        meta: "agreed by reviewer-a · confidence 0.71"
       }
     ]
   },
@@ -158,8 +158,8 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
     removed: 42,
     running: [
       { id: "heuristic", role: "solana-security", state: "done", note: "2 findings" },
-      { id: "claude", role: "anchor-accounts", state: "running", note: "" },
-      { id: "codex", role: "transaction-safety", state: "queued", note: "" }
+      { id: "reviewer-a", role: "anchor-accounts", state: "running", note: "" },
+      { id: "reviewer-b", role: "transaction-safety", state: "queued", note: "" }
     ],
     verdict: "fail",
     findingCount: 3,
@@ -171,7 +171,7 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         severityColor: "text-quorate-high",
         location: "programs/escrow/src/lib.rs:88",
         body: "Anchor account constraint removed - close_escrow no longer proves the vault belongs to the escrow authority.",
-        meta: "agreed by claude, codex, heuristic · confidence 0.86"
+        meta: "agreed by 3 reviewers · confidence 0.86"
       },
       {
         verdict: "warn",
@@ -384,12 +384,12 @@ export function TerminalEmulator({
 
   const statusLine = useMemo(() => {
     if (phase === "diff") {
-      return { mode: "review", agents: "claude+codex+heuristic", diff: "git working tree", hint: "" };
+      return { mode: "review", agents: "reviewer-a+reviewer-b+heuristic", diff: "git working tree", hint: "" };
     }
     if (phase === "running" || phase === "verdict") {
       return {
         mode: "review",
-        agents: "claude+codex+heuristic",
+        agents: "reviewer-a+reviewer-b+heuristic",
         diff: "git working tree",
         hint: "esc to interrupt"
       };
@@ -454,7 +454,7 @@ export function TerminalEmulator({
               <p className="terminal-agents-line">
                 <span className="text-quorate-dim">Installed on PATH</span>{" "}
                 <strong>3 of 17 agents</strong>{" "}
-                <span className="text-quorate-pass">claude ✔ codex ✔</span>
+                <span className="text-quorate-pass">reviewer-a ✔ reviewer-b ✔</span>
                 <span className="text-quorate-dim"> · heuristic always on</span>
               </p>
               <p className="terminal-agents-line">

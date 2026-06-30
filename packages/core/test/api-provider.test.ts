@@ -95,6 +95,24 @@ describe("runApiProvider", () => {
     expect(result.summary).toContain("500");
   });
 
+  it("redacts provider secrets from upstream error bodies", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("Authorization: Bearer secret-token\napi_key=sk-supersecret123456789", {
+        status: 401,
+        statusText: "Unauthorized"
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", "secret-token");
+
+    const result = await runApiProvider(apiProvider({ apiKeyEnv: "MY_TOKEN" }), "maintainer", request);
+
+    expect(result.status).toBe("error");
+    expect(result.error).not.toContain("secret-token");
+    expect(result.rawOutput).not.toContain("sk-supersecret");
+    expect(result.error).toContain("[redacted]");
+  });
+
   it("returns error without calling fetch when model is missing", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

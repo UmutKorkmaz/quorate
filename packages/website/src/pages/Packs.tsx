@@ -27,7 +27,9 @@ const STANDARD_STYLE: Record<string, string> = {
   "MISRA C 2012": "border-quorate-amber/40 text-quorate-amber bg-quorate-amber/8",
   "MISRA C++ 2008": "border-quorate-amber/40 text-quorate-amber bg-quorate-amber/8",
   "Performance & SRE": "border-quorate-performance/40 text-quorate-performance bg-quorate-performance/8",
-  "GraphQL Security": "border-quorate-architect/40 text-quorate-architect bg-quorate-architect/8"
+  "GraphQL Security": "border-quorate-architect/40 text-quorate-architect bg-quorate-architect/8",
+  "DD.xyz / Webacy": "border-quorate-accent/40 text-quorate-accent bg-quorate-accent/8",
+  "Web3 Review": "border-quorate-amber/40 text-quorate-amber bg-quorate-amber/8"
 };
 
 function standardStyle(standard: string): string {
@@ -42,6 +44,7 @@ const PACK_ICON: Record<string, string> = {
   solana: "◎",
   evm: "⬡",
   move: "▲",
+  "web3-dd": "◇",
   iac: "☁",
   llm: "✦",
   ci: "⚙",
@@ -65,6 +68,7 @@ const PACK_SPAN: Record<string, string> = {
   solana: "sm:col-span-2 lg:col-span-3",
   evm: "sm:col-span-2 lg:col-span-3",
   move: "lg:col-span-2",
+  "web3-dd": "lg:col-span-2",
   iac: "lg:col-span-2",
   llm: "lg:col-span-2",
   ci: "lg:col-span-2",
@@ -84,9 +88,9 @@ const PACK_SPAN: Record<string, string> = {
 
 // ── Stat banner ───────────────────────────────────────────────────
 const STATS = [
-  { value: "18", label: "domain packs" },
-  { value: "191", label: "vulnerability classes" },
-  { value: "22", label: "recognised standards" },
+  { value: "19", label: "domain packs" },
+  { value: "198", label: "review classes" },
+  { value: "24", label: "recognised standards" },
   { value: "0", label: "false positives on clean code" }
 ];
 
@@ -198,7 +202,7 @@ export function Packs() {
     <>
       <Seo
         title="Review Packs"
-        description="Quorate ships 18 domain-aware review packs — Solana, EVM, Move, IaC, Kubernetes, CI/CD, LLM, MLOps, Web, GraphQL, Accessibility, Data & SQL, Fintech, Healthcare, Privacy, Mobile, Embedded, and Performance — each grounding deterministic vulnerability classes in recognised standards."
+        description="Quorate ships 19 domain-aware review packs — Solana, EVM, Move, Web3 DD, IaC, Kubernetes, CI/CD, LLM, MLOps, Web, GraphQL, Accessibility, Data & SQL, Fintech, Healthcare, Privacy, Mobile, Embedded, and Performance — each grounding review classes in recognised standards or external evidence."
         path="/packs"
       />
 
@@ -227,7 +231,7 @@ export function Packs() {
           </div>
 
           <h1 className="display-hero text-[2.6rem] leading-[1.04] text-white md:text-5xl lg:text-[3.8rem]">
-            Eighteen review councils.
+            Nineteen review councils.
             <span
               className="mt-1 block bg-clip-text text-transparent"
               style={{ backgroundImage: "linear-gradient(90deg, #6e97ff, #a8c4ff, #6e97ff)" }}
@@ -237,9 +241,9 @@ export function Packs() {
           </h1>
 
           <p className="mt-6 max-w-2xl text-lg leading-relaxed text-quorate-muted">
-            Each pack is a domain-aware review council paired with deterministic heuristics
-            grounded in a recognised security standard. Install one, get a council that already
-            knows what to look for — before a model is ever called.
+            Each pack is a domain-aware review council paired with deterministic heuristics or
+            opt-in external evidence. Install one, get a council that already knows what to look
+            for before a model is ever called.
           </p>
 
           {/* Stat row */}
@@ -293,11 +297,12 @@ export function Packs() {
             id="packs-heading"
             className="display-section mb-2 text-2xl text-white md:text-4xl"
           >
-            Eighteen domains, each with its own council
+            Nineteen domains, each with its own council
           </h2>
           <p className="mb-10 max-w-xl text-quorate-muted">
-            Select a pack to auto-configure councils, role guidance, and heuristics for that
-            domain. Multi-pack configs are supported — councils are deduplicated automatically.
+            Select a pack to auto-configure councils, role guidance, heuristics, and optional
+            evidence integrations for that domain. Multi-pack configs are supported — councils
+            are deduplicated automatically.
           </p>
 
           {/* Bento grid */}
@@ -334,8 +339,8 @@ export function Packs() {
             Grounded in recognised standards
           </h2>
           <p className="mb-8 max-w-xl text-quorate-muted">
-            Every heuristic maps to a specific entry in a published security standard — no
-            invented rule IDs, no vague warnings.
+            Every static heuristic maps to a specific entry in a published security standard, and
+            evidence-backed packs show the external source that produced the signal.
           </p>
 
           {/* Pack selector */}

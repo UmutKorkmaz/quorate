@@ -37,6 +37,48 @@ const providerSchema = z.object({
     .optional()
 });
 
+const webacyRiskLevelSchema = z.enum(["low", "medium", "high"]);
+
+const webacySchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    apiKeyEnv: z.string().min(1).default("WEBACY_API_KEY"),
+    chains: z.array(z.string().min(1)).default(["eth", "base", "sol"]),
+    failOn: z
+      .object({
+        riskLevel: webacyRiskLevelSchema.optional(),
+        sanctioned: z.boolean().optional(),
+        maliciousUrl: z.boolean().optional()
+      })
+      .default({ riskLevel: "high", sanctioned: true, maliciousUrl: true }),
+    warnOn: z
+      .object({
+        riskLevel: webacyRiskLevelSchema.optional()
+      })
+      .default({ riskLevel: "medium" }),
+    allowlist: z
+      .object({
+        addresses: z.array(z.string().min(1)).default([]),
+        domains: z.array(z.string().min(1)).default([]),
+        urls: z.array(z.string().min(1)).default([])
+      })
+      .default({ addresses: [], domains: [], urls: [] }),
+    cache: z
+      .object({
+        ttlHours: z.number().positive().default(24)
+      })
+      .default({ ttlHours: 24 })
+  })
+  .default({
+    enabled: false,
+    apiKeyEnv: "WEBACY_API_KEY",
+    chains: ["eth", "base", "sol"],
+    failOn: { riskLevel: "high", sanctioned: true, maliciousUrl: true },
+    warnOn: { riskLevel: "medium" },
+    allowlist: { addresses: [], domains: [], urls: [] },
+    cache: { ttlHours: 24 }
+  });
+
 const configSchema = z.object({
   councils: z.array(z.string().min(1)).default([]),
   providers: z.array(providerSchema).default([]),
@@ -62,7 +104,12 @@ const configSchema = z.object({
     })
     .optional(),
   merge: z.object({ provider: z.string().min(1) }).optional(),
-  roleGuidance: z.record(z.string(), z.string()).optional()
+  roleGuidance: z.record(z.string(), z.string()).optional(),
+  integrations: z
+    .object({
+      webacy: webacySchema.optional()
+    })
+    .optional()
 });
 
 export function parseConfig(source: string): QuorateConfig {
@@ -79,7 +126,8 @@ export function parseConfig(source: string): QuorateConfig {
     },
     budget: userConfig.budget,
     merge: userConfig.merge,
-    roleGuidance: userConfig.roleGuidance
+    roleGuidance: userConfig.roleGuidance,
+    integrations: userConfig.integrations
   };
 }
 

@@ -163,6 +163,10 @@ export default function Solana() {
       </p>
       <CodeBlock language="bash">{`quorate init --pack solana`}</CodeBlock>
       <p>
+        For wallet-facing dApps, pair it with the optional Web3 due-diligence pack:
+      </p>
+      <CodeBlock language="bash">{`quorate init --pack solana,web3-dd`}</CodeBlock>
+      <p>
         This writes a <InlineCode>.quorate.yml</InlineCode> that includes five councils
         pre-configured for Solana/Anchor work:
       </p>
@@ -205,6 +209,11 @@ Client sends the transaction with skipPreflight enabled, so simulation failures 
         The same CLI can review non-Solana work by changing the pack. Solana is the front-page
         example because account constraints, PDA derivation, CPI safety, transaction preflight,
         and token-account validation are easy to regress in AI-generated code.
+      </p>
+      <p>
+        Add <Link to="/docs/web3-dd">Web3 DD / Webacy</Link> when the same PR introduces wallet
+        addresses, mint/program ids, claim URLs, approvals, or raw transaction paths. Quorate will
+        keep the Solana heuristics and add DD.xyz/Webacy evidence when configured.
       </p>
 
       <h2>Release gate</h2>
@@ -331,7 +340,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.10.0
+      - uses: UmutKorkmaz/quorate@v1.0.0
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:

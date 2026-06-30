@@ -6,6 +6,7 @@ import { computeReviewId, fingerprintFinding } from "./identity.js";
 import { createDefaultConfig } from "./providers.js";
 import { mergeWithMaster } from "./merge.js";
 import { areSameFinding } from "./similarity.js";
+import { runWeb3DdReview, web3DdReviewEnabled } from "./web3-dd.js";
 import type {
   QuorateConfig,
   CouncilEvent,
@@ -76,7 +77,13 @@ export function clusterFindings(findings: Finding[]): Finding[] {
 
   for (const finding of findings) {
     const target = clusters.find((cluster) =>
-      cluster.some((member) => areSameFinding(member, finding))
+      cluster.some((member) => {
+        const sameLane = member.providerId === finding.providerId && member.role === finding.role;
+        if (sameLane && member.title !== finding.title) {
+          return false;
+        }
+        return areSameFinding(member, finding);
+      })
     );
     if (target) {
       target.push(finding);
@@ -288,19 +295,29 @@ export async function runCouncil(
 
   const ctx: RunContext = { councilRunId, emit, signal };
   const lanes = buildPlannedLanes(config);
+  const includeWeb3Dd = web3DdReviewEnabled(config, request);
+  const web3DdProviderType: ProviderType = config.integrations?.webacy?.enabled === true ? "api" : "mock";
 
-  const requestedProviders = lanes.map((lane) => `${lane.provider.id}:${lane.role}`);
+  const requestedProviders = [
+    ...lanes.map((lane) => `${lane.provider.id}:${lane.role}`),
+    ...(includeWeb3Dd ? ["web3-dd:web3-due-diligence"] : [])
+  ];
 
   emit({
     type: "council/started",
     councilRunId,
     mode: request.mode,
     subject: request.subject,
-    planned: lanes.map((lane) => ({
-      providerId: lane.provider.id,
-      role: lane.role,
-      providerType: providerTypeOf(lane.provider)
-    })),
+    planned: [
+      ...lanes.map((lane) => ({
+        providerId: lane.provider.id,
+        role: lane.role,
+        providerType: providerTypeOf(lane.provider)
+      })),
+      ...(includeWeb3Dd
+        ? [{ providerId: "web3-dd", role: "web3-due-diligence", providerType: web3DdProviderType }]
+        : [])
+    ],
     at: new Date().toISOString()
   });
 
@@ -332,6 +349,23 @@ export async function runCouncil(
       durationMs: 0
     };
   });
+  if (includeWeb3Dd && !signal?.aborted) {
+    try {
+      const web3DdResult = await runWeb3DdReview(reviewRequest, config, { signal });
+      if (web3DdResult) providerResults.push(web3DdResult);
+    } catch (error) {
+      providerResults.push({
+        providerId: "web3-dd",
+        role: "web3-due-diligence",
+        providerType: web3DdProviderType,
+        status: "error",
+        summary: "Web3 DD review threw before producing a result.",
+        findings: [],
+        error: error instanceof Error ? error.message : String(error),
+        durationMs: 0
+      });
+    }
+  }
 
   // Optional master-agent merge: a selected provider semantically dedupes the
   // raw findings before the built-in clustering (which still runs after, both

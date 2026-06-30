@@ -18,6 +18,7 @@ import Evm from "./pages/docs/Evm";
 import Iac from "./pages/docs/Iac";
 import LlmApp from "./pages/docs/LlmApp";
 import Move from "./pages/docs/Move";
+import Web3Dd from "./pages/docs/Web3Dd";
 import Ci from "./pages/docs/Ci";
 import Fintech from "./pages/docs/Fintech";
 import Web from "./pages/docs/Web";
@@ -53,6 +54,7 @@ export function App() {
           <Route path="iac" element={<Iac />} />
           <Route path="llm" element={<LlmApp />} />
           <Route path="move" element={<Move />} />
+          <Route path="web3-dd" element={<Web3Dd />} />
           <Route path="ci" element={<Ci />} />
           <Route path="fintech" element={<Fintech />} />
           <Route path="web" element={<Web />} />

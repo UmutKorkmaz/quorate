@@ -42,6 +42,7 @@ Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interact
 - **Many models, one verdict.** Get several independent AI perspectives on a change, deduplicated and ranked into a single PASS / WARN / FAIL.
 - **Uses the CLIs you already have.** No API keys to wire up — Quorate detects local **agents** (`claude`, `codex`, `qwen`, `kimi`, `crush`, `goose`, …) and drives them in headless mode.
 - **Honest by default.** The built-in heuristic runs with zero setup and never pretends: a heuristic-only review is reported as **degraded**, not a confident green.
+- **Web3 DD when you need it.** Pair `web3-dd` with Solana/EVM/Move packs to flag added addresses, approvals, signing flows, and URLs, with optional DD.xyz/Webacy risk evidence from `WEBACY_API_KEY`.
 - **Safe by design.** Real agents are opt-in, spawned without a shell, with explicit headless args, byte/time caps, and a dangerous-flag denylist.
 - **A shell that feels like Claude Code.** Inline transcript, a `/` command palette with fuzzy-style filtering, an animated braille spinner, and native severity cards.
 
@@ -116,14 +117,15 @@ workflows/Swift/Kotlin + framework deps) and scaffolds the matching pack(s);
 `quorate init --pack <id>` (or a comma-separated `<id,id>`) picks them explicitly.
 Each scaffolds a domain-aware council — ecosystem-specific
 councils + per-role reviewer guidance — and turns on **deterministic, diff-based
-heuristics** for that domain (always-on, zero setup, layered under whatever real
-agents you enable). `quorate packs` lists them.
+heuristics** or optional evidence scanners for that domain (always-on where static,
+layered under whatever real agents you enable). `quorate packs` lists them.
 
 | Pack | `init --pack` | Classes | Catches (examples) |
 | --- | --- | --- | --- |
 | **Solana / Anchor** | `solana` | 21 | unchecked accounts, remaining_accounts, CPI program pinning, confirmation/blockhash expiry, Token-2022, weakened constraints |
 | **EVM / Solidity** | `evm` | 10 | tx.origin auth, delegatecall, selfdestruct, unchecked call, reentrancy surface, unchecked ERC20 |
 | **Move (Sui/Aptos)** | `move` | 10 | public entry auth, borrow_global_mut, shared objects, copy/drop abilities, privileged fns |
+| **Web3 DD / Webacy** | `web3-dd` | 7 | Webacy address/URL risk, hardcoded wallet/program/token addresses, claim URLs, approvals, raw tx and typed-data signing |
 | **IaC (Terraform/K8s)** | `iac` | 11 | public ACLs, 0.0.0.0/0 ingress, encryption off, privileged containers, host namespaces |
 | **AI / LLM apps** | `llm` | 12 | prompt injection, output→eval, raw-HTML output, tool-arg validation, PII in prompts |
 | **CI/CD + supply chain** | `ci` | 10 | pull_request_target, expression injection, unpinned actions, install scripts, pipe-to-shell |
@@ -140,10 +142,50 @@ agents you enable). `quorate packs` lists them.
 | **Performance & SRE** | `performance` | 10 | await-in-loop, N+1 queries, missing pagination, no fetch timeout, O(n²) scans, leaked intervals |
 | **Embedded (MISRA)** | `embedded` | 10 | unbounded string ops, unchecked malloc/memcpy, missing volatile, alloc on ISR, float equality |
 
-Every pack ships a vulnerable/clean demo corpus proving each class is detected
-with zero false positives on clean code, a docs page (`/docs/<pack>`), and a
-ready-to-copy GitHub Action example. A pack is **data, not a code path** — adding
-an ecosystem is one registry entry, so the set grows without rewrites.
+The deterministic packs ship a vulnerable/clean demo corpus proving each class is detected
+with zero false positives on clean code; evidence-backed packs add focused mocked tests and
+docs for their integration behavior. Every pack has a docs page (`/docs/<pack>`) and a
+ready-to-copy GitHub Action example. A pack is **data, not a code path** where possible — adding
+an ecosystem stays a small registry change unless the pack intentionally connects to an external
+evidence source.
+
+### Web3 DD / DD.xyz-Webacy
+
+`web3-dd` is fully opt-in and works with `solana`, `evm`, or `move`:
+
+```bash
+quorate init --pack solana,web3-dd
+```
+
+Add Webacy evidence by committing this to the base branch config and passing the key in CI:
+
+```yaml
+integrations:
+  webacy:
+    enabled: true
+    apiKeyEnv: WEBACY_API_KEY
+    chains: [eth, base, sol]
+    failOn:
+      riskLevel: high
+      sanctioned: true
+      maliciousUrl: true
+    warnOn:
+      riskLevel: medium
+```
+
+In GitHub Actions:
+
+```yaml
+env:
+  WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
+with:
+  pack: solana,web3-dd
+```
+
+Quorate sends extracted indicators only — address, chain, or URL — not full source files or full diffs.
+For the DD.xyz Startup Accelerator use case, this covers threat risk and URL risk with live
+evidence, while approval, raw transaction, and typed-data signing changes are static PR gates.
+Invite-only holder analysis is intentionally outside the v1 pack.
 
 ### Custom packs
 
@@ -419,7 +461,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v0.10.0
+      - uses: UmutKorkmaz/quorate@v1.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -434,7 +476,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v0.10.0
+      - uses: UmutKorkmaz/quorate@v1.0.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:

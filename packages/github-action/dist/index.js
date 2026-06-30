@@ -5,6 +5,14 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
 var __commonJS = (cb, mod) => function __require() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
@@ -2088,9 +2096,9 @@ var require_dispatcher_base = __commonJS({
       }
       close(callback) {
         if (callback === void 0) {
-          return new Promise((resolve2, reject) => {
+          return new Promise((resolve3, reject) => {
             this.close((err, data) => {
-              return err ? reject(err) : resolve2(data);
+              return err ? reject(err) : resolve3(data);
             });
           });
         }
@@ -2128,12 +2136,12 @@ var require_dispatcher_base = __commonJS({
           err = null;
         }
         if (callback === void 0) {
-          return new Promise((resolve2, reject) => {
+          return new Promise((resolve3, reject) => {
             this.destroy(err, (err2, data) => {
               return err2 ? (
                 /* istanbul ignore next: should never error */
                 reject(err2)
-              ) : resolve2(data);
+              ) : resolve3(data);
             });
           });
         }
@@ -4400,8 +4408,8 @@ var require_util2 = __commonJS({
     function createDeferredPromise() {
       let res;
       let rej;
-      const promise2 = new Promise((resolve2, reject) => {
-        res = resolve2;
+      const promise2 = new Promise((resolve3, reject) => {
+        res = resolve3;
         rej = reject;
       });
       return { promise: promise2, resolve: res, reject: rej };
@@ -6638,12 +6646,12 @@ upgrade: ${upgrade}\r
           cb();
         }
       }
-      const waitForDrain = () => new Promise((resolve2, reject) => {
+      const waitForDrain = () => new Promise((resolve3, reject) => {
         assert2(callback === null);
         if (socket[kError]) {
           reject(socket[kError]);
         } else {
-          callback = resolve2;
+          callback = resolve3;
         }
       });
       socket.on("close", onDrain).on("drain", onDrain);
@@ -7280,12 +7288,12 @@ var require_client_h2 = __commonJS({
           cb();
         }
       }
-      const waitForDrain = () => new Promise((resolve2, reject) => {
+      const waitForDrain = () => new Promise((resolve3, reject) => {
         assert2(callback === null);
         if (socket[kError]) {
           reject(socket[kError]);
         } else {
-          callback = resolve2;
+          callback = resolve3;
         }
       });
       h2stream.on("close", onDrain).on("drain", onDrain);
@@ -7763,16 +7771,16 @@ var require_client = __commonJS({
         return this[kNeedDrain] < 2;
       }
       async [kClose]() {
-        return new Promise((resolve2) => {
+        return new Promise((resolve3) => {
           if (this[kSize]) {
-            this[kClosedResolve] = resolve2;
+            this[kClosedResolve] = resolve3;
           } else {
-            resolve2(null);
+            resolve3(null);
           }
         });
       }
       async [kDestroy](err) {
-        return new Promise((resolve2) => {
+        return new Promise((resolve3) => {
           const requests = this[kQueue].splice(this[kPendingIdx]);
           for (let i = 0; i < requests.length; i++) {
             const request2 = requests[i];
@@ -7783,7 +7791,7 @@ var require_client = __commonJS({
               this[kClosedResolve]();
               this[kClosedResolve] = null;
             }
-            resolve2(null);
+            resolve3(null);
           };
           if (this[kHTTPContext]) {
             this[kHTTPContext].destroy(err, callback);
@@ -7834,7 +7842,7 @@ var require_client = __commonJS({
         });
       }
       try {
-        const socket = await new Promise((resolve2, reject) => {
+        const socket = await new Promise((resolve3, reject) => {
           client[kConnector]({
             host,
             hostname: hostname3,
@@ -7846,7 +7854,7 @@ var require_client = __commonJS({
             if (err) {
               reject(err);
             } else {
-              resolve2(socket2);
+              resolve3(socket2);
             }
           });
         });
@@ -8182,8 +8190,8 @@ var require_pool_base = __commonJS({
         if (this[kQueue].isEmpty()) {
           await Promise.all(this[kClients].map((c) => c.close()));
         } else {
-          await new Promise((resolve2) => {
-            this[kClosedResolve] = resolve2;
+          await new Promise((resolve3) => {
+            this[kClosedResolve] = resolve3;
           });
         }
       }
@@ -9398,7 +9406,7 @@ var require_readable = __commonJS({
         if (this._readableState.closeEmitted) {
           return null;
         }
-        return await new Promise((resolve2, reject) => {
+        return await new Promise((resolve3, reject) => {
           if (this[kContentLength] > limit) {
             this.destroy(new AbortError());
           }
@@ -9411,7 +9419,7 @@ var require_readable = __commonJS({
             if (signal?.aborted) {
               reject(signal.reason ?? new AbortError());
             } else {
-              resolve2(null);
+              resolve3(null);
             }
           }).on("error", noop3).on("data", function(chunk) {
             limit -= chunk.length;
@@ -9430,7 +9438,7 @@ var require_readable = __commonJS({
     }
     async function consume(stream, type) {
       assert2(!stream[kConsume]);
-      return new Promise((resolve2, reject) => {
+      return new Promise((resolve3, reject) => {
         if (isUnusable(stream)) {
           const rState = stream._readableState;
           if (rState.destroyed && rState.closeEmitted === false) {
@@ -9447,7 +9455,7 @@ var require_readable = __commonJS({
             stream[kConsume] = {
               type,
               stream,
-              resolve: resolve2,
+              resolve: resolve3,
               reject,
               length: 0,
               body: []
@@ -9517,18 +9525,18 @@ var require_readable = __commonJS({
       return buffer;
     }
     function consumeEnd(consume2) {
-      const { type, body, resolve: resolve2, stream, length } = consume2;
+      const { type, body, resolve: resolve3, stream, length } = consume2;
       try {
         if (type === "text") {
-          resolve2(chunksDecode(body, length));
+          resolve3(chunksDecode(body, length));
         } else if (type === "json") {
-          resolve2(JSON.parse(chunksDecode(body, length)));
+          resolve3(JSON.parse(chunksDecode(body, length)));
         } else if (type === "arrayBuffer") {
-          resolve2(chunksConcat(body, length).buffer);
+          resolve3(chunksConcat(body, length).buffer);
         } else if (type === "blob") {
-          resolve2(new Blob(body, { type: stream[kContentType] }));
+          resolve3(new Blob(body, { type: stream[kContentType] }));
         } else if (type === "bytes") {
-          resolve2(chunksConcat(body, length));
+          resolve3(chunksConcat(body, length));
         }
         consumeFinish(consume2);
       } catch (err) {
@@ -9785,9 +9793,9 @@ var require_api_request = __commonJS({
     };
     function request2(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           request2.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -10010,9 +10018,9 @@ var require_api_stream = __commonJS({
     };
     function stream(opts, factory, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           stream.call(this, opts, factory, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -10297,9 +10305,9 @@ var require_api_upgrade = __commonJS({
     };
     function upgrade(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           upgrade.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -10391,9 +10399,9 @@ var require_api_connect = __commonJS({
     };
     function connect(opts, callback) {
       if (callback === void 0) {
-        return new Promise((resolve2, reject) => {
+        return new Promise((resolve3, reject) => {
           connect.call(this, opts, (err, data) => {
-            return err ? reject(err) : resolve2(data);
+            return err ? reject(err) : resolve3(data);
           });
         });
       }
@@ -14255,7 +14263,7 @@ var require_fetch = __commonJS({
       function dispatch({ body }) {
         const url2 = requestCurrentURL(request2);
         const agent = fetchParams.controller.dispatcher;
-        return new Promise((resolve2, reject) => agent.dispatch(
+        return new Promise((resolve3, reject) => agent.dispatch(
           {
             path: url2.pathname + url2.search,
             origin: url2.origin,
@@ -14331,7 +14339,7 @@ var require_fetch = __commonJS({
                 }
               }
               const onError = this.onError.bind(this);
-              resolve2({
+              resolve3({
                 status,
                 statusText,
                 headersList,
@@ -14377,7 +14385,7 @@ var require_fetch = __commonJS({
               for (let i = 0; i < rawHeaders.length; i += 2) {
                 headersList.append(bufferToLowerCasedHeaderName(rawHeaders[i]), rawHeaders[i + 1].toString("latin1"), true);
               }
-              resolve2({
+              resolve3({
                 status,
                 statusText: STATUS_CODES[status],
                 headersList,
@@ -18069,8 +18077,8 @@ var require_util8 = __commonJS({
       return true;
     }
     function delay(ms) {
-      return new Promise((resolve2) => {
-        setTimeout(resolve2, ms).unref();
+      return new Promise((resolve3) => {
+        setTimeout(resolve3, ms).unref();
       });
     }
     module2.exports = {
@@ -18874,11 +18882,11 @@ var require_lib = __commonJS({
     })();
     var __awaiter3 = exports2 && exports2.__awaiter || function(thisArg, _arguments, P, generator) {
       function adopt(value) {
-        return value instanceof P ? value : new P(function(resolve2) {
-          resolve2(value);
+        return value instanceof P ? value : new P(function(resolve3) {
+          resolve3(value);
         });
       }
-      return new (P || (P = Promise))(function(resolve2, reject) {
+      return new (P || (P = Promise))(function(resolve3, reject) {
         function fulfilled(value) {
           try {
             step(generator.next(value));
@@ -18894,7 +18902,7 @@ var require_lib = __commonJS({
           }
         }
         function step(result) {
-          result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+          result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
         }
         step((generator = generator.apply(thisArg, _arguments || [])).next());
       });
@@ -18981,26 +18989,26 @@ var require_lib = __commonJS({
       }
       readBody() {
         return __awaiter3(this, void 0, void 0, function* () {
-          return new Promise((resolve2) => __awaiter3(this, void 0, void 0, function* () {
+          return new Promise((resolve3) => __awaiter3(this, void 0, void 0, function* () {
             let output = Buffer.alloc(0);
             this.message.on("data", (chunk) => {
               output = Buffer.concat([output, chunk]);
             });
             this.message.on("end", () => {
-              resolve2(output.toString());
+              resolve3(output.toString());
             });
           }));
         });
       }
       readBodyBuffer() {
         return __awaiter3(this, void 0, void 0, function* () {
-          return new Promise((resolve2) => __awaiter3(this, void 0, void 0, function* () {
+          return new Promise((resolve3) => __awaiter3(this, void 0, void 0, function* () {
             const chunks = [];
             this.message.on("data", (chunk) => {
               chunks.push(chunk);
             });
             this.message.on("end", () => {
-              resolve2(Buffer.concat(chunks));
+              resolve3(Buffer.concat(chunks));
             });
           }));
         });
@@ -19011,7 +19019,7 @@ var require_lib = __commonJS({
       const parsedUrl = new URL(requestUrl);
       return parsedUrl.protocol === "https:";
     }
-    var HttpClient3 = class {
+    var HttpClient4 = class {
       constructor(userAgent2, handlers, requestOptions) {
         this._ignoreSslError = false;
         this._allowRedirects = true;
@@ -19208,14 +19216,14 @@ var require_lib = __commonJS({
        */
       requestRaw(info2, data) {
         return __awaiter3(this, void 0, void 0, function* () {
-          return new Promise((resolve2, reject) => {
+          return new Promise((resolve3, reject) => {
             function callbackForResult(err, res) {
               if (err) {
                 reject(err);
               } else if (!res) {
                 reject(new Error("Unknown error"));
               } else {
-                resolve2(res);
+                resolve3(res);
               }
             }
             this.requestRawWithCallback(info2, data, callbackForResult);
@@ -19459,12 +19467,12 @@ var require_lib = __commonJS({
         return __awaiter3(this, void 0, void 0, function* () {
           retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
           const ms = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
-          return new Promise((resolve2) => setTimeout(() => resolve2(), ms));
+          return new Promise((resolve3) => setTimeout(() => resolve3(), ms));
         });
       }
       _processResponse(res, options) {
         return __awaiter3(this, void 0, void 0, function* () {
-          return new Promise((resolve2, reject) => __awaiter3(this, void 0, void 0, function* () {
+          return new Promise((resolve3, reject) => __awaiter3(this, void 0, void 0, function* () {
             const statusCode = res.message.statusCode || 0;
             const response = {
               statusCode,
@@ -19472,7 +19480,7 @@ var require_lib = __commonJS({
               headers: {}
             };
             if (statusCode === HttpCodes2.NotFound) {
-              resolve2(response);
+              resolve3(response);
             }
             function dateTimeDeserializer(key, value) {
               if (typeof value === "string") {
@@ -19511,13 +19519,13 @@ var require_lib = __commonJS({
               err.result = response.result;
               reject(err);
             } else {
-              resolve2(response);
+              resolve3(response);
             }
           }));
         });
       }
     };
-    exports2.HttpClient = HttpClient3;
+    exports2.HttpClient = HttpClient4;
     var lowercaseKeys2 = (obj) => Object.keys(obj).reduce((c, k) => (c[k.toLowerCase()] = obj[k], c), {});
   }
 });
@@ -19650,6 +19658,3404 @@ var require_dist = __commonJS({
         return `"${str.replace(QUOTE_REGEXP, "\\$&")}"`;
       throw new TypeError(`Invalid parameter value: ${str}`);
     }
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/config.js
+function buildBaseUrl(config2) {
+  const baseUrl2 = config2.baseUrl ?? DEFAULT_CONFIG.baseUrl;
+  return baseUrl2.replace(/\/$/, "");
+}
+var defaultLogger, DEFAULT_CONFIG;
+var init_config = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/config.js"() {
+    defaultLogger = {
+      debug: (message, data) => console.debug(`[Webacy SDK] ${message}`, data ?? ""),
+      info: (message, data) => console.info(`[Webacy SDK] ${message}`, data ?? ""),
+      warn: (message, data) => console.warn(`[Webacy SDK] ${message}`, data ?? ""),
+      error: (message, data) => console.error(`[Webacy SDK] ${message}`, data ?? "")
+    };
+    DEFAULT_CONFIG = {
+      baseUrl: "https://api.webacy.com",
+      apiVersion: "v2",
+      timeout: 3e4
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/base.js
+var WebacyError;
+var init_base = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/base.js"() {
+    WebacyError = class extends Error {
+      /** HTTP status code if applicable */
+      status;
+      /** Error code for programmatic handling */
+      code;
+      /** Original error if wrapped */
+      cause;
+      /** Request ID for support inquiries */
+      requestId;
+      /** API endpoint that failed (for debugging) */
+      endpoint;
+      constructor(message, options) {
+        super(message);
+        this.name = "WebacyError";
+        this.status = options.status;
+        this.code = options.code;
+        this.cause = options.cause;
+        this.requestId = options.requestId;
+        this.endpoint = options.endpoint;
+        if (Error.captureStackTrace) {
+          Error.captureStackTrace(this, this.constructor);
+        }
+      }
+      /**
+       * Check if this error is retryable
+       */
+      isRetryable() {
+        return false;
+      }
+      /**
+       * Convert to JSON for logging
+       *
+       * Includes the error cause chain for debugging nested errors.
+       */
+      toJSON() {
+        const json2 = {
+          name: this.name,
+          message: this.message,
+          code: this.code,
+          status: this.status,
+          requestId: this.requestId,
+          endpoint: this.endpoint
+        };
+        if (this.cause) {
+          json2.cause = {
+            name: this.cause.name,
+            message: this.cause.message,
+            stack: this.cause.stack
+          };
+        }
+        return json2;
+      }
+      /**
+       * Get a user-friendly description of how to resolve this error
+       */
+      getRecoverySuggestion() {
+        return void 0;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/authentication.js
+var AuthenticationError;
+var init_authentication = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/authentication.js"() {
+    init_base();
+    AuthenticationError = class extends WebacyError {
+      constructor(message = "Invalid or missing API key", options = {}) {
+        super(message, {
+          status: 401,
+          code: "AUTHENTICATION_ERROR",
+          requestId: options.requestId,
+          endpoint: options.endpoint
+        });
+        this.name = "AuthenticationError";
+      }
+      getRecoverySuggestion() {
+        return "Verify your API key is correct and has not expired. You can get a new API key from the Webacy dashboard at https://webacy.com";
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/rate-limit.js
+var RateLimitError;
+var init_rate_limit = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/rate-limit.js"() {
+    init_base();
+    RateLimitError = class extends WebacyError {
+      /** When the rate limit resets (Unix timestamp) */
+      resetAt;
+      /** Number of seconds until reset */
+      retryAfter;
+      constructor(message = "Rate limit exceeded", options = {}) {
+        super(message, {
+          status: 429,
+          code: "RATE_LIMIT_ERROR",
+          requestId: options.requestId,
+          endpoint: options.endpoint
+        });
+        this.name = "RateLimitError";
+        this.resetAt = options.resetAt;
+        this.retryAfter = options.retryAfter;
+      }
+      isRetryable() {
+        return true;
+      }
+      getRecoverySuggestion() {
+        if (this.retryAfter) {
+          return `Wait ${this.retryAfter} seconds before retrying. Consider implementing request throttling or upgrading your API plan for higher limits.`;
+        }
+        return "Wait a moment before retrying. Consider implementing request throttling or upgrading your API plan for higher limits.";
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/validation.js
+var ValidationError;
+var init_validation = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/validation.js"() {
+    init_base();
+    ValidationError = class extends WebacyError {
+      /** Field-level validation errors */
+      errors;
+      constructor(message = "Validation failed", options = {}) {
+        super(message, {
+          status: 400,
+          code: "VALIDATION_ERROR",
+          requestId: options.requestId,
+          endpoint: options.endpoint
+        });
+        this.name = "ValidationError";
+        this.errors = options.errors;
+      }
+      getRecoverySuggestion() {
+        if (this.errors && Object.keys(this.errors).length > 0) {
+          const fields = Object.keys(this.errors).join(", ");
+          return `Check the following fields: ${fields}. Ensure address formats match the specified blockchain and all required parameters are provided.`;
+        }
+        return "Check your input parameters. Ensure address formats match the specified blockchain (e.g., 0x... for EVM chains, base58 for Solana).";
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/not-found.js
+var NotFoundError;
+var init_not_found = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/not-found.js"() {
+    init_base();
+    NotFoundError = class extends WebacyError {
+      constructor(message = "Resource not found", options = {}) {
+        super(message, {
+          status: 404,
+          code: "NOT_FOUND_ERROR",
+          requestId: options.requestId,
+          endpoint: options.endpoint
+        });
+        this.name = "NotFoundError";
+      }
+      getRecoverySuggestion() {
+        return "Verify the address exists and has activity on the specified chain. For new addresses, data may take a few minutes to become available.";
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/network.js
+var NetworkError;
+var init_network = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/network.js"() {
+    init_base();
+    NetworkError = class extends WebacyError {
+      constructor(message = "Network request failed", options = {}) {
+        super(message, {
+          code: "NETWORK_ERROR",
+          cause: options.cause,
+          endpoint: options.endpoint,
+          requestId: options.requestId
+        });
+        this.name = "NetworkError";
+      }
+      isRetryable() {
+        return true;
+      }
+      getRecoverySuggestion() {
+        if (this.message.toLowerCase().includes("timed out")) {
+          return "The request timed out. Try increasing the timeout option or check your network connection.";
+        }
+        return "Check your network connection and try again. If the problem persists, the Webacy API may be temporarily unavailable.";
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/index.js
+var init_errors = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/errors/index.js"() {
+    init_base();
+    init_authentication();
+    init_rate_limit();
+    init_validation();
+    init_not_found();
+    init_network();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/http/retry.js
+function calculateRetryDelay(attempt, config2, retryAfter) {
+  if (retryAfter && retryAfter > 0) {
+    return Math.min(retryAfter * 1e3, config2.maxDelay);
+  }
+  const exponentialDelay = config2.initialDelay * Math.pow(config2.backoffMultiplier, attempt);
+  const cappedExponentialDelay = Math.min(exponentialDelay, config2.maxDelay);
+  const maxJitter = 0.3 * cappedExponentialDelay;
+  const jitter = Math.random() * maxJitter;
+  const delay = cappedExponentialDelay + jitter;
+  return Math.min(delay, config2.maxDelay);
+}
+function isRetryableStatusCode(statusCode, config2) {
+  return config2.retryableStatusCodes.includes(statusCode);
+}
+function sleep(ms) {
+  return new Promise((resolve3) => setTimeout(resolve3, ms));
+}
+var DEFAULT_RETRY_CONFIG;
+var init_retry = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/http/retry.js"() {
+    DEFAULT_RETRY_CONFIG = {
+      maxRetries: 3,
+      initialDelay: 1e3,
+      maxDelay: 3e4,
+      backoffMultiplier: 2,
+      retryableStatusCodes: [408, 429, 500, 502, 503, 504]
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/http/client.js
+var HttpClient3;
+var init_client = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/http/client.js"() {
+    init_errors();
+    init_retry();
+    init_config();
+    HttpClient3 = class {
+      baseUrl;
+      defaultHeaders;
+      defaultTimeout;
+      retryConfig;
+      requestInterceptors = [];
+      responseInterceptors = [];
+      errorInterceptors = [];
+      debug;
+      logger;
+      constructor(config2) {
+        this.baseUrl = config2.baseUrl.replace(/\/$/, "");
+        this.defaultHeaders = {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...config2.headers
+        };
+        this.defaultTimeout = config2.timeout ?? 3e4;
+        this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...config2.retry };
+        this.debug = config2.debug ?? false;
+        this.logger = config2.logger ?? defaultLogger;
+      }
+      /**
+       * Check if request logging is enabled
+       */
+      shouldLogRequests() {
+        return this.debug === true || this.debug === "all" || this.debug === "requests";
+      }
+      /**
+       * Check if response logging is enabled
+       */
+      shouldLogResponses() {
+        return this.debug === true || this.debug === "all" || this.debug === "responses";
+      }
+      /**
+       * Check if error logging is enabled
+       */
+      shouldLogErrors() {
+        return this.debug === true || this.debug === "all" || this.debug === "errors";
+      }
+      /**
+       * Log a request
+       */
+      logRequest(method, url2, body) {
+        if (this.shouldLogRequests()) {
+          this.logger.debug(`\u2192 ${method} ${url2}`, body ? { body: this.sanitizeBody(body) } : void 0);
+        }
+      }
+      /**
+       * Log a response
+       */
+      logResponse(method, url2, status, duration3) {
+        if (this.shouldLogResponses()) {
+          this.logger.debug(`\u2190 ${method} ${url2} ${status} (${duration3}ms)`);
+        }
+      }
+      /**
+       * Log an error
+       */
+      logError(method, url2, error52) {
+        if (this.shouldLogErrors()) {
+          this.logger.error(`\u2717 ${method} ${url2} - ${error52.code}: ${error52.message}`, {
+            code: error52.code,
+            status: error52.status,
+            requestId: error52.requestId
+          });
+        }
+      }
+      /**
+       * Sanitize request body for logging (remove sensitive data)
+       * Recursively processes nested objects and arrays
+       */
+      sanitizeBody(body) {
+        if (typeof body !== "object" || body === null) {
+          return body;
+        }
+        if (Array.isArray(body)) {
+          return body.map((item) => this.sanitizeBody(item));
+        }
+        const sanitized = {};
+        const sensitiveKeys = [
+          "apikey",
+          "api_key",
+          "secret",
+          "password",
+          "token",
+          "authorization",
+          "auth",
+          "credentials",
+          "bearer",
+          "privatekey",
+          "private_key",
+          "sk",
+          "priv",
+          "mnemonic",
+          "seed",
+          "passphrase"
+        ];
+        for (const [key, value] of Object.entries(body)) {
+          if (sensitiveKeys.includes(key.toLowerCase())) {
+            sanitized[key] = "[REDACTED]";
+          } else if (typeof value === "object" && value !== null) {
+            sanitized[key] = this.sanitizeBody(value);
+          } else {
+            sanitized[key] = value;
+          }
+        }
+        return sanitized;
+      }
+      /**
+       * Add a request interceptor
+       */
+      addRequestInterceptor(interceptor) {
+        this.requestInterceptors.push(interceptor);
+      }
+      /**
+       * Add a response interceptor
+       */
+      addResponseInterceptor(interceptor) {
+        this.responseInterceptors.push(interceptor);
+      }
+      /**
+       * Add an error interceptor
+       */
+      addErrorInterceptor(interceptor) {
+        this.errorInterceptors.push(interceptor);
+      }
+      /**
+       * Make a GET request
+       */
+      async get(path, config2) {
+        return this.request(path, { ...config2, method: "GET" });
+      }
+      /**
+       * Make a POST request
+       */
+      async post(path, body, config2) {
+        return this.request(path, { ...config2, method: "POST", body });
+      }
+      /**
+       * Make a PUT request
+       */
+      async put(path, body, config2) {
+        return this.request(path, { ...config2, method: "PUT", body });
+      }
+      /**
+       * Make a PATCH request
+       */
+      async patch(path, body, config2) {
+        return this.request(path, { ...config2, method: "PATCH", body });
+      }
+      /**
+       * Make a DELETE request
+       */
+      async delete(path, config2) {
+        return this.request(path, { ...config2, method: "DELETE" });
+      }
+      /**
+       * Make an HTTP request with retry support
+       */
+      async request(path, config2 = {}) {
+        const url2 = `${this.baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+        let finalConfig = { ...config2 };
+        for (const interceptor of this.requestInterceptors) {
+          finalConfig = await interceptor(url2, finalConfig);
+        }
+        let lastError;
+        let attempt = 0;
+        while (attempt <= this.retryConfig.maxRetries) {
+          try {
+            const response = await this.executeRequest(url2, finalConfig);
+            let finalResponse = response;
+            for (const interceptor of this.responseInterceptors) {
+              finalResponse = await interceptor(finalResponse);
+            }
+            return finalResponse;
+          } catch (error52) {
+            lastError = error52 instanceof WebacyError ? error52 : this.wrapError(error52);
+            for (const interceptor of this.errorInterceptors) {
+              lastError = await interceptor(lastError);
+            }
+            if (!lastError.isRetryable() || attempt >= this.retryConfig.maxRetries) {
+              throw lastError;
+            }
+            const retryAfter = lastError instanceof RateLimitError ? lastError.retryAfter : void 0;
+            const delay = calculateRetryDelay(attempt, this.retryConfig, retryAfter);
+            await sleep(delay);
+            attempt++;
+          }
+        }
+        throw lastError ?? new NetworkError("Request failed after all retries");
+      }
+      /**
+       * Execute a single HTTP request
+       */
+      async executeRequest(url2, config2) {
+        const method = config2.method ?? "GET";
+        const timeout = config2.timeout ?? this.defaultTimeout;
+        const controller = new AbortController();
+        let didTimeout = false;
+        const timeoutId = setTimeout(() => {
+          didTimeout = true;
+          controller.abort();
+        }, timeout);
+        const startTime = Date.now();
+        this.logRequest(method, url2, config2.body);
+        const signal = config2.signal ? this.combineAbortSignals(config2.signal, controller.signal) : controller.signal;
+        try {
+          const response = await fetch(url2, {
+            method,
+            headers: {
+              ...this.defaultHeaders,
+              ...config2.headers
+            },
+            body: config2.body ? JSON.stringify(config2.body) : void 0,
+            signal
+          });
+          clearTimeout(timeoutId);
+          const duration3 = Date.now() - startTime;
+          const requestId = response.headers.get("x-request-id") ?? void 0;
+          if (!response.ok) {
+            const error52 = await this.createErrorFromResponse(response, requestId, url2);
+            this.logError(method, url2, error52);
+            throw error52;
+          }
+          this.logResponse(method, url2, response.status, duration3);
+          const contentType = response.headers.get("content-type");
+          let data;
+          if (contentType?.includes("application/json")) {
+            data = await response.json();
+          } else {
+            data = await response.text();
+          }
+          return {
+            data,
+            status: response.status,
+            headers: response.headers,
+            requestId
+          };
+        } catch (error52) {
+          clearTimeout(timeoutId);
+          if (error52 instanceof WebacyError) {
+            throw error52;
+          }
+          let networkError;
+          if (error52 instanceof Error) {
+            if (error52.name === "AbortError") {
+              if (didTimeout) {
+                networkError = new NetworkError("Request timed out", { cause: error52, endpoint: url2 });
+              } else {
+                networkError = new NetworkError("Request was cancelled by the caller", {
+                  cause: error52,
+                  endpoint: url2
+                });
+              }
+            } else {
+              networkError = new NetworkError(error52.message, { cause: error52, endpoint: url2 });
+            }
+          } else {
+            networkError = new NetworkError("An unknown error occurred", { endpoint: url2 });
+          }
+          this.logError(method, url2, networkError);
+          throw networkError;
+        }
+      }
+      /**
+       * Create an appropriate error from an HTTP response
+       */
+      async createErrorFromResponse(response, requestId, endpoint2) {
+        let errorBody = {};
+        try {
+          errorBody = await response.json();
+        } catch {
+        }
+        const message = errorBody.message ?? errorBody.error ?? response.statusText;
+        switch (response.status) {
+          case 401:
+          case 403:
+            return new AuthenticationError(message, { requestId, endpoint: endpoint2 });
+          case 404:
+            return new NotFoundError(message, { requestId, endpoint: endpoint2 });
+          case 429: {
+            const retryAfter = response.headers.get("retry-after");
+            const resetAt = response.headers.get("x-ratelimit-reset");
+            return new RateLimitError(message, {
+              retryAfter: this.parseRetryAfter(retryAfter),
+              resetAt: this.parseRetryAfter(resetAt),
+              requestId,
+              endpoint: endpoint2
+            });
+          }
+          case 400:
+            return new ValidationError(message, {
+              errors: errorBody.errors,
+              requestId,
+              endpoint: endpoint2
+            });
+          default:
+            if (isRetryableStatusCode(response.status, this.retryConfig)) {
+              return new NetworkError(message, {
+                cause: new Error(`HTTP ${response.status}`),
+                endpoint: endpoint2,
+                requestId
+              });
+            }
+            return new WebacyError(message, {
+              status: response.status,
+              code: "API_ERROR",
+              requestId,
+              endpoint: endpoint2
+            });
+        }
+      }
+      /**
+       * Wrap an unknown error in a WebacyError
+       */
+      wrapError(error52) {
+        if (error52 instanceof WebacyError) {
+          return error52;
+        }
+        if (error52 instanceof Error) {
+          return new NetworkError(error52.message, { cause: error52 });
+        }
+        return new NetworkError("An unknown error occurred");
+      }
+      /**
+       * Parse and validate Retry-After header value
+       *
+       * Handles edge cases:
+       * - NaN from non-numeric strings (e.g., HTTP-date format)
+       * - Negative values
+       * - Extremely large values (capped at 5 minutes)
+       *
+       * @param value - Raw header value
+       * @returns Validated retry delay in seconds, or undefined if invalid
+       */
+      parseRetryAfter(value) {
+        if (!value)
+          return void 0;
+        const parsed = parseInt(value, 10);
+        if (Number.isNaN(parsed) || parsed < 0) {
+          return void 0;
+        }
+        const MAX_RETRY_AFTER_SECONDS = 300;
+        return Math.min(parsed, MAX_RETRY_AFTER_SECONDS);
+      }
+      /**
+       * Combine multiple abort signals
+       */
+      combineAbortSignals(...signals) {
+        const controller = new AbortController();
+        for (const signal of signals) {
+          if (signal.aborted) {
+            controller.abort(signal.reason);
+            break;
+          }
+          signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
+        }
+        return controller.signal;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/http/index.js
+var init_http = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/http/index.js"() {
+    init_client();
+    init_retry();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/client-base.js
+var BaseClient;
+var init_client_base = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/client-base.js"() {
+    init_config();
+    init_http();
+    init_errors();
+    BaseClient = class {
+      httpClient;
+      config;
+      /**
+       * Default chain to use when chain is not specified in API calls
+       */
+      defaultChain;
+      constructor(config2) {
+        if (!config2.apiKey) {
+          throw new AuthenticationError("API key is required");
+        }
+        this.config = {
+          ...config2,
+          baseUrl: config2.baseUrl ?? DEFAULT_CONFIG.baseUrl,
+          apiVersion: config2.apiVersion ?? DEFAULT_CONFIG.apiVersion,
+          timeout: config2.timeout ?? DEFAULT_CONFIG.timeout
+        };
+        this.defaultChain = config2.defaultChain;
+        this.httpClient = new HttpClient3({
+          baseUrl: buildBaseUrl(this.config),
+          timeout: this.config.timeout,
+          retry: config2.retry,
+          debug: config2.debug,
+          logger: config2.logger,
+          headers: {
+            "x-api-key": config2.apiKey,
+            ...config2.headers
+          }
+        });
+      }
+      /**
+       * Add a request interceptor
+       *
+       * Request interceptors are called before each request is sent.
+       * Use them to modify requests, add headers, or log requests.
+       *
+       * @example
+       * ```typescript
+       * client.addRequestInterceptor((url, config) => {
+       *   console.log(`Making request to ${url}`);
+       *   return config;
+       * });
+       * ```
+       */
+      addRequestInterceptor(interceptor) {
+        this.httpClient.addRequestInterceptor(interceptor);
+      }
+      /**
+       * Add a response interceptor
+       *
+       * Response interceptors are called after each successful response.
+       * Use them to transform responses or log data.
+       *
+       * @example
+       * ```typescript
+       * client.addResponseInterceptor((response) => {
+       *   console.log(`Received ${response.status} response`);
+       *   return response;
+       * });
+       * ```
+       */
+      addResponseInterceptor(interceptor) {
+        this.httpClient.addResponseInterceptor(interceptor);
+      }
+      /**
+       * Add an error interceptor
+       *
+       * Error interceptors are called when a request fails.
+       * Use them to handle errors globally or transform error types.
+       *
+       * @example
+       * ```typescript
+       * client.addErrorInterceptor((error) => {
+       *   if (error instanceof RateLimitError) {
+       *     console.warn('Rate limited, will retry...');
+       *   }
+       *   return error;
+       * });
+       * ```
+       */
+      addErrorInterceptor(interceptor) {
+        this.httpClient.addErrorInterceptor(interceptor);
+      }
+      /**
+       * Make a GET request
+       */
+      get(path, options) {
+        return this.httpClient.get(path, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+      }
+      /**
+       * Make a POST request
+       */
+      post(path, body, options) {
+        return this.httpClient.post(path, body, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+      }
+      /**
+       * Make a PUT request
+       */
+      put(path, body, options) {
+        return this.httpClient.put(path, body, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+      }
+      /**
+       * Make a DELETE request
+       */
+      delete(path, options) {
+        return this.httpClient.delete(path, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/chain.js
+function getChainCompatibility(chain) {
+  switch (chain) {
+    case Chain.ETH:
+    case Chain.SEP:
+    case Chain.ARB:
+    case Chain.POL:
+    case Chain.OPT:
+    case Chain.BASE:
+    case Chain.BSC:
+      return ChainCompatibility.EVM;
+    case Chain.SOL:
+      return ChainCompatibility.SOLANA;
+    case Chain.TON:
+      return ChainCompatibility.TON;
+    case Chain.BTC:
+      return ChainCompatibility.BTC;
+    case Chain.SEI:
+      return ChainCompatibility.SEI;
+    case Chain.SUI:
+      return ChainCompatibility.SUI;
+    case Chain.STELLAR:
+      return ChainCompatibility.STELLAR;
+    case Chain.HEDERA:
+      return ChainCompatibility.HEDERA;
+    default: {
+      const _exhaustiveCheck = chain;
+      throw new Error(`Unhandled chain: ${String(_exhaustiveCheck)}`);
+    }
+  }
+}
+function isEvmChain(chain) {
+  return getChainCompatibility(chain) === ChainCompatibility.EVM;
+}
+var Chain, ChainCompatibility, CHAIN_IDS, CHAIN_NAMES;
+var init_chain = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/chain.js"() {
+    (function(Chain2) {
+      Chain2["ETH"] = "eth";
+      Chain2["SEP"] = "sep";
+      Chain2["ARB"] = "arb";
+      Chain2["POL"] = "pol";
+      Chain2["SOL"] = "sol";
+      Chain2["OPT"] = "opt";
+      Chain2["BASE"] = "base";
+      Chain2["BSC"] = "bsc";
+      Chain2["TON"] = "ton";
+      Chain2["SEI"] = "sei";
+      Chain2["BTC"] = "btc";
+      Chain2["SUI"] = "sui";
+      Chain2["STELLAR"] = "stellar";
+      Chain2["HEDERA"] = "hedera";
+    })(Chain || (Chain = {}));
+    (function(ChainCompatibility2) {
+      ChainCompatibility2["EVM"] = "EVM";
+      ChainCompatibility2["SOLANA"] = "SOLANA";
+      ChainCompatibility2["TON"] = "TON";
+      ChainCompatibility2["BTC"] = "BTC";
+      ChainCompatibility2["SEI"] = "SEI";
+      ChainCompatibility2["SUI"] = "SUI";
+      ChainCompatibility2["STELLAR"] = "STELLAR";
+      ChainCompatibility2["HEDERA"] = "HEDERA";
+    })(ChainCompatibility || (ChainCompatibility = {}));
+    CHAIN_IDS = {
+      [Chain.ETH]: 1,
+      [Chain.SEP]: 11155111,
+      [Chain.BSC]: 56,
+      [Chain.POL]: 137,
+      [Chain.OPT]: 10,
+      [Chain.ARB]: 42161,
+      [Chain.BASE]: 8453
+    };
+    CHAIN_NAMES = {
+      [Chain.ETH]: "Ethereum",
+      [Chain.SEP]: "Sepolia",
+      [Chain.ARB]: "Arbitrum",
+      [Chain.POL]: "Polygon",
+      [Chain.SOL]: "Solana",
+      [Chain.OPT]: "Optimism",
+      [Chain.BASE]: "Base",
+      [Chain.BSC]: "BNB Smart Chain",
+      [Chain.TON]: "TON",
+      [Chain.SEI]: "Sei",
+      [Chain.BTC]: "Bitcoin",
+      [Chain.SUI]: "Sui",
+      [Chain.STELLAR]: "Stellar",
+      [Chain.HEDERA]: "Hedera"
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/modules.js
+var RiskModule;
+var init_modules = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/modules.js"() {
+    (function(RiskModule2) {
+      RiskModule2["GOVERNANCE_ANALYSIS"] = "governance_analysis";
+      RiskModule2["TOKEN_SECURITY"] = "token_security";
+      RiskModule2["CONTRACT_ANALYSIS"] = "contract_analysis";
+      RiskModule2["SOURCE_CODE_ANALYSIS"] = "source_code_analysis";
+      RiskModule2["MARKET_DATA"] = "market_data";
+      RiskModule2["HOLDER_ANALYSIS"] = "holder_analysis";
+      RiskModule2["LIQUIDITY_ANALYSIS"] = "liquidity_analysis";
+      RiskModule2["FRAUD_DETECTION"] = "fraud_detection";
+      RiskModule2["SANCTIONS_COMPLIANCE"] = "sanctions_compliance";
+      RiskModule2["MIXER_DETECTION"] = "mixer_detection";
+      RiskModule2["ADDRESS_BEHAVIOR"] = "address_behavior";
+      RiskModule2["TRANSACTION_ANALYSIS"] = "transaction_analysis";
+      RiskModule2["REPUTATION_ANALYSIS"] = "reputation_analysis";
+      RiskModule2["SOLANA_SPECIFIC"] = "solana_specific";
+      RiskModule2["EVM_SPECIFIC"] = "evm_specific";
+      RiskModule2["TON_SPECIFIC"] = "ton_specific";
+      RiskModule2["SUI_SPECIFIC"] = "sui_specific";
+      RiskModule2["BASIC_INFO"] = "basic_info";
+      RiskModule2["SECURITY_ESSENTIALS"] = "security_essentials";
+      RiskModule2["FUND_FLOW_SCREENING"] = "fund_flow_screening";
+      RiskModule2["DEVELOPER_MIGRATION"] = "developer_migration";
+    })(RiskModule || (RiskModule = {}));
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/common.js
+var RiskScore, RiskLevel, TypeOfAddress, TokenStandard;
+var init_common = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/common.js"() {
+    (function(RiskScore2) {
+      RiskScore2["HIGH"] = "High Risk";
+      RiskScore2["MEDIUM"] = "Medium Risk";
+      RiskScore2["LOW"] = "Low Risk";
+      RiskScore2["TRUSTED"] = "Trusted";
+      RiskScore2["UNKNOWN"] = "Unknown";
+    })(RiskScore || (RiskScore = {}));
+    (function(RiskLevel2) {
+      RiskLevel2["Low"] = "low";
+      RiskLevel2["Medium"] = "medium";
+      RiskLevel2["High"] = "high";
+      RiskLevel2["Suspicious"] = "suspicious";
+    })(RiskLevel || (RiskLevel = {}));
+    (function(TypeOfAddress2) {
+      TypeOfAddress2["EOA"] = "EOA";
+      TypeOfAddress2["CONTRACT"] = "CONTRACT";
+      TypeOfAddress2["TOKEN"] = "TOKEN";
+      TypeOfAddress2["CONTRACT_WALLET"] = "CONTRACT_WALLET";
+      TypeOfAddress2["MULTISIG"] = "MULTISIG";
+    })(TypeOfAddress || (TypeOfAddress = {}));
+    (function(TokenStandard2) {
+      TokenStandard2["ERC20"] = "ERC20";
+      TokenStandard2["ERC721"] = "ERC721";
+      TokenStandard2["ERC1155"] = "ERC1155";
+      TokenStandard2["SPL"] = "SPL";
+      TokenStandard2["JETTON"] = "JETTON";
+      TokenStandard2["STELLAR_ASSET"] = "STELLAR_ASSET";
+      TokenStandard2["SUI_COIN"] = "SUI_COIN";
+    })(TokenStandard || (TokenStandard = {}));
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/index.js
+var init_types = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/types/index.js"() {
+    init_chain();
+    init_modules();
+    init_common();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/utils/address-validation.js
+function isValidEvmAddress(address) {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
+}
+function isValidSolanaAddress(address) {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+}
+function isValidBitcoinAddress(address) {
+  if (/^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$/.test(address)) {
+    return true;
+  }
+  const hasLower = /[a-z]/.test(address);
+  const hasUpper = /[A-Z]/.test(address);
+  if (hasLower && hasUpper) {
+    return false;
+  }
+  const lowerAddress = address.toLowerCase();
+  if (/^bc1q[a-z0-9]{38,58}$/.test(lowerAddress)) {
+    return true;
+  }
+  if (/^bc1p[a-z0-9]{58}$/.test(lowerAddress)) {
+    return true;
+  }
+  return false;
+}
+function isValidTonAddress(address) {
+  if (/^-?\d:[a-fA-F0-9]{64}$/.test(address)) {
+    return true;
+  }
+  if (/^[A-Za-z0-9_-]{48}$/.test(address)) {
+    return true;
+  }
+  return false;
+}
+function isValidSuiAddress(address) {
+  if (/^0x[a-fA-F0-9]{1,64}$/.test(address)) {
+    return true;
+  }
+  if (/^0x[a-fA-F0-9]{1,64}::[a-zA-Z_][a-zA-Z0-9_]*::[a-zA-Z_][a-zA-Z0-9_]*$/.test(address)) {
+    return true;
+  }
+  return false;
+}
+function isValidStellarAddress(address) {
+  if (/^G[A-Z2-7]{55}$/.test(address)) {
+    return true;
+  }
+  if (/^[A-Za-z0-9]{1,12}:G[A-Z2-7]{55}$/.test(address)) {
+    return true;
+  }
+  return false;
+}
+function isValidHederaAddress(address) {
+  if (/^\d+\.\d+\.\d+$/.test(address)) {
+    return true;
+  }
+  if (/^0x0{24}[0-9a-fA-F]{16}$/.test(address)) {
+    return true;
+  }
+  if (/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    return true;
+  }
+  return false;
+}
+function isValidAddress(address, chain) {
+  if (!address || typeof address !== "string") {
+    return false;
+  }
+  if (isEvmChain(chain)) {
+    return isValidEvmAddress(address);
+  }
+  switch (chain) {
+    case Chain.SOL:
+      return isValidSolanaAddress(address);
+    case Chain.BTC:
+      return isValidBitcoinAddress(address);
+    case Chain.TON:
+      return isValidTonAddress(address);
+    case Chain.SUI:
+      return isValidSuiAddress(address);
+    case Chain.STELLAR:
+      return isValidStellarAddress(address);
+    case Chain.HEDERA:
+      return isValidHederaAddress(address);
+    default:
+      return address.length > 0;
+  }
+}
+var init_address_validation = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/utils/address-validation.js"() {
+    init_types();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/utils/url-validation.js
+function normalizeUrl(url2) {
+  if (!url2 || typeof url2 !== "string")
+    return url2;
+  if (!/^https?:\/\//i.test(url2)) {
+    return `https://${url2}`;
+  }
+  return url2;
+}
+function isValidUrl(url2) {
+  if (!url2 || typeof url2 !== "string") {
+    return false;
+  }
+  try {
+    const parsed = new URL(url2);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return false;
+    }
+    if (!parsed.hostname || parsed.hostname.length === 0) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+var init_url_validation = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/utils/url-validation.js"() {
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/utils/index.js
+var init_utils = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/utils/index.js"() {
+    init_address_validation();
+    init_url_validation();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/resources/base.js
+var BaseResource;
+var init_base2 = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/resources/base.js"() {
+    init_errors();
+    init_types();
+    init_utils();
+    BaseResource = class {
+      httpClient;
+      defaultChain;
+      constructor(httpClient2, defaultChain) {
+        this.httpClient = httpClient2;
+        this.defaultChain = defaultChain;
+      }
+      /**
+       * Resolve the chain to use for a request
+       * @throws ValidationError if no chain is specified and no default is set
+       */
+      resolveChain(options) {
+        const chain = options?.chain ?? this.defaultChain;
+        if (!chain) {
+          throw new ValidationError("Chain is required. Either specify chain in options or set defaultChain in client configuration.");
+        }
+        return chain;
+      }
+      /**
+       * Validate address format for the given chain
+       * @throws ValidationError if address format is invalid for the chain
+       */
+      validateAddress(address, chain) {
+        if (!isValidAddress(address, chain)) {
+          const chainName = CHAIN_NAMES[chain] || chain;
+          throw new ValidationError(`Invalid ${chainName} address: "${address}". Please provide a valid address format for the ${chainName} blockchain.`);
+        }
+      }
+      /**
+       * Build a query string from an object of parameters
+       *
+       * Filters out undefined and null values, converts remaining values to strings.
+       *
+       * @param params - Object with query parameter key-value pairs
+       * @returns Query string (without leading '?') or empty string if no params
+       *
+       * @example
+       * ```typescript
+       * this.buildQueryString({ chain: 'eth', limit: 10, offset: undefined })
+       * // Returns: 'chain=eth&limit=10'
+       * ```
+       */
+      buildQueryString(params) {
+        const searchParams = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+          if (value !== void 0 && value !== null) {
+            searchParams.append(key, String(value));
+          }
+        }
+        return searchParams.toString();
+      }
+      /**
+       * Build a URL path with optional query string
+       *
+       * @param basePath - The base path (e.g., '/addresses/0x123')
+       * @param params - Optional query parameters
+       * @returns Full path with query string if params exist
+       */
+      buildPath(basePath, params) {
+        if (!params) {
+          return basePath;
+        }
+        const queryString = this.buildQueryString(params);
+        return queryString ? `${basePath}?${queryString}` : basePath;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/resources/index.js
+var init_resources = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/resources/index.js"() {
+    init_base2();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-core/dist/esm/index.js
+var init_esm = __esm({
+  "../../node_modules/@webacy-xyz/sdk-core/dist/esm/index.js"() {
+    init_config();
+    init_client_base();
+    init_resources();
+    init_http();
+    init_errors();
+    init_types();
+    init_utils();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/constants.js
+var VALID_SCAN_CHAIN_IDS, SUPPORTED_TX_CHAINS, SUPPORTED_QUICK_PROFILE_CHAINS;
+var init_constants = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/constants.js"() {
+    init_esm();
+    VALID_SCAN_CHAIN_IDS = [1, 56, 137, 10, 42161, 8453];
+    SUPPORTED_TX_CHAINS = [
+      Chain.ETH,
+      Chain.BASE,
+      Chain.BSC,
+      Chain.POL,
+      Chain.OPT,
+      Chain.ARB,
+      Chain.SOL,
+      Chain.STELLAR
+    ];
+    SUPPORTED_QUICK_PROFILE_CHAINS = [
+      Chain.ETH,
+      Chain.BASE,
+      Chain.BSC,
+      Chain.POL,
+      Chain.OPT,
+      Chain.ARB,
+      Chain.SOL
+    ];
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/addresses.js
+var AddressesResource;
+var init_addresses = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/addresses.js"() {
+    init_esm();
+    init_constants();
+    AddressesResource = class extends BaseResource {
+      /**
+       * Analyze an address for security risks
+       *
+       * Returns comprehensive risk analysis including:
+       * - Overall risk score (0-100)
+       * - Risk tags and categories
+       * - Detailed analysis data (optional)
+       * - Deployer risk for contracts (optional)
+       *
+       * @param address - Address to analyze
+       * @param options - Analysis options (chain is optional if defaultChain is set)
+       * @returns Address risk analysis result
+       *
+       * @example
+       * ```typescript
+       * // Basic analysis
+       * const risk = await client.addresses.analyze('0x742d35Cc...', {
+       *   chain: Chain.ETH,
+       * });
+       * console.log(`Risk score: ${risk.overallRisk}`);
+       *
+       * // With default chain, options can be omitted
+       * const risk = await client.addresses.analyze('0x742d35Cc...');
+       *
+       * // With specific modules
+       * const risk = await client.addresses.analyze('0x...', {
+       *   chain: Chain.ETH,
+       *   modules: [RiskModule.SANCTIONS_COMPLIANCE, RiskModule.FUND_FLOW_SCREENING],
+       * });
+       *
+       * // With detailed response and deployer risk
+       * const risk = await client.addresses.analyze('0x...', {
+       *   chain: Chain.ETH,
+       *   detailed: true,
+       *   deployerRisk: true,
+       * });
+       * ```
+       */
+      async analyze(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.modules && options.modules.length > 0) {
+          for (const module2 of options.modules) {
+            queryParams.append("modules", module2);
+          }
+        }
+        if (options.detailed !== void 0) {
+          queryParams.append("detailed", String(options.detailed));
+        }
+        if (options.deployerRisk !== void 0) {
+          queryParams.append("deployer_risk", String(options.deployerRisk));
+        }
+        const response = await this.httpClient.get(`/addresses/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Check if an address is sanctioned
+       *
+       * Screens the address against known sanctions lists including OFAC.
+       *
+       * @param address - Address to check
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Sanctions check result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.addresses.checkSanctioned('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * // With default chain configured
+       * const result = await client.addresses.checkSanctioned('0x...');
+       *
+       * if (result.is_sanctioned) {
+       *   console.error('Address is sanctioned!');
+       *   console.log('Details:', result.sanction_details);
+       * }
+       * ```
+       */
+      async checkSanctioned(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/addresses/sanctioned/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Check for address poisoning attacks
+       *
+       * Detects if an address has been targeted by address poisoning
+       * (dust attack) attempts.
+       *
+       * @param address - Address to check
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Poisoning detection result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.addresses.checkPoisoning('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * // With default chain configured
+       * const result = await client.addresses.checkPoisoning('0x...');
+       *
+       * if (result.is_poisoned) {
+       *   console.warn('Address poisoning detected!');
+       *   console.log('Similar addresses:', result.poisoning_details?.similar_addresses);
+       * }
+       * ```
+       */
+      async checkPoisoning(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/addresses/${encodeURIComponent(address)}/poisoning?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get a quick risk profile for an address
+       *
+       * Returns a lightweight risk assessment including:
+       * - Risk score and level
+       * - Risk tags
+       * - Token approvals (optional)
+       * - Account age and activity summary
+       *
+       * @param address - Address to analyze
+       * @param options - Request options
+       * @returns Quick profile result
+       *
+       * @example
+       * ```typescript
+       * // Basic quick profile
+       * const profile = await client.addresses.getQuickProfile('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       * console.log(`Risk score: ${profile.riskScore}`);
+       *
+       * // With token approvals
+       * const profile = await client.addresses.getQuickProfile('0x...', {
+       *   chain: Chain.ETH,
+       *   withApprovals: true,
+       * });
+       * for (const approval of profile.approvals ?? []) {
+       *   console.log(`${approval.symbol} approved to ${approval.spenderName}`);
+       * }
+       *
+       * // Hide trust flags
+       * const profile = await client.addresses.getQuickProfile('0x...', {
+       *   chain: Chain.ETH,
+       *   hideTrustFlags: true,
+       * });
+       * ```
+       */
+      async getQuickProfile(address, options = {}) {
+        const chain = this.resolveQuickProfileChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.withApprovals !== void 0) {
+          queryParams.append("withApprovals", String(options.withApprovals));
+        }
+        if (options.withNewApprovals !== void 0) {
+          queryParams.append("withNewApprovals", String(options.withNewApprovals));
+        }
+        if (options.refreshCache !== void 0) {
+          queryParams.append("refreshCache", String(options.refreshCache));
+        }
+        if (options.hideTrustFlags !== void 0) {
+          queryParams.append("hide_trust_flags", String(options.hideTrustFlags));
+        }
+        const response = await this.httpClient.get(`/quick-profile/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get transaction risk summary for an address
+       *
+       * Returns a summary of transaction risk data for the given address.
+       *
+       * @param address - Address to get summary for
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Transaction risk summary
+       *
+       * @example
+       * ```typescript
+       * const summary = await client.addresses.getSummary('0x...', { chain: Chain.ETH });
+       * ```
+       */
+      async getSummary(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.page !== void 0) {
+          queryParams.append("page", String(options.page));
+        }
+        const response = await this.httpClient.get(`/summary/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Resolve the chain for quick profile requests
+       */
+      resolveQuickProfileChain(options) {
+        const chain = options?.chain ?? this.defaultChain;
+        if (!chain) {
+          throw new ValidationError("Chain is required. Either specify chain in options or set defaultChain in client configuration.");
+        }
+        if (!SUPPORTED_QUICK_PROFILE_CHAINS.includes(chain)) {
+          throw new ValidationError(`Chain "${chain}" is not supported for quick profile. Supported chains: ${SUPPORTED_QUICK_PROFILE_CHAINS.join(", ")}`);
+        }
+        return chain;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/contracts.js
+var ContractsResource;
+var init_contracts = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/contracts.js"() {
+    init_esm();
+    ContractsResource = class extends BaseResource {
+      /**
+       * Analyze a smart contract for security risks
+       *
+       * Returns comprehensive analysis including:
+       * - Risk score and categorization
+       * - Vulnerability detection
+       * - Source code analysis (if verified)
+       * - Similar contracts
+       * - Deployer risk (optional)
+       *
+       * @param address - Contract address
+       * @param options - Analysis options (chain is optional if defaultChain is set)
+       * @returns Contract risk analysis result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.contracts.analyze('0xContract...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * // With default chain, options can be omitted
+       * const result = await client.contracts.analyze('0xContract...');
+       *
+       * console.log(`Risk score: ${result.score}`);
+       * console.log(`Tags: ${result.tags.map(t => t.name).join(', ')}`);
+       *
+       * // Check for vulnerabilities
+       * if (result.source_code_analysis && 'vulnerabilities' in result.source_code_analysis) {
+       *   for (const vuln of result.source_code_analysis.vulnerabilities) {
+       *     console.warn(`${vuln.severity}: ${vuln.title}`);
+       *   }
+       * }
+       * ```
+       */
+      async analyze(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.deployerRisk !== void 0) {
+          queryParams.append("deployer_risk", String(options.deployerRisk));
+        }
+        if (options.fromBytecode !== void 0) {
+          queryParams.append("fromBytecode", String(options.fromBytecode));
+        }
+        if (options.refreshCache !== void 0) {
+          queryParams.append("refreshCache", String(options.refreshCache));
+        }
+        if (options.disableChecksum !== void 0) {
+          queryParams.append("disableChecksum", String(options.disableChecksum));
+        }
+        const response = await this.httpClient.get(`/contracts/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get contract source code
+       *
+       * Returns source code and metadata for verified contracts.
+       *
+       * @param address - Contract address
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Contract source code and metadata
+       *
+       * @example
+       * ```typescript
+       * const source = await client.contracts.getSourceCode('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * // With default chain configured
+       * const source = await client.contracts.getSourceCode('0x...');
+       *
+       * if (source.is_verified) {
+       *   console.log(`Contract: ${source.contract_name}`);
+       *   console.log(`Compiler: ${source.compiler_version}`);
+       * } else {
+       *   console.log('Contract source not verified');
+       * }
+       * ```
+       */
+      async getSourceCode(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/contracts/${encodeURIComponent(address)}/source-code?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get token buy/sell taxes
+       *
+       * Analyzes token contracts for buy and sell taxes.
+       *
+       * @param address - Token contract address
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Tax information
+       *
+       * @example
+       * ```typescript
+       * const taxes = await client.contracts.getTaxes('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * // With default chain configured
+       * const taxes = await client.contracts.getTaxes('0x...');
+       *
+       * if (taxes.buyTaxPercentage !== null || taxes.sellTaxPercentage !== null) {
+       *   console.log(`Buy tax: ${taxes.buyTaxPercentage}%`);
+       *   console.log(`Sell tax: ${taxes.sellTaxPercentage}%`);
+       * }
+       * ```
+       */
+      async getTaxes(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/contracts/taxes/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Analyze Solidity source code
+       *
+       * Analyzes raw Solidity source code for vulnerabilities
+       * without requiring deployment.
+       *
+       * @param request - Analysis request with source code
+       * @returns Analysis results
+       *
+       * @example
+       * ```typescript
+       * const result = await client.contracts.analyzeSolidity({
+       *   source_code: `
+       *     pragma solidity ^0.8.0;
+       *     contract MyToken {
+       *       // ...
+       *     }
+       *   `,
+       *   compiler_version: '0.8.19',
+       * });
+       *
+       * if (result.success && result.results) {
+       *   console.log(`Security score: ${result.results.security_score}`);
+       *   for (const vuln of result.results.vulnerabilities) {
+       *     console.warn(`${vuln.severity}: ${vuln.title}`);
+       *   }
+       * }
+       * ```
+       */
+      async analyzeSolidity(request2, options) {
+        const response = await this.httpClient.post("/contracts/solidity-detector", request2, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get static code analysis for a contract
+       *
+       * Performs static analysis on verified contract source code
+       * to identify security vulnerabilities and code quality issues.
+       *
+       * @param address - Contract address
+       * @param options - Analysis options (chain is optional if defaultChain is set)
+       * @returns Code analysis result
+       *
+       * @example
+       * ```typescript
+       * const analysis = await client.contracts.getCodeAnalysis('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * console.log(`Security score: ${analysis.securityScore}`);
+       * console.log(`Findings: ${analysis.findings.length}`);
+       *
+       * // Check for critical/high severity issues
+       * const critical = analysis.findings.filter(f =>
+       *   f.severity === 'critical' || f.severity === 'high'
+       * );
+       * for (const finding of critical) {
+       *   console.warn(`${finding.severity}: ${finding.title}`);
+       *   console.warn(`  ${finding.description}`);
+       * }
+       *
+       * // Force refresh cache
+       * const fresh = await client.contracts.getCodeAnalysis('0x...', {
+       *   chain: Chain.ETH,
+       *   refreshCache: true,
+       * });
+       * ```
+       */
+      async getCodeAnalysis(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.refreshCache !== void 0) {
+          queryParams.append("refreshCache", String(options.refreshCache));
+        }
+        const response = await this.httpClient.get(`/contracts/${encodeURIComponent(address)}/code-analysis?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get audit data for a contract
+       *
+       * Returns audit information for the given contract address.
+       *
+       * @param address - Contract address
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Audit data
+       *
+       * @example
+       * ```typescript
+       * const audits = await client.contracts.getAudits('0x...', { chain: Chain.ETH });
+       * ```
+       */
+      async getAudits(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/audits/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Look up contracts by token symbol
+       *
+       * Returns contract data matching the given symbol.
+       *
+       * @param symbol - Token symbol to search for
+       * @param options - Request options
+       * @returns Symbol lookup results
+       *
+       * @example
+       * ```typescript
+       * const results = await client.contracts.getBySymbol('USDC');
+       * ```
+       */
+      async getBySymbol(symbol2, options = {}) {
+        if (!symbol2 || typeof symbol2 !== "string" || symbol2.trim() === "") {
+          throw new ValidationError("Symbol is required and must be a non-empty string.");
+        }
+        const response = await this.httpClient.get(`/contracts/symbol/${encodeURIComponent(symbol2)}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/url.js
+var UrlResource;
+var init_url = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/url.js"() {
+    init_esm();
+    UrlResource = class extends BaseResource {
+      // Note: URL analysis is chain-agnostic, defaultChain is accepted for interface consistency
+      constructor(httpClient2, _defaultChain) {
+        super(httpClient2, _defaultChain);
+      }
+      /**
+       * Check if a URL is safe
+       *
+       * Analyzes a URL for phishing, malware, and other threats.
+       *
+       * @param url - URL to check
+       * @param options - Request options
+       * @returns URL safety analysis result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.url.check('https://example.com');
+       *
+       * if (result.prediction === 'malicious') {
+       *   console.error('URL is potentially dangerous!');
+       *   console.log('Details:', result.details);
+       * } else if (result.prediction === 'benign') {
+       *   console.log('URL appears safe');
+       * }
+       *
+       * // Check blacklist/whitelist status
+       * if (result.blacklist === 'true') {
+       *   console.error('URL is blacklisted');
+       * }
+       * if (result.whitelist === 'true') {
+       *   console.log('URL is whitelisted');
+       * }
+       * ```
+       */
+      async check(url2, options) {
+        url2 = normalizeUrl(url2);
+        if (!isValidUrl(url2)) {
+          throw new ValidationError(`Invalid URL: "${url2}". Please provide a valid HTTP or HTTPS URL.`);
+        }
+        const response = await this.httpClient.post("/url", { url: url2 }, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+      /**
+       * Add a URL to the database
+       *
+       * Report a URL to be analyzed and added to the threat database.
+       *
+       * @param url - URL to add
+       * @param options - Request options
+       * @returns Addition result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.url.add('https://phishing-site.com');
+       * if (result.success) {
+       *   console.log('URL reported successfully');
+       * }
+       * ```
+       */
+      async add(url2, options) {
+        url2 = normalizeUrl(url2);
+        if (!isValidUrl(url2)) {
+          throw new ValidationError(`Invalid URL: "${url2}". Please provide a valid HTTP or HTTPS URL.`);
+        }
+        const response = await this.httpClient.post("/url/add", { url: url2 }, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/wallets.js
+var WalletsResource;
+var init_wallets = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/wallets.js"() {
+    init_esm();
+    WalletsResource = class extends BaseResource {
+      /**
+       * Get wallet transaction risk analysis
+       *
+       * Analyzes recent transactions for security risks including:
+       * - Interactions with risky addresses
+       * - Sanctioned counterparties
+       * - Suspicious patterns
+       *
+       * @param address - Wallet address
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Transaction risk analysis
+       *
+       * @example
+       * ```typescript
+       * const result = await client.wallets.getTransactions('0x...', {
+       *   chain: Chain.ETH,
+       *   limit: 50,
+       * });
+       *
+       * // With default chain configured
+       * const result = await client.wallets.getTransactions('0x...');
+       *
+       * console.log(`Total issues: ${result.count}`);
+       * console.log(`High risk: ${result.high}`);
+       * console.log(`Overall risk: ${result.overallRisk}`);
+       *
+       * for (const issue of result.issues) {
+       *   if (issue.transaction.sanctioned_address) {
+       *     console.error('Transaction with sanctioned address!');
+       *   }
+       * }
+       * ```
+       */
+      async getTransactions(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.limit !== void 0) {
+          queryParams.append("limit", String(options.limit));
+        }
+        if (options.offset !== void 0) {
+          queryParams.append("offset", String(options.offset));
+        }
+        const response = await this.httpClient.get(`/wallets/${encodeURIComponent(address)}/transactions?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get wallet token approvals
+       *
+       * Lists all active token approvals for a wallet,
+       * with risk assessment for each spender.
+       *
+       * @param address - Wallet address
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Token approvals with risk data
+       *
+       * @example
+       * ```typescript
+       * const result = await client.wallets.getApprovals('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * // With default chain configured
+       * const result = await client.wallets.getApprovals('0x...');
+       *
+       * console.log(`Total approvals: ${result.count}`);
+       * console.log(`High risk approvals: ${result.high_risk_count}`);
+       *
+       * for (const approval of result.approvals) {
+       *   if (approval.is_unlimited) {
+       *     console.warn(`Unlimited approval to ${approval.spender}`);
+       *   }
+       *   if (approval.spender_risk && approval.spender_risk > 50) {
+       *     console.error(`High risk spender: ${approval.spender}`);
+       *   }
+       * }
+       * ```
+       */
+      async getApprovals(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/wallets/${encodeURIComponent(address)}/approvals?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/ledger.js
+var LedgerResource;
+var init_ledger = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/ledger.js"() {
+    init_esm();
+    LedgerResource = class extends BaseResource {
+      // Note: Ledger uses numeric chain IDs in request body, defaultChain is accepted for consistency
+      constructor(httpClient2, _defaultChain) {
+        super(httpClient2, _defaultChain);
+      }
+      /**
+       * Scan a transaction before signing
+       *
+       * Analyzes a transaction for security risks before signing
+       * on a hardware wallet.
+       *
+       * @param family - Ledger device family (ethereum, solana, bitcoin)
+       * @param request - Transaction scan request
+       * @param options - Request options
+       * @returns Security analysis result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.ledger.scanTransaction('ethereum', {
+       *   tx: {
+       *     from: '0xYourWallet...',
+       *     raw: '0xEncodedTransaction...',
+       *   },
+       *   chain: 1, // Ethereum mainnet
+       * });
+       *
+       * if (!result.is_safe) {
+       *   console.error(`Risk level: ${result.risk_level}`);
+       *   for (const risk of result.risks) {
+       *     console.warn(`${risk.level}: ${risk.description}`);
+       *   }
+       * }
+       *
+       * // Check decoded data
+       * if (result.decoded?.function_name) {
+       *   console.log(`Function: ${result.decoded.function_name}`);
+       * }
+       * ```
+       */
+      async scanTransaction(family, request2, options) {
+        const response = await this.httpClient.post(`/ledger/${family}/scan/tx`, request2, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+      /**
+       * Scan EIP-712 typed data before signing
+       *
+       * Analyzes EIP-712 structured data for security risks
+       * before signing on a hardware wallet.
+       *
+       * @param family - Ledger device family
+       * @param request - EIP-712 scan request
+       * @param options - Request options
+       * @returns Security analysis result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.ledger.scanEip712('ethereum', {
+       *   signer: '0xYourWallet...',
+       *   typedData: {
+       *     domain: {
+       *       name: 'MyDApp',
+       *       version: '1',
+       *       chainId: 1,
+       *       verifyingContract: '0x...',
+       *     },
+       *     message: {
+       *       // Message content
+       *     },
+       *     primaryType: 'Order',
+       *     types: {
+       *       EIP712Domain: [
+       *         { name: 'name', type: 'string' },
+       *         // ...
+       *       ],
+       *       Order: [
+       *         { name: 'maker', type: 'address' },
+       *         // ...
+       *       ],
+       *     },
+       *   },
+       *   chain: 1,
+       * });
+       *
+       * if (!result.is_safe) {
+       *   console.error('EIP-712 data may be risky!');
+       * }
+       * ```
+       */
+      async scanEip712(family, request2, options) {
+        const response = await this.httpClient.post(`/ledger/${family}/scan/eip-712`, request2, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/account-trace.js
+var AccountTraceResource;
+var init_account_trace = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/account-trace.js"() {
+    init_esm();
+    AccountTraceResource = class extends BaseResource {
+      /**
+       * Trace account fund flows
+       *
+       * Analyzes connections to identify:
+       * - Direct counterparties
+       * - Sanctioned address connections
+       * - Mixer usage
+       * - High-risk entities
+       *
+       * @param address - Address to trace
+       * @param options - Trace options (chain is optional if defaultChain is set)
+       * @returns Fund flow trace result
+       *
+       * @example
+       * ```typescript
+       * const trace = await client.accountTrace.trace('0x...', {
+       *   chain: Chain.ETH,
+       *   depth: 2, // Trace 2 hops
+       * });
+       *
+       * // With default chain configured
+       * const trace = await client.accountTrace.trace('0x...');
+       *
+       * console.log(`Total connections: ${trace.summary.total_connections}`);
+       * console.log(`High risk: ${trace.summary.high_risk_connections}`);
+       * console.log(`Sanctioned: ${trace.summary.sanctioned_connections}`);
+       * console.log(`Mixers: ${trace.summary.mixer_connections}`);
+       *
+       * // Check individual connections
+       * for (const conn of trace.connections) {
+       *   if (conn.risk_flags?.length) {
+       *     console.warn(`Risky connection: ${conn.address}`);
+       *     console.warn(`Flags: ${conn.risk_flags.join(', ')}`);
+       *   }
+       * }
+       * ```
+       */
+      async trace(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.depth !== void 0) {
+          queryParams.append("depth", String(options.depth));
+        }
+        const response = await this.httpClient.get(`/account-trace/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/usage.js
+var UsageResource;
+var init_usage = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/usage.js"() {
+    init_esm();
+    UsageResource = class extends BaseResource {
+      // Note: Usage endpoints are chain-agnostic, defaultChain is accepted for interface consistency
+      constructor(httpClient2, _defaultChain) {
+        super(httpClient2, _defaultChain);
+      }
+      /**
+       * Get historical usage data
+       *
+       * Returns API usage statistics for a time period.
+       *
+       * @param options - Request options with date range
+       * @returns Historical usage data
+       *
+       * @example
+       * ```typescript
+       * const usage = await client.usage.getUsage({
+       *   start_date: '2024-01-01',
+       *   end_date: '2024-01-31',
+       * });
+       *
+       * console.log(`Total calls: ${usage.total_calls}`);
+       * console.log(`Period calls: ${usage.period_calls}`);
+       *
+       * // Usage by endpoint
+       * if (usage.by_endpoint) {
+       *   for (const [endpoint, count] of Object.entries(usage.by_endpoint)) {
+       *     console.log(`${endpoint}: ${count} calls`);
+       *   }
+       * }
+       * ```
+       */
+      async getUsage(options) {
+        const queryParams = new URLSearchParams();
+        if (options?.start_date) {
+          queryParams.append("start_date", options.start_date);
+        }
+        if (options?.end_date) {
+          queryParams.append("end_date", options.end_date);
+        }
+        const queryString = queryParams.toString();
+        const path = queryString ? `/usage?${queryString}` : "/usage";
+        const response = await this.httpClient.get(path, {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get current usage status
+       *
+       * Returns current period usage and remaining quota.
+       *
+       * @param options - Request options
+       * @returns Current usage status
+       *
+       * @example
+       * ```typescript
+       * const current = await client.usage.getCurrent();
+       *
+       * console.log(`Plan: ${current.plan}`);
+       * console.log(`Used: ${current.calls_used}/${current.calls_limit}`);
+       * console.log(`Remaining: ${current.calls_remaining}`);
+       * console.log(`Usage: ${current.usage_percentage}%`);
+       * console.log(`Resets: ${current.reset_date}`);
+       *
+       * if (current.usage_percentage > 80) {
+       *   console.warn('Approaching usage limit!');
+       * }
+       * ```
+       */
+      async getCurrent(options) {
+        const response = await this.httpClient.get("/usage/current", {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get available usage plans
+       *
+       * Returns list of available plans and their features.
+       *
+       * @param options - Request options
+       * @returns Available plans
+       *
+       * @example
+       * ```typescript
+       * const plans = await client.usage.getPlans();
+       *
+       * console.log(`Current plan: ${plans.current_plan}`);
+       *
+       * for (const plan of plans.plans) {
+       *   console.log(`${plan.name}:`);
+       *   console.log(`  Monthly limit: ${plan.monthly_limit}`);
+       *   console.log(`  Rate limit: ${plan.rate_limit}/sec`);
+       *   console.log(`  Features: ${plan.features.join(', ')}`);
+       * }
+       * ```
+       */
+      async getPlans(options) {
+        const response = await this.httpClient.get("/usage/usagePlans", {
+          timeout: options?.timeout,
+          signal: options?.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get maximum requests per second for a time period
+       *
+       * Returns the peak RPS achieved by an organization within the specified
+       * time range.
+       *
+       * @param options - Request options with organization and time range
+       * @returns Maximum RPS value, or null if no data
+       *
+       * @example
+       * ```typescript
+       * // Get max RPS for the last 24 hours
+       * const now = Date.now();
+       * const oneDayAgo = now - 24 * 60 * 60 * 1000;
+       *
+       * const maxRps = await client.usage.getMaxRps({
+       *   organization: 'my-org',
+       *   from: oneDayAgo,
+       *   to: now,
+       * });
+       *
+       * if (maxRps !== null) {
+       *   console.log(`Peak RPS: ${maxRps}`);
+       * } else {
+       *   console.log('No usage data for this period');
+       * }
+       * ```
+       */
+      async getMaxRps(options) {
+        if (!options.organization || typeof options.organization !== "string") {
+          throw new ValidationError("Organization name is required.");
+        }
+        if (typeof options.from !== "number" || options.from < 0) {
+          throw new ValidationError("From timestamp must be a non-negative number (milliseconds).");
+        }
+        if (typeof options.to !== "number" || options.to < 0) {
+          throw new ValidationError("To timestamp must be a non-negative number (milliseconds).");
+        }
+        if (options.from >= options.to) {
+          throw new ValidationError("From timestamp must be less than to timestamp.");
+        }
+        const queryParams = new URLSearchParams();
+        queryParams.append("organization", options.organization);
+        queryParams.append("from", String(options.from));
+        queryParams.append("to", String(options.to));
+        const response = await this.httpClient.get(`/usage/max-rps?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/transactions.js
+var TransactionsResource;
+var init_transactions = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/transactions.js"() {
+    init_esm();
+    init_constants();
+    TransactionsResource = class extends BaseResource {
+      /**
+       * Analyze a transaction for security risks
+       *
+       * Returns comprehensive risk analysis including:
+       * - Risk score (0-100)
+       * - Risk tags and categories
+       * - Transaction details
+       *
+       * @param txHash - Transaction hash to analyze
+       * @param options - Analysis options
+       * @returns Transaction risk analysis result
+       *
+       * @example
+       * ```typescript
+       * const risk = await client.transactions.analyze('0xabc123...', {
+       *   chain: Chain.ETH,
+       * });
+       * console.log(`Risk score: ${risk.riskScore}`);
+       *
+       * // With default chain configured
+       * const risk = await client.transactions.analyze('0xabc123...');
+       *
+       * // Hide trust flags in response
+       * const risk = await client.transactions.analyze('0xabc123...', {
+       *   chain: Chain.ETH,
+       *   hideTrustFlags: true,
+       * });
+       * ```
+       */
+      async analyze(txHash, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateChain(chain);
+        this.validateTxHash(txHash);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.hideTrustFlags !== void 0) {
+          queryParams.append("hide_trust_flags", String(options.hideTrustFlags));
+        }
+        const response = await this.httpClient.get(`/transactions/${encodeURIComponent(txHash)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Validate that the chain is supported for transaction analysis
+       */
+      validateChain(chain) {
+        if (!SUPPORTED_TX_CHAINS.includes(chain)) {
+          throw new ValidationError(`Chain "${chain}" is not supported for transaction analysis. Supported chains: ${SUPPORTED_TX_CHAINS.join(", ")}`);
+        }
+      }
+      /**
+       * Validate transaction hash format
+       */
+      validateTxHash(txHash) {
+        if (!txHash || typeof txHash !== "string" || txHash.trim() === "") {
+          throw new ValidationError("Transaction hash is required and must be a non-empty string.");
+        }
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/scan.js
+var ScanResource;
+var init_scan = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/scan.js"() {
+    init_esm();
+    init_constants();
+    ScanResource = class extends BaseResource {
+      // Note: Scan uses numeric chain IDs in request body, defaultChain is accepted for consistency
+      constructor(httpClient2, _defaultChain) {
+        super(httpClient2, _defaultChain);
+      }
+      /**
+       * Scan a transaction for security risks before signing
+       *
+       * Analyzes raw transaction data and returns:
+       * - Risk assessment and warnings
+       * - Simulated asset changes
+       * - Contract interaction details
+       * - Domain reputation (if provided)
+       *
+       * @param fromAddress - The signer address
+       * @param request - Transaction scan request
+       * @param options - Request options
+       * @returns Transaction scan result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.scan.scanTransaction('0xSigner...', {
+       *   tx: {
+       *     from: '0xSigner...',
+       *     raw: '0x02f8...',
+       *   },
+       *   chain: 1, // Ethereum mainnet
+       *   domain: 'uniswap.org',
+       * });
+       *
+       * if (result.riskLevel === 'high' || result.riskLevel === 'critical') {
+       *   console.warn('High risk transaction!');
+       *   for (const warning of result.warnings) {
+       *     console.warn(`${warning.severity}: ${warning.description}`);
+       *   }
+       * }
+       *
+       * // Check simulated asset changes
+       * if (result.assetChanges) {
+       *   for (const change of result.assetChanges) {
+       *     console.log(`${change.type}: ${change.amount} ${change.symbol}`);
+       *   }
+       * }
+       * ```
+       */
+      async scanTransaction(fromAddress, request2, options = {}) {
+        this.validateSignerAddress(fromAddress);
+        this.validateTransactionRequest(request2);
+        this.validateSignerAddressMatch(fromAddress, request2.tx.from, "tx.from");
+        const queryParams = new URLSearchParams();
+        if (options.refreshCache !== void 0) {
+          queryParams.append("refreshCache", String(options.refreshCache));
+        }
+        const queryString = queryParams.toString();
+        const path = `/scan/${encodeURIComponent(fromAddress)}/transactions${queryString ? `?${queryString}` : ""}`;
+        const response = await this.httpClient.post(path, request2, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Scan an EIP-712 typed message for security risks before signing
+       *
+       * Analyzes EIP-712 typed data and returns:
+       * - Risk assessment and warnings
+       * - Message type analysis (permit, order, etc.)
+       * - Spender analysis for approvals
+       * - Domain reputation (if provided)
+       *
+       * @param fromAddress - The signer address
+       * @param request - EIP-712 scan request
+       * @param options - Request options
+       * @returns EIP-712 scan result
+       *
+       * @example
+       * ```typescript
+       * const result = await client.scan.scanEip712('0xSigner...', {
+       *   msg: {
+       *     from: '0xSigner...',
+       *     data: {
+       *       types: {
+       *         EIP712Domain: [
+       *           { name: 'name', type: 'string' },
+       *           { name: 'version', type: 'string' },
+       *           { name: 'chainId', type: 'uint256' },
+       *           { name: 'verifyingContract', type: 'address' },
+       *         ],
+       *         Permit: [
+       *           { name: 'owner', type: 'address' },
+       *           { name: 'spender', type: 'address' },
+       *           { name: 'value', type: 'uint256' },
+       *           { name: 'nonce', type: 'uint256' },
+       *           { name: 'deadline', type: 'uint256' },
+       *         ],
+       *       },
+       *       primaryType: 'Permit',
+       *       domain: {
+       *         name: 'Token',
+       *         version: '1',
+       *         chainId: 1,
+       *         verifyingContract: '0xToken...',
+       *       },
+       *       message: {
+       *         owner: '0xSigner...',
+       *         spender: '0xSpender...',
+       *         value: '1000000000000000000',
+       *         nonce: 0,
+       *         deadline: 1735689600,
+       *       },
+       *     },
+       *   },
+       *   domain: 'app.uniswap.org',
+       * });
+       *
+       * if (result.messageType?.isPermit) {
+       *   console.log('This is a permit/approval signature');
+       *   if (result.spenderAnalysis?.riskLevel === 'high') {
+       *     console.warn('High risk spender!');
+       *   }
+       * }
+       * ```
+       */
+      async scanEip712(fromAddress, request2, options = {}) {
+        this.validateSignerAddress(fromAddress);
+        this.validateEip712Request(request2);
+        this.validateSignerAddressMatch(fromAddress, request2.msg.from, "msg.from");
+        const queryParams = new URLSearchParams();
+        if (options.refreshCache !== void 0) {
+          queryParams.append("refreshCache", String(options.refreshCache));
+        }
+        const queryString = queryParams.toString();
+        const path = `/scan/${encodeURIComponent(fromAddress)}/eip712${queryString ? `?${queryString}` : ""}`;
+        const response = await this.httpClient.post(path, request2, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Initiate a wallet risk score scan
+       *
+       * Starts an asynchronous risk analysis for the given address.
+       * Use `getRiskScanStatus()` to poll for completion.
+       *
+       * @param address - Wallet address to scan
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Scan initiation response
+       *
+       * @example
+       * ```typescript
+       * // Start a risk scan
+       * const result = await client.scan.startRiskScan('0x...', { chain: Chain.ETH });
+       *
+       * // Poll for completion
+       * const status = await client.scan.getRiskScanStatus('0x...', { chain: Chain.ETH });
+       * ```
+       */
+      async startRiskScan(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.post(`/scan/${encodeURIComponent(address)}?${queryParams.toString()}`, void 0, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get the status of a wallet risk score scan
+       *
+       * Polls the status of a previously initiated risk scan.
+       * Returns scan progress and results when complete.
+       *
+       * @param address - Wallet address that was scanned
+       * @param options - Request options (chain is optional if defaultChain is set)
+       * @returns Scan status response
+       *
+       * @example
+       * ```typescript
+       * const status = await client.scan.getRiskScanStatus('0x...', { chain: Chain.ETH });
+       * if (status.status === 'complete') {
+       *   console.log(`Risk score: ${status.score}`);
+       * }
+       * ```
+       */
+      async getRiskScanStatus(address, options = {}) {
+        const chain = this.resolveChain(options);
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/status/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Validate signer address format (basic non-empty check)
+       *
+       * Note: This is a simpler validation than the chain-aware validation in BaseResource,
+       * as scan requests accept EVM addresses only.
+       */
+      validateSignerAddress(address) {
+        if (!address || typeof address !== "string" || address.trim() === "") {
+          throw new ValidationError("Address is required and must be a non-empty string.");
+        }
+      }
+      /**
+       * Validate that the signer address matches the address in the request
+       */
+      validateSignerAddressMatch(signerAddress, requestAddress, fieldName) {
+        if (signerAddress.toLowerCase() !== requestAddress.toLowerCase()) {
+          throw new ValidationError(`Signer address must match ${fieldName}.`);
+        }
+      }
+      /**
+       * Validate transaction scan request
+       */
+      validateTransactionRequest(request2) {
+        if (!request2) {
+          throw new ValidationError("Request body is required.");
+        }
+        if (!request2.tx) {
+          throw new ValidationError("Transaction data (tx) is required.");
+        }
+        if (!request2.tx.from || typeof request2.tx.from !== "string") {
+          throw new ValidationError("Transaction from address (tx.from) is required.");
+        }
+        if (!request2.tx.raw || typeof request2.tx.raw !== "string") {
+          throw new ValidationError("Raw transaction data (tx.raw) is required.");
+        }
+        if (!VALID_SCAN_CHAIN_IDS.includes(request2.chain)) {
+          throw new ValidationError(`Invalid chain ID. Supported chain IDs: ${VALID_SCAN_CHAIN_IDS.join(", ")} (1=ETH, 56=BSC, 137=POL, 10=OPT, 42161=ARB, 8453=BASE)`);
+        }
+      }
+      /**
+       * Validate EIP-712 scan request
+       */
+      validateEip712Request(request2) {
+        if (!request2) {
+          throw new ValidationError("Request body is required.");
+        }
+        if (!request2.msg) {
+          throw new ValidationError("Message data (msg) is required.");
+        }
+        if (!request2.msg.from || typeof request2.msg.from !== "string") {
+          throw new ValidationError("Message from address (msg.from) is required.");
+        }
+        if (!request2.msg.data) {
+          throw new ValidationError("EIP-712 typed data (msg.data) is required.");
+        }
+        if (!request2.msg.data.types || typeof request2.msg.data.types !== "object") {
+          throw new ValidationError("EIP-712 types (msg.data.types) is required.");
+        }
+        if (!request2.msg.data.primaryType || typeof request2.msg.data.primaryType !== "string") {
+          throw new ValidationError("EIP-712 primaryType (msg.data.primaryType) is required.");
+        }
+        if (!request2.msg.data.domain || typeof request2.msg.data.domain !== "object") {
+          throw new ValidationError("EIP-712 domain (msg.data.domain) is required.");
+        }
+        if (typeof request2.msg.data.domain.chainId !== "number") {
+          throw new ValidationError("EIP-712 domain chainId (msg.data.domain.chainId) is required.");
+        }
+        if (request2.msg.data.domain.chainId <= 0) {
+          throw new ValidationError("EIP-712 domain chainId must be a positive integer.");
+        }
+        if (!VALID_SCAN_CHAIN_IDS.includes(request2.msg.data.domain.chainId)) {
+          throw new ValidationError(`Invalid chain ID in EIP-712 domain. Supported chain IDs: ${VALID_SCAN_CHAIN_IDS.join(", ")} (1=ETH, 56=BSC, 137=POL, 10=OPT, 42161=ARB, 8453=BASE)`);
+        }
+        if (!request2.msg.data.message || typeof request2.msg.data.message !== "object") {
+          throw new ValidationError("EIP-712 message (msg.data.message) is required.");
+        }
+        if (Object.keys(request2.msg.data.message).length === 0) {
+          throw new ValidationError("EIP-712 message (msg.data.message) cannot be empty.");
+        }
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/batch.js
+var BatchResource;
+var init_batch = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/batch.js"() {
+    init_esm();
+    BatchResource = class extends BaseResource {
+      /**
+       * Batch analyze contracts for risk
+       *
+       * @param request - Batch request with contract addresses and chain
+       * @param options - Request options
+       * @returns Batch contract analysis results
+       */
+      async contracts(request2, options = {}) {
+        this.validateBatchRequest(request2.addresses, "addresses");
+        const response = await this.httpClient.post("/query/contracts", request2, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Batch analyze addresses for risk
+       *
+       * @param request - Batch request with addresses and chain
+       * @param options - Request options
+       * @returns Batch address analysis results
+       */
+      async addresses(request2, options = {}) {
+        this.validateBatchRequest(request2.addresses, "addresses");
+        const response = await this.httpClient.post("/query/addresses", request2, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Batch analyze transactions for risk
+       *
+       * @param request - Batch request with transaction hashes and chain
+       * @param options - Request options
+       * @returns Batch transaction analysis results
+       */
+      async transactions(request2, options = {}) {
+        this.validateBatchRequest(request2.transactions, "transactions");
+        const response = await this.httpClient.post("/batch/transactions", request2, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      validateBatchRequest(items, fieldName) {
+        if (!items || !Array.isArray(items) || items.length === 0) {
+          throw new ValidationError(`At least one item is required in the "${fieldName}" array.`);
+        }
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/rwa.js
+var RwaResource;
+var init_rwa = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/rwa.js"() {
+    init_esm();
+    RwaResource = class extends BaseResource {
+      /**
+       * List all pegged tokens with depeg risk data and aggregates
+       *
+       * Returns a paginated list of tracked pegged tokens with their current
+       * depeg risk scores, price deviations, liquidity data, and ecosystem-wide
+       * aggregates.
+       *
+       * @param options - Filter, sort, and pagination options
+       * @returns Paginated token list with aggregates
+       *
+       * @example
+       * ```typescript
+       * // Get all tokens
+       * const result = await client.rwa.list();
+       * console.log(`Total tokens: ${result.pagination.total}`);
+       * console.log(`Stability index: ${result.aggregates.stability_index}`);
+       *
+       * // Filter by denomination and risk
+       * const usdCritical = await client.rwa.list({
+       *   denomination: 'USD',
+       *   tier: 'critical',
+       *   sort: 'score',
+       *   order: 'desc',
+       * });
+       *
+       * // Search and filter by tags
+       * const goldTokens = await client.rwa.list({
+       *   tags: ['gold', 'rwa'],
+       *   minMcap: 1_000_000,
+       * });
+       *
+       * // View collapsed/dead tokens
+       * const graveyard = await client.rwa.list({ collapsedOnly: true });
+       * ```
+       */
+      async list(options = {}) {
+        const queryParams = new URLSearchParams();
+        if (options.chain)
+          queryParams.append("chain", options.chain);
+        if (options.denomination !== void 0)
+          queryParams.append("denomination", options.denomination);
+        if (options.tier !== void 0)
+          queryParams.append("tier", options.tier);
+        if (options.tags && options.tags.length > 0)
+          queryParams.append("tags", options.tags.join(","));
+        if (options.minScore !== void 0)
+          queryParams.append("minScore", String(options.minScore));
+        if (options.maxScore !== void 0)
+          queryParams.append("maxScore", String(options.maxScore));
+        if (options.minMcap !== void 0)
+          queryParams.append("minMcap", String(options.minMcap));
+        if (options.liquidity !== void 0)
+          queryParams.append("liquidity", options.liquidity);
+        if (options.q !== void 0)
+          queryParams.append("q", options.q);
+        if (options.sort !== void 0)
+          queryParams.append("sort", options.sort);
+        if (options.order !== void 0)
+          queryParams.append("order", options.order);
+        if (options.showAll !== void 0)
+          queryParams.append("showAll", String(options.showAll));
+        if (options.collapsedOnly !== void 0)
+          queryParams.append("collapsedOnly", String(options.collapsedOnly));
+        if (options.page !== void 0)
+          queryParams.append("page", String(options.page));
+        if (options.pageSize !== void 0)
+          queryParams.append("pageSize", String(options.pageSize));
+        const qs = queryParams.toString();
+        const path = qs ? `/rwa?${qs}` : "/rwa";
+        const response = await this.httpClient.get(path, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get detailed depeg risk data for a specific pegged token
+       *
+       * Returns comprehensive token detail including identity, current snapshot,
+       * risk analysis, historical time series, and depeg events.
+       *
+       * @param address - Token contract address
+       * @param options - Query options (chain, hours of history)
+       * @returns Detailed token data with history and events
+       *
+       * @example
+       * ```typescript
+       * // Get token detail with default 24h history
+       * const detail = await client.rwa.get('0xA0b8...');
+       *
+       * // Specify chain and request 7 days of history
+       * const detail = await client.rwa.get('0xA0b8...', {
+       *   chain: Chain.ETH,
+       *   hours: 168,
+       * });
+       *
+       * console.log(`Score: ${detail.snapshot.score}`);
+       * console.log(`Tier: ${detail.snapshot.tier}`);
+       * console.log(`History points: ${detail.history.series.length}`);
+       * console.log(`Depeg events: ${detail.depegEvents.length}`);
+       * ```
+       */
+      async get(address, options = {}) {
+        const queryParams = new URLSearchParams();
+        if (options.chain)
+          queryParams.append("chain", options.chain);
+        if (options.hours !== void 0)
+          queryParams.append("hours", String(options.hours));
+        const qs = queryParams.toString();
+        const path = qs ? `/rwa/${encodeURIComponent(address)}?${qs}` : `/rwa/${encodeURIComponent(address)}`;
+        const response = await this.httpClient.get(path, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/vaults.js
+var VaultsResource;
+var init_vaults = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/vaults.js"() {
+    init_esm();
+    VaultsResource = class extends BaseResource {
+      /**
+       * List all rated ERC-4626 vaults with risk scores and aggregates
+       *
+       * Returns a paginated list of vaults using offset-based pagination.
+       * For cursor-based pagination, use {@link listCursor}.
+       *
+       * @param options - Filter, sort, and pagination options
+       * @returns Paginated vault list with aggregates
+       *
+       * @example
+       * ```typescript
+       * // Get all vaults
+       * const result = await client.vaults.list();
+       * console.log(`Total vaults: ${result.pagination.total}`);
+       * console.log(`Total TVL: $${result.aggregates.total_tvl_usd}`);
+       *
+       * // Filter by protocol, chain, and risk
+       * const risky = await client.vaults.list({
+       *   protocol: 'morpho',
+       *   chain: Chain.ETH,
+       *   tier: 'high',
+       *   sort: 'score_desc',
+       * });
+       *
+       * // Filter by underlying asset and attention needed
+       * const urgent = await client.vaults.list({
+       *   underlying: 'USDC',
+       *   attentionNeeded: true,
+       * });
+       *
+       * // Search and filter by risk flags
+       * const looping = await client.vaults.list({
+       *   riskFlags: 'vault-high-looping,vault-upgradeable',
+       *   riskFlagsMode: 'any',
+       * });
+       * ```
+       */
+      async list(options = {}) {
+        const queryParams = new URLSearchParams();
+        this.appendSharedListParams(queryParams, options);
+        if (options.page !== void 0)
+          queryParams.append("page", String(options.page));
+        if (options.pageSize !== void 0)
+          queryParams.append("pageSize", String(options.pageSize));
+        const qs = queryParams.toString();
+        const path = qs ? `/vaults?${qs}` : "/vaults";
+        const response = await this.httpClient.get(path, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * List vaults with cursor-based pagination
+       *
+       * Returns vaults using an opaque cursor for efficient sequential pagination.
+       * Pass the `next_cursor` from a previous response to get the next page.
+       *
+       * @param options - Filter options with required cursor
+       * @returns Cursor-paginated vault list with aggregates
+       *
+       * @example
+       * ```typescript
+       * // First page
+       * const first = await client.vaults.list({ pageSize: 100 });
+       *
+       * // Subsequent pages using cursor
+       * const second = await client.vaults.listCursor({
+       *   cursor: 'opaque-cursor-from-previous-response',
+       *   limit: 100,
+       * });
+       *
+       * if (second.next_cursor) {
+       *   const third = await client.vaults.listCursor({
+       *     cursor: second.next_cursor,
+       *     limit: 100,
+       *   });
+       * }
+       * ```
+       */
+      async listCursor(options) {
+        const queryParams = new URLSearchParams();
+        this.appendSharedListParams(queryParams, options);
+        queryParams.append("cursor", options.cursor);
+        if (options.limit !== void 0)
+          queryParams.append("limit", String(options.limit));
+        const path = `/vaults?${queryParams.toString()}`;
+        const response = await this.httpClient.get(path, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * List curated historical vault incidents and attacks
+       *
+       * Returns the full catalog of curated vault incidents (exploits, rugs,
+       * depegs, oracle attacks). To scope events to a single vault, use
+       * {@link listEventsForAddress} instead. The endpoint degrades gracefully:
+       * when the upstream curated source is unreachable the response is
+       * `{ stale: true, events: [] }` rather than an error.
+       *
+       * @param options - Optional filters (category, mechanism)
+       * @returns Curated vault events with generated-at metadata
+       *
+       * @example
+       * ```typescript
+       * // All curated events
+       * const all = await client.vaults.listEvents();
+       *
+       * // Filter by category and mechanism
+       * const oracleAttacks = await client.vaults.listEvents({
+       *   category: VaultEventCategory.VAULT_CONTRACT,
+       *   mechanism: VaultEventMechanism.ORACLE_MANIPULATION,
+       * });
+       * ```
+       */
+      async listEvents(options = {}) {
+        const queryParams = new URLSearchParams();
+        if (options.category !== void 0)
+          queryParams.append("category", options.category);
+        if (options.mechanism !== void 0)
+          queryParams.append("mechanism", options.mechanism);
+        const qs = queryParams.toString();
+        const path = qs ? `/vaults/events?${qs}` : "/vaults/events";
+        const response = await this.httpClient.get(path, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return this.normalizeEventsResponse(response.data);
+      }
+      /**
+       * List curated historical incidents for a specific vault
+       *
+       * Returns the curated incident catalog scoped to a single vault. Like
+       * {@link listEvents}, the endpoint degrades gracefully when the upstream
+       * source is unreachable (`{ stale: true, events: [] }`).
+       *
+       * @param address - Vault contract address
+       * @param options - Query options (chain is required)
+       * @returns Curated vault events scoped to the given vault
+       *
+       * @example
+       * ```typescript
+       * // All curated events for a vault
+       * const events = await client.vaults.listEventsForAddress('0xabc...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * // Filter by category
+       * const contractIssues = await client.vaults.listEventsForAddress('0xabc...', {
+       *   chain: Chain.ETH,
+       *   category: VaultEventCategory.VAULT_CONTRACT,
+       * });
+       * ```
+       */
+      async listEventsForAddress(address, options) {
+        const chain = options.chain;
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.category !== void 0)
+          queryParams.append("category", options.category);
+        if (options.mechanism !== void 0)
+          queryParams.append("mechanism", options.mechanism);
+        const response = await this.httpClient.get(`/vaults/${encodeURIComponent(address)}/events?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return this.normalizeEventsResponse(response.data);
+      }
+      /**
+       * Fill defaults for the degraded `{ stale: true, events: [] }` response
+       * shape so callers always receive a conforming VaultEventsResponse.
+       */
+      normalizeEventsResponse(data) {
+        const events = data.events ?? [];
+        return {
+          generated_at: data.generated_at ?? null,
+          stale: data.stale ?? false,
+          count: data.count ?? events.length,
+          events
+        };
+      }
+      /**
+       * Get detailed risk data for a specific vault
+       *
+       * Returns comprehensive vault detail including metadata, risk breakdown,
+       * looping markets, composition, Morpho-specific data, and Webacy findings.
+       *
+       * @param address - Vault contract address
+       * @param options - Query options (chain is required)
+       * @returns Detailed vault risk data
+       *
+       * @example
+       * ```typescript
+       * const detail = await client.vaults.get('0x...', { chain: Chain.ETH });
+       *
+       * console.log(`Score: ${detail.risk.score}`);
+       * console.log(`TVL: $${detail.metadata.tvl_usd}`);
+       * console.log(`Protocol: ${detail.metadata.protocol}`);
+       * console.log(`Listing verdict: ${detail.metadata.listing_verdict}`);
+       *
+       * // Check Morpho-specific data
+       * if (detail.morpho) {
+       *   console.log(`Morpho liquidity: $${detail.morpho.liquidity_usd}`);
+       * }
+       *
+       * // Check risk issues
+       * for (const issue of detail.risk.issues) {
+       *   console.log(`Risk score: ${issue.score}, tags: ${issue.tags.join(', ')}`);
+       * }
+       * ```
+       */
+      async get(address, options) {
+        const chain = options.chain;
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        const response = await this.httpClient.get(`/vaults/${encodeURIComponent(address)}?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get the daily TVL history for a specific vault
+       *
+       * Returns a daily time series of total value locked (USD) for the vault,
+       * along with a hoisted `latest` aggregate so stat-tile consumers can render
+       * the current value without requesting the full series. `stale` flips
+       * `true` when `stale_reason !== 'fresh'`.
+       *
+       * Each sample (and `latest`) carries a `quality_flag` so consumers can spot
+       * pipeline-flagged samples. By default the response only contains `'ok'` /
+       * `'unknown'` rows — pass `includeFlagged: true` to also surface `'capped'`,
+       * `'diverged'`, and `'spike'` samples.
+       *
+       * @param address - Vault contract address
+       * @param options - Query options (chain is required; range and includeFlagged are optional)
+       * @returns Daily TVL series with envelope and latest aggregate
+       *
+       * @example
+       * ```typescript
+       * // Default 30-day window
+       * const history = await client.vaults.getTvlHistory('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * if (history.latest) {
+       *   console.log(`Current TVL: $${history.latest.tvl_usd}`);
+       * }
+       *
+       * // 7-day window
+       * const week = await client.vaults.getTvlHistory('0x...', {
+       *   chain: Chain.ETH,
+       *   range: '7d',
+       * });
+       *
+       * // Include flagged samples (researcher / power-user view)
+       * const raw = await client.vaults.getTvlHistory('0x...', {
+       *   chain: Chain.ETH,
+       *   includeFlagged: true,
+       * });
+       * ```
+       */
+      async getTvlHistory(address, options) {
+        const chain = options.chain;
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.range !== void 0)
+          queryParams.append("range", options.range);
+        if (options.includeFlagged === true)
+          queryParams.append("includeFlagged", "true");
+        const response = await this.httpClient.get(`/vaults/${encodeURIComponent(address)}/tvl-history?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /**
+       * Get the daily share-price history for a specific vault
+       *
+       * Returns a daily time series of share prices (USD) with per-point
+       * `apy_trailing_7d` annualised against the sample 7 days earlier. The
+       * hoisted `latest` aggregate also carries `apy_trailing_30d` (smoother —
+       * intended for headline / stat-tile display). `stale` flips `true` when
+       * `stale_reason !== 'fresh'`.
+       *
+       * Each sample (and `latest`) carries a `quality_flag` so consumers can spot
+       * pipeline-flagged samples. By default the response only contains `'ok'` /
+       * `'unknown'` rows — pass `includeFlagged: true` to also surface `'capped'`,
+       * `'diverged'`, and `'spike'` samples.
+       *
+       * @param address - Vault contract address
+       * @param options - Query options (chain is required; range and includeFlagged are optional)
+       * @returns Daily share-price series with envelope and latest aggregate
+       *
+       * @example
+       * ```typescript
+       * // Default 30-day window
+       * const history = await client.vaults.getSharePriceHistory('0x...', {
+       *   chain: Chain.ETH,
+       * });
+       *
+       * if (history.latest) {
+       *   console.log(`Current price: $${history.latest.share_price_usd}`);
+       *   console.log(`30d APY: ${history.latest.apy_trailing_30d}`);
+       * }
+       *
+       * // 60-day window for the chart
+       * const chart = await client.vaults.getSharePriceHistory('0x...', {
+       *   chain: Chain.ETH,
+       *   range: '60d',
+       * });
+       *
+       * // Include flagged samples (researcher / power-user view)
+       * const raw = await client.vaults.getSharePriceHistory('0x...', {
+       *   chain: Chain.ETH,
+       *   includeFlagged: true,
+       * });
+       * ```
+       */
+      async getSharePriceHistory(address, options) {
+        const chain = options.chain;
+        this.validateAddress(address, chain);
+        const queryParams = new URLSearchParams();
+        queryParams.append("chain", chain);
+        if (options.range !== void 0)
+          queryParams.append("range", options.range);
+        if (options.includeFlagged === true)
+          queryParams.append("includeFlagged", "true");
+        const response = await this.httpClient.get(`/vaults/${encodeURIComponent(address)}/share-price-history?${queryParams.toString()}`, {
+          timeout: options.timeout,
+          signal: options.signal
+        });
+        return response.data;
+      }
+      /** Append filter params shared between offset and cursor list methods */
+      appendSharedListParams(queryParams, options) {
+        if (options.chain)
+          queryParams.append("chain", options.chain);
+        if (options.tier !== void 0)
+          queryParams.append("tier", options.tier);
+        if (options.underlying !== void 0)
+          queryParams.append("underlying", options.underlying);
+        if (options.protocol !== void 0)
+          queryParams.append("protocol", options.protocol);
+        if (options.version !== void 0)
+          queryParams.append("version", options.version);
+        if (options.minTvl !== void 0)
+          queryParams.append("minTvl", String(options.minTvl));
+        if (options.underlyingRisk !== void 0)
+          queryParams.append("underlyingRisk", options.underlyingRisk);
+        if (options.withdrawalRisk !== void 0)
+          queryParams.append("withdrawalRisk", options.withdrawalRisk);
+        if (options.minScore !== void 0)
+          queryParams.append("minScore", String(options.minScore));
+        if (options.maxScore !== void 0)
+          queryParams.append("maxScore", String(options.maxScore));
+        if (options.contractType !== void 0)
+          queryParams.append("contractType", options.contractType);
+        if (options.attentionNeeded !== void 0)
+          queryParams.append("attentionNeeded", String(options.attentionNeeded));
+        if (options.riskFlags !== void 0)
+          queryParams.append("riskFlags", options.riskFlags);
+        if (options.riskFlagsMode !== void 0)
+          queryParams.append("riskFlagsMode", options.riskFlagsMode);
+        if (options.q !== void 0)
+          queryParams.append("q", options.q);
+        if (options.sort !== void 0)
+          queryParams.append("sort", options.sort);
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/client.js
+var ThreatClient;
+var init_client2 = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/client.js"() {
+    init_esm();
+    init_addresses();
+    init_contracts();
+    init_url();
+    init_wallets();
+    init_ledger();
+    init_account_trace();
+    init_usage();
+    init_transactions();
+    init_scan();
+    init_batch();
+    init_rwa();
+    init_vaults();
+    ThreatClient = class extends BaseClient {
+      /**
+       * Addresses resource
+       *
+       * Comprehensive security analysis for blockchain addresses including
+       * risk scoring, sanctions screening, and address poisoning detection.
+       */
+      addresses;
+      /**
+       * Contracts resource
+       *
+       * Smart contract security analysis including vulnerability detection,
+       * source code analysis, and tax detection.
+       */
+      contracts;
+      /**
+       * URL resource
+       *
+       * URL safety analysis to identify phishing sites and malicious domains.
+       */
+      url;
+      /**
+       * Wallets resource
+       *
+       * Wallet activity analysis including transaction risks and token approvals.
+       */
+      wallets;
+      /**
+       * Ledger resource
+       *
+       * Hardware wallet transaction scanning for secure signing.
+       */
+      ledger;
+      /**
+       * Account trace resource
+       *
+       * Fund flow tracing to identify connections to risky entities.
+       */
+      accountTrace;
+      /**
+       * Usage resource
+       *
+       * API usage statistics and quota management.
+       */
+      usage;
+      /**
+       * Transactions resource
+       *
+       * Transaction risk analysis for blockchain transactions.
+       */
+      transactions;
+      /**
+       * Scan resource
+       *
+       * Pre-signing security analysis for transactions and EIP-712 messages.
+       * Also provides wallet risk scanning methods.
+       */
+      scan;
+      /**
+       * Batch resource
+       *
+       * Batch risk analysis for multiple addresses, contracts, or transactions.
+       */
+      batch;
+      /**
+       * RWA resource
+       *
+       * Depeg risk monitoring for pegged tokens including stablecoins,
+       * tokenized gold, yield-bearing tokens, and bridged assets.
+       */
+      rwa;
+      /**
+       * Vaults resource
+       *
+       * DeFi vault risk analysis for ERC-4626 vaults including risk scoring,
+       * looping detection, TVL analysis, and underlying asset risk.
+       */
+      vaults;
+      /**
+       * Create a new ThreatClient instance
+       *
+       * @param config - Client configuration
+       * @throws AuthenticationError if API key is not provided
+       *
+       * @example
+       * ```typescript
+       * // Basic setup
+       * const client = new ThreatClient({
+       *   apiKey: 'your-api-key',
+       * });
+       *
+       * // With default chain (omit chain in API calls)
+       * const client = new ThreatClient({
+       *   apiKey: 'your-api-key',
+       *   defaultChain: Chain.ETH,
+       * });
+       *
+       * // With custom configuration
+       * const client = new ThreatClient({
+       *   apiKey: 'your-api-key',
+       *   timeout: 60000,
+       *   retry: {
+       *     maxRetries: 5,
+       *   },
+       * });
+       * ```
+       */
+      constructor(config2) {
+        super(config2);
+        this.addresses = new AddressesResource(this.httpClient, this.defaultChain);
+        this.contracts = new ContractsResource(this.httpClient, this.defaultChain);
+        this.url = new UrlResource(this.httpClient, this.defaultChain);
+        this.wallets = new WalletsResource(this.httpClient, this.defaultChain);
+        this.ledger = new LedgerResource(this.httpClient, this.defaultChain);
+        this.accountTrace = new AccountTraceResource(this.httpClient, this.defaultChain);
+        this.usage = new UsageResource(this.httpClient, this.defaultChain);
+        this.transactions = new TransactionsResource(this.httpClient, this.defaultChain);
+        this.scan = new ScanResource(this.httpClient, this.defaultChain);
+        this.batch = new BatchResource(this.httpClient, this.defaultChain);
+        this.rwa = new RwaResource(this.httpClient, this.defaultChain);
+        this.vaults = new VaultsResource(this.httpClient, this.defaultChain);
+      }
+    };
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/index.js
+var init_resources2 = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/resources/index.js"() {
+    init_addresses();
+    init_contracts();
+    init_url();
+    init_wallets();
+    init_ledger();
+    init_account_trace();
+    init_usage();
+    init_transactions();
+    init_scan();
+    init_batch();
+    init_rwa();
+    init_vaults();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/types/vault.js
+var VaultEventCategory, VaultEventMechanism;
+var init_vault = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/types/vault.js"() {
+    (function(VaultEventCategory2) {
+      VaultEventCategory2["VAULT_CONTRACT"] = "vault_contract";
+      VaultEventCategory2["STRATEGY_PROTOCOL"] = "strategy_protocol";
+      VaultEventCategory2["INFRASTRUCTURE"] = "infrastructure";
+      VaultEventCategory2["STABLECOIN"] = "stablecoin";
+      VaultEventCategory2["GOVERNANCE_ADMIN"] = "governance_admin";
+    })(VaultEventCategory || (VaultEventCategory = {}));
+    (function(VaultEventMechanism2) {
+      VaultEventMechanism2["ORACLE_MANIPULATION"] = "oracle_manipulation";
+      VaultEventMechanism2["FLASH_LOAN"] = "flash_loan";
+      VaultEventMechanism2["REENTRANCY"] = "reentrancy";
+      VaultEventMechanism2["LOGIC_ERROR"] = "logic_error";
+      VaultEventMechanism2["DONATION_ATTACK"] = "donation_attack";
+      VaultEventMechanism2["COLLATERAL_MISPRICING"] = "collateral_mispricing";
+      VaultEventMechanism2["INSOLVENCY_CASCADE"] = "insolvency_cascade";
+      VaultEventMechanism2["LIQUIDITY_FREEZE"] = "liquidity_freeze";
+      VaultEventMechanism2["BRIDGE_EXPLOIT"] = "bridge_exploit";
+    })(VaultEventMechanism || (VaultEventMechanism = {}));
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/types/index.js
+var init_types2 = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/types/index.js"() {
+    init_vault();
+  }
+});
+
+// ../../node_modules/@webacy-xyz/sdk-threat/dist/esm/index.js
+var esm_exports = {};
+__export(esm_exports, {
+  AccountTraceResource: () => AccountTraceResource,
+  AddressesResource: () => AddressesResource,
+  AuthenticationError: () => AuthenticationError,
+  BatchResource: () => BatchResource,
+  CHAIN_NAMES: () => CHAIN_NAMES,
+  Chain: () => Chain,
+  ChainCompatibility: () => ChainCompatibility,
+  ContractsResource: () => ContractsResource,
+  LedgerResource: () => LedgerResource,
+  NetworkError: () => NetworkError,
+  NotFoundError: () => NotFoundError,
+  RateLimitError: () => RateLimitError,
+  RiskLevel: () => RiskLevel,
+  RiskModule: () => RiskModule,
+  RiskScore: () => RiskScore,
+  RwaResource: () => RwaResource,
+  ScanResource: () => ScanResource,
+  ThreatClient: () => ThreatClient,
+  TokenStandard: () => TokenStandard,
+  TransactionsResource: () => TransactionsResource,
+  TypeOfAddress: () => TypeOfAddress,
+  UrlResource: () => UrlResource,
+  UsageResource: () => UsageResource,
+  ValidationError: () => ValidationError,
+  VaultEventCategory: () => VaultEventCategory,
+  VaultEventMechanism: () => VaultEventMechanism,
+  VaultsResource: () => VaultsResource,
+  WalletsResource: () => WalletsResource,
+  WebacyError: () => WebacyError,
+  isEvmChain: () => isEvmChain
+});
+var init_esm2 = __esm({
+  "../../node_modules/@webacy-xyz/sdk-threat/dist/esm/index.js"() {
+    init_client2();
+    init_resources2();
+    init_types2();
+    init_esm();
   }
 });
 
@@ -27161,11 +30567,11 @@ var import_os = require("os");
 var import_fs = require("fs");
 var __awaiter = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve2) {
-      resolve2(value);
+    return value instanceof P ? value : new P(function(resolve3) {
+      resolve3(value);
     });
   }
-  return new (P || (P = Promise))(function(resolve2, reject) {
+  return new (P || (P = Promise))(function(resolve3, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -27181,7 +30587,7 @@ var __awaiter = function(thisArg, _arguments, P, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -27551,11 +30957,11 @@ var httpClient = __toESM(require_lib(), 1);
 var import_undici2 = __toESM(require_undici(), 1);
 var __awaiter2 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve2) {
-      resolve2(value);
+    return value instanceof P ? value : new P(function(resolve3) {
+      resolve3(value);
     });
   }
-  return new (P || (P = Promise))(function(resolve2, reject) {
+  return new (P || (P = Promise))(function(resolve3, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -27571,7 +30977,7 @@ var __awaiter2 = function(thisArg, _arguments, P, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve2(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve3(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -31607,7 +35013,7 @@ var verdicts = ["pass", "warn", "fail"];
 
 // ../core/src/cli-provider.ts
 async function runCommand(command, args, input, options) {
-  return new Promise((resolve2) => {
+  return new Promise((resolve3) => {
     const child = (0, import_node_child_process.spawn)(command, args, {
       cwd: options.cwd,
       env: options.env,
@@ -31683,7 +35089,7 @@ async function runCommand(command, args, input, options) {
     });
     child.on("error", (error52) => {
       cleanup();
-      resolve2({
+      resolve3({
         stdout,
         stderr: `${stderr}${error52.message}`,
         exitCode: null,
@@ -31695,7 +35101,7 @@ async function runCommand(command, args, input, options) {
     });
     child.on("close", (exitCode, signal) => {
       cleanup();
-      resolve2({ stdout, stderr, exitCode, signal, timedOut, outputTruncated, aborted: aborted2 });
+      resolve3({ stdout, stderr, exitCode, signal, timedOut, outputTruncated, aborted: aborted2 });
     });
     child.stdin.on("error", () => {
     });
@@ -31958,6 +35364,35 @@ async function runCliProvider(provider, role, request2, hooks) {
   }
 }
 
+// ../core/src/redact.ts
+var SECRET_PATTERNS = [
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi,
+  /\b(?:api[_-]?key|authorization|access[_-]?token|refresh[_-]?token|secret)\s*[:=]\s*["']?[^"'\s,}]{8,}/gi,
+  /\bsk-[A-Za-z0-9_-]{16,}\b/g,
+  /\bgithub_pat_[A-Za-z0-9_]{16,}\b/g,
+  /\bgh[pousr]_[A-Za-z0-9_]{16,}\b/g
+];
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function redactSecrets(input, secrets = []) {
+  if (input === void 0) return void 0;
+  let output = input;
+  for (const pattern of SECRET_PATTERNS) {
+    output = output.replace(pattern, (match) => {
+      const bearer = /^(Bearer\s+)/i.exec(match)?.[1];
+      if (bearer) return `${bearer}[redacted]`;
+      const assignment = /^([^:=]+[:=]\s*)/i.exec(match)?.[1];
+      return assignment ? `${assignment}[redacted]` : "[redacted]";
+    });
+  }
+  for (const secret of secrets) {
+    if (!secret || secret.length < 4) continue;
+    output = output.replace(new RegExp(escapeRegExp(secret), "g"), "[redacted]");
+  }
+  return output;
+}
+
 // ../core/src/api-provider.ts
 var DEFAULT_BASE_URL = "http://localhost:11434/v1";
 var MAX_TIMEOUT_MS = 3e5;
@@ -32001,9 +35436,13 @@ async function runApiProvider(provider, role, request2, hooks) {
   const maxOutputBytes = provider.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const prompt = buildReviewPrompt(provider, role, request2);
   const headers = { "content-type": "application/json" };
+  let apiToken;
   if (provider.apiKeyEnv) {
     const token = process.env[provider.apiKeyEnv];
-    if (token) headers.authorization = `Bearer ${token}`;
+    if (token) {
+      apiToken = token;
+      headers.authorization = `Bearer ${token}`;
+    }
   }
   const controller = new AbortController();
   let timedOut = false;
@@ -32036,7 +35475,7 @@ async function runApiProvider(provider, role, request2, hooks) {
     });
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      const trimmed = errorText.trim();
+      const trimmed = redactSecrets(errorText.trim(), [apiToken]) ?? "";
       return fail(
         `API provider ${provider.id} returned HTTP ${response.status}.`,
         trimmed || `HTTP ${response.status} ${response.statusText}`.trim(),
@@ -32075,7 +35514,7 @@ async function runApiProvider(provider, role, request2, hooks) {
     }
     return fail(
       `API provider ${provider.id} request failed.`,
-      error52 instanceof Error ? error52.message : String(error52)
+      redactSecrets(error52 instanceof Error ? error52.message : String(error52), [apiToken])
     );
   } finally {
     clearTimeout(timer);
@@ -49049,6 +52488,562 @@ function areSameFinding(a, b, threshold = DEFAULT_SIMILARITY_THRESHOLD) {
   return titleBodySimilarity(a, b) >= effective;
 }
 
+// ../core/src/web3-dd.ts
+var import_promises2 = require("node:fs/promises");
+var import_node_path3 = require("node:path");
+var WEB3_DD_ROLE = "web3-due-diligence";
+var PROVIDER_ID = "web3-dd";
+var DEFAULT_CHAINS = ["eth", "base", "sol"];
+var EVM_CHAINS = /* @__PURE__ */ new Set(["eth", "base", "arb", "opt", "pol", "bsc", "sep"]);
+var SUPPORTED_CHAINS = /* @__PURE__ */ new Set([
+  "eth",
+  "base",
+  "arb",
+  "opt",
+  "pol",
+  "bsc",
+  "sep",
+  "sol",
+  "sui",
+  "stellar",
+  "ton",
+  "btc"
+]);
+var MAX_LIVE_INDICATORS = 25;
+var MAX_CHAIN_QUERIES_PER_ADDRESS = 3;
+var WEBACY_CONCURRENCY = 2;
+var EVM_ADDRESS_RE = /\b0x[a-fA-F0-9]{40}\b/g;
+var SOLANA_ADDRESS_RE = /\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g;
+var URL_RE = /\bhttps?:\/\/[^\s"'`<>)\\]+/g;
+var SOLANA_CONTEXT_RE = /\b(solana|anchor|spl|pubkey|publickey|address|mint|program|wallet|token|owner|authority|recipient|treasury|vault|escrow)\b/i;
+var WEB3_URL_CONTEXT_RE = /\b(wallet|token|mint|contract|nft|swap|bridge|rpc|explorer|metadata|airdrop|claim|sign|transaction|program|web3)\b/i;
+var APPROVAL_RE = /\b(approve\s*\(|setApprovalForAll\s*\(|MaxUint256|MAX_UINT|uint256\.max|2\s*\*\*\s*256\s*-\s*1|0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)\b/i;
+var TYPED_DATA_RE = /\b(signTypedData|eth_signTypedData|EIP712Domain|TypedDataEncoder|verifyingContract|typedData)\b/i;
+var RAW_TRANSACTION_RE = /\b(sendRawTransaction|eth_sendRawTransaction|serializeTransaction|rawTransaction|VersionedTransaction\.deserialize)\b/i;
+var LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/i;
+function addedLines2(diff) {
+  const result = [];
+  let currentFile;
+  let currentLine;
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith("diff --git ")) {
+      currentFile = void 0;
+      currentLine = void 0;
+    } else if (line.startsWith("+++ b/")) {
+      currentFile = line.slice("+++ b/".length);
+    } else if (line.startsWith("@@")) {
+      const match = /\+(\d+)/.exec(line);
+      currentLine = match ? Number(match[1]) : void 0;
+    } else if (line.startsWith("+") && !line.startsWith("+++")) {
+      result.push({ file: currentFile, line: currentLine, text: line.slice(1) });
+      if (currentLine !== void 0) currentLine += 1;
+    } else if (!line.startsWith("-") && currentLine !== void 0) {
+      currentLine += 1;
+    }
+  }
+  return result;
+}
+function linesByFile2(lines) {
+  const result = /* @__PURE__ */ new Map();
+  for (const line of lines) {
+    if (!line.file) continue;
+    const bucket = result.get(line.file) ?? [];
+    bucket.push(line);
+    result.set(line.file, bucket);
+  }
+  return result;
+}
+function nearbyText(target, grouped, distance = 3) {
+  if (!target.file || target.line === void 0) return target.text;
+  return (grouped.get(target.file) ?? []).filter((line) => line.line !== void 0 && Math.abs(line.line - target.line) <= distance).map((line) => line.text).join("\n");
+}
+function normalizeUrl2(raw) {
+  const trimmed = raw.replace(/[.,;:!?]+$/g, "");
+  try {
+    const parsed = new URL(trimmed);
+    if (!["http:", "https:"].includes(parsed.protocol)) return void 0;
+    if (LOCAL_HOST_RE.test(parsed.hostname) || parsed.hostname.endsWith(".local")) return void 0;
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return void 0;
+  }
+}
+function hostnameOf(url2) {
+  try {
+    return new URL(url2).hostname.toLowerCase();
+  } catch {
+    return void 0;
+  }
+}
+function normalizedChains(config2) {
+  const raw = config2?.chains?.length ? config2.chains : DEFAULT_CHAINS;
+  const chains = raw.map((chain) => chain.trim().toLowerCase()).filter((chain) => SUPPORTED_CHAINS.has(chain));
+  return chains.length ? [...new Set(chains)] : DEFAULT_CHAINS;
+}
+function inferredChainFromContext(context3) {
+  const lower = context3.toLowerCase();
+  if (/\b(base|8453)\b/.test(lower)) return "base";
+  if (/\b(arbitrum|arb|42161)\b/.test(lower)) return "arb";
+  if (/\b(optimism|opt|10)\b/.test(lower)) return "opt";
+  if (/\b(polygon|matic|pol|137)\b/.test(lower)) return "pol";
+  if (/\b(bsc|bnb|56)\b/.test(lower)) return "bsc";
+  if (/\b(sepolia|sep|11155111)\b/.test(lower)) return "sep";
+  if (/\b(ethereum|mainnet|eth|1)\b/.test(lower)) return "eth";
+  if (/\b(solana|sol)\b/.test(lower)) return "sol";
+  return void 0;
+}
+function chainsForIndicator(indicator, config2) {
+  if (indicator.kind === "url") return [];
+  const configured = normalizedChains(config2);
+  const inferred = inferredChainFromContext(`${indicator.context}
+${indicator.file ?? ""}`);
+  if (indicator.chainType === "solana") return configured.includes("sol") ? ["sol"] : [];
+  if (inferred && EVM_CHAINS.has(inferred) && configured.includes(inferred)) return [inferred];
+  const evmChains = configured.filter((chain) => EVM_CHAINS.has(chain));
+  return evmChains.slice(0, MAX_CHAIN_QUERIES_PER_ADDRESS);
+}
+function allowlistSets(config2) {
+  return {
+    addresses: new Set((config2?.allowlist.addresses ?? []).map((value) => value.toLowerCase())),
+    domains: new Set((config2?.allowlist.domains ?? []).map((value) => value.toLowerCase())),
+    urls: new Set((config2?.allowlist.urls ?? []).map((value) => value.toLowerCase()))
+  };
+}
+function isAllowlisted(indicator, config2) {
+  const allow = allowlistSets(config2);
+  if (indicator.kind === "address") return allow.addresses.has(indicator.value.toLowerCase());
+  const url2 = indicator.value.toLowerCase();
+  const domain2 = hostnameOf(indicator.value);
+  return allow.urls.has(url2) || (domain2 ? allow.domains.has(domain2) : false);
+}
+function extractWeb3DdIndicators(diff, config2) {
+  const lines = addedLines2(diff);
+  const grouped = linesByFile2(lines);
+  const seen = /* @__PURE__ */ new Set();
+  const indicators = [];
+  const add = (indicator) => {
+    if (isAllowlisted(indicator, config2)) return;
+    const key = `${indicator.kind}:${indicator.chainType}:${indicator.value.toLowerCase()}:${indicator.file ?? ""}:${indicator.line ?? ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    indicators.push(indicator);
+  };
+  for (const line of lines) {
+    const context3 = `${nearbyText(line, grouped)}
+${line.file ?? ""}`;
+    for (const match of line.text.matchAll(EVM_ADDRESS_RE)) {
+      add({
+        kind: "address",
+        value: match[0],
+        file: line.file,
+        line: line.line,
+        chainType: "evm",
+        context: context3
+      });
+    }
+    for (const match of line.text.matchAll(SOLANA_ADDRESS_RE)) {
+      const value = match[0];
+      if (/^0x/i.test(value)) continue;
+      if (!SOLANA_CONTEXT_RE.test(context3)) continue;
+      add({
+        kind: "address",
+        value,
+        file: line.file,
+        line: line.line,
+        chainType: "solana",
+        context: context3
+      });
+    }
+    for (const match of line.text.matchAll(URL_RE)) {
+      const value = normalizeUrl2(match[0]);
+      if (!value) continue;
+      add({
+        kind: "url",
+        value,
+        file: line.file,
+        line: line.line,
+        chainType: "unknown",
+        context: context3
+      });
+    }
+  }
+  return indicators;
+}
+function staticFindings(diff, config2) {
+  const lines = addedLines2(diff);
+  const grouped = linesByFile2(lines);
+  const findings = [];
+  const indicators = extractWeb3DdIndicators(diff, config2);
+  for (const line of lines) {
+    const base = { file: line.file, line: line.line, providerId: PROVIDER_ID, role: WEB3_DD_ROLE };
+    if (APPROVAL_RE.test(line.text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "High-risk token approval pattern",
+        body: "This change introduces an approval-style token permission. Verify the spender is trusted, the allowance is bounded, and revocation is possible.",
+        suggestion: "Prefer exact allowances, spender allowlists, and tests that prove approvals cannot be abused."
+      });
+    }
+    if (TYPED_DATA_RE.test(line.text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Typed-data signing path changed",
+        body: "EIP-712 / typed-data signing changes can alter what a wallet asks users to authorize. Verify the domain, chain id, verifying contract, and displayed fields.",
+        suggestion: "Add fixtures for the exact typed-data payload users will sign."
+      });
+    }
+    if (RAW_TRANSACTION_RE.test(line.text)) {
+      findings.push({
+        ...base,
+        severity: "medium",
+        title: "Raw transaction submission path changed",
+        body: "Raw transaction construction or submission bypasses some wallet/client safeguards. Verify simulation, chain id, recipient, value, and confirmation handling.",
+        suggestion: "Simulate before submission and test that the transaction cannot be redirected to an unexpected recipient or chain."
+      });
+    }
+  }
+  for (const indicator of indicators) {
+    if (indicator.kind === "address") {
+      findings.push({
+        providerId: PROVIDER_ID,
+        role: WEB3_DD_ROLE,
+        file: indicator.file,
+        line: indicator.line,
+        severity: "low",
+        title: "Hardcoded Web3 address introduced",
+        body: `${shortIndicator(indicator.value)} was added in a Web3-sensitive context. Confirm the address, chain, ownership, and upgrade path before merge.`,
+        suggestion: "Document the expected chain and owner, and allowlist known-safe addresses in Quorate if this is intentional."
+      });
+    } else if (WEB3_URL_CONTEXT_RE.test(indicator.context)) {
+      findings.push({
+        providerId: PROVIDER_ID,
+        role: WEB3_DD_ROLE,
+        file: indicator.file,
+        line: indicator.line,
+        severity: "low",
+        title: "External Web3 URL introduced",
+        body: `${hostnameOf(indicator.value) ?? indicator.value} was added in a wallet/token/transaction context. Verify it is not a phishing, malware, or untrusted metadata endpoint.`,
+        suggestion: "Prefer trusted domains and add tests or config allowlists for production endpoints."
+      });
+    }
+  }
+  return applyInlineSuppressions(findings, lines);
+}
+function shortIndicator(value) {
+  if (value.length <= 18) return value;
+  return `${value.slice(0, 8)}...${value.slice(-6)}`;
+}
+function scoreToLevel(score) {
+  if (score === void 0 || Number.isNaN(score)) return "low";
+  if (score >= 70) return "high";
+  if (score >= 40) return "medium";
+  return "low";
+}
+function maxLevel(left, right) {
+  const rank = { low: 1, medium: 2, high: 3 };
+  return rank[right] > rank[left] ? right : left;
+}
+function meetsThreshold(level, threshold) {
+  if (!threshold) return false;
+  const rank = { low: 1, medium: 2, high: 3 };
+  return rank[level] >= rank[threshold];
+}
+function issueLabel(issue3) {
+  if (!issue3 || typeof issue3 !== "object") return void 0;
+  const record2 = issue3;
+  const candidates = [record2.name, record2.title, record2.type, record2.tag, record2.category, record2.description];
+  const found = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+  return found?.trim();
+}
+function normalizeAddressRisk(risk, sanctioned) {
+  const record2 = risk && typeof risk === "object" ? risk : {};
+  const score = typeof record2.overallRisk === "number" ? record2.overallRisk : void 0;
+  const highCount = typeof record2.high === "number" ? record2.high : void 0;
+  const mediumCount = typeof record2.medium === "number" ? record2.medium : void 0;
+  let level = scoreToLevel(score);
+  if ((highCount ?? 0) > 0) level = "high";
+  else if ((mediumCount ?? 0) > 0) level = maxLevel(level, "medium");
+  const issues = Array.isArray(record2.issues) ? record2.issues.map(issueLabel).filter((value) => Boolean(value)).slice(0, 5) : [];
+  const sanctionedRecord = sanctioned && typeof sanctioned === "object" ? sanctioned : {};
+  const isSanctioned = sanctionedRecord.is_sanctioned === true || sanctionedRecord.isSanctioned === true;
+  if (isSanctioned) {
+    level = "high";
+    issues.unshift("sanctioned address");
+  }
+  return {
+    level,
+    score,
+    highCount,
+    mediumCount,
+    issues: [...new Set(issues)],
+    sanctioned: isSanctioned
+  };
+}
+function normalizeUrlRisk(risk) {
+  const record2 = risk && typeof risk === "object" ? risk : {};
+  const prediction = typeof record2.prediction === "string" ? record2.prediction.toLowerCase() : "";
+  const blacklist = String(record2.blacklist ?? "").toLowerCase();
+  const details = record2.details && typeof record2.details === "object" ? record2.details : {};
+  const confidence = typeof details.confidence === "number" ? details.confidence : void 0;
+  const maliciousUrl = prediction === "malicious" || blacklist === "true";
+  const level = maliciousUrl ? "high" : scoreToLevel(confidence);
+  const categories = Array.isArray(details.categories) ? details.categories.filter((value) => typeof value === "string").slice(0, 5) : [];
+  const threatType = typeof details.threat_type === "string" ? details.threat_type : void 0;
+  return {
+    level,
+    score: confidence,
+    issues: [...new Set([threatType, ...categories].filter((value) => Boolean(value)))],
+    maliciousUrl
+  };
+}
+function severityForRisk(summary2, config2) {
+  if (summary2.sanctioned && config2.failOn.sanctioned) return "high";
+  if (summary2.maliciousUrl && config2.failOn.maliciousUrl) return "high";
+  if (meetsThreshold(summary2.level, config2.failOn.riskLevel)) return "high";
+  if (meetsThreshold(summary2.level, config2.warnOn.riskLevel)) return "medium";
+  return void 0;
+}
+function riskBody(kind, indicator, chain, summary2) {
+  const chainText = chain ? ` on ${chain}` : "";
+  const scoreText = summary2.score === void 0 ? "" : ` Webacy score: ${summary2.score}.`;
+  const issueText = summary2.issues.length ? ` Issues: ${summary2.issues.join(", ")}.` : "";
+  return `Webacy classified ${kind === "address" ? shortIndicator(indicator) : indicator}${chainText} as ${summary2.level} risk.${scoreText}${issueText}`;
+}
+function findingFromRisk(indicator, chain, summary2, config2) {
+  const severity = severityForRisk(summary2, config2);
+  if (!severity) return void 0;
+  const kindTitle = indicator.kind === "address" ? "address" : "URL";
+  return {
+    severity,
+    title: `Webacy ${summary2.level}-risk ${kindTitle} introduced`,
+    body: riskBody(indicator.kind, indicator.value, chain, summary2),
+    file: indicator.file,
+    line: indicator.line,
+    providerId: PROVIDER_ID,
+    role: WEB3_DD_ROLE,
+    suggestion: indicator.kind === "address" ? "Verify the address owner, chain, token/contract behavior, and whether it belongs in an explicit allowlist before merge." : "Remove or replace the URL, or allowlist it only after independently verifying ownership and safety."
+  };
+}
+async function createSdkClient(apiKey) {
+  const { ThreatClient: ThreatClient2 } = await Promise.resolve().then(() => (init_esm2(), esm_exports));
+  const client = new ThreatClient2({
+    apiKey,
+    timeout: 3e4,
+    retry: { maxRetries: 2, initialDelay: 500, maxDelay: 5e3 }
+  });
+  return {
+    analyzeAddress: (address, chain, signal) => client.addresses.analyze(address, { chain, detailed: true, deployerRisk: true, signal }),
+    checkSanctioned: (address, chain, signal) => client.addresses.checkSanctioned(address, { chain, signal }),
+    checkUrl: (url2, signal) => client.url.check(url2, { signal })
+  };
+}
+async function readCacheFile(path) {
+  if (!path) return { entries: {} };
+  try {
+    const parsed = JSON.parse(await (0, import_promises2.readFile)(path, "utf8"));
+    return { entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {} };
+  } catch {
+    return { entries: {} };
+  }
+}
+async function writeCacheFile(path, cache) {
+  if (!path) return;
+  await (0, import_promises2.mkdir)((0, import_node_path3.dirname)(path), { recursive: true });
+  await (0, import_promises2.writeFile)(path, `${JSON.stringify(cache, null, 2)}
+`, "utf8");
+}
+function cacheKey(kind, value, chain) {
+  return `${kind}:${chain ?? "-"}:${value.toLowerCase()}`;
+}
+async function cached2(cache, key, ttlMs, now, fetcher) {
+  const existing = cache.entries[key];
+  if (existing && existing.expiresAt > now) {
+    return { value: existing.value, hit: true };
+  }
+  const value = await fetcher();
+  cache.entries[key] = { value, expiresAt: now + ttlMs };
+  return { value, hit: false };
+}
+async function mapLimited(items, limit, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      try {
+        results[index] = { status: "fulfilled", value: await mapper(items[index]) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+function sanitizedError(error52, apiKey) {
+  const raw = error52 instanceof Error ? error52.message : String(error52);
+  return redactSecrets(raw, [apiKey]) ?? "Webacy lookup failed.";
+}
+function webacyConfig(config2) {
+  return config2.integrations?.webacy;
+}
+function hasWeb3DdPack(config2) {
+  return config2.councils.some(
+    (council) => ["web3-due-diligence", "wallet-safety", "phishing-safety"].includes(council)
+  );
+}
+function web3DdReviewEnabled(config2, request2) {
+  return request2.mode === "review" && (hasWeb3DdPack(config2) || webacyConfig(config2)?.enabled === true);
+}
+async function runWeb3DdReview(request2, config2, options = {}) {
+  if (!web3DdReviewEnabled(config2, request2)) return void 0;
+  const startedAt = Date.now();
+  const diff = request2.diff ?? "";
+  const integration = webacyConfig(config2);
+  const staticIssues = staticFindings(diff, integration);
+  if (!integration?.enabled) {
+    return {
+      providerId: PROVIDER_ID,
+      role: WEB3_DD_ROLE,
+      providerType: "mock",
+      status: "ok",
+      summary: `Web3 DD static scan produced ${staticIssues.length} finding${staticIssues.length === 1 ? "" : "s"}.`,
+      findings: staticIssues,
+      durationMs: Date.now() - startedAt
+    };
+  }
+  const env = options.env ?? process.env;
+  const apiKey = env[integration.apiKeyEnv];
+  if (!apiKey) {
+    return {
+      providerId: PROVIDER_ID,
+      role: WEB3_DD_ROLE,
+      providerType: "api",
+      status: "error",
+      summary: `Webacy integration is enabled but ${integration.apiKeyEnv} is not set.`,
+      findings: [
+        ...staticIssues,
+        {
+          providerId: PROVIDER_ID,
+          role: WEB3_DD_ROLE,
+          severity: "high",
+          title: "Webacy API key missing",
+          body: `integrations.webacy.enabled is true, but ${integration.apiKeyEnv} is not available in the environment.`,
+          suggestion: `Add ${integration.apiKeyEnv} as a CI secret or disable integrations.webacy.enabled.`
+        }
+      ],
+      durationMs: Date.now() - startedAt,
+      error: `${integration.apiKeyEnv} is missing`
+    };
+  }
+  const indicators = extractWeb3DdIndicators(diff, integration).slice(0, MAX_LIVE_INDICATORS);
+  if (indicators.length === 0) {
+    return {
+      providerId: PROVIDER_ID,
+      role: WEB3_DD_ROLE,
+      providerType: "api",
+      status: "ok",
+      summary: `Webacy integration found no address or URL indicators to query. Static scan produced ${staticIssues.length} finding${staticIssues.length === 1 ? "" : "s"}.`,
+      findings: staticIssues,
+      durationMs: Date.now() - startedAt
+    };
+  }
+  const now = options.now ?? Date.now();
+  const ttlMs = Math.max(0, integration.cache.ttlHours) * 60 * 60 * 1e3;
+  const cachePath = options.cachePath === false ? false : options.cachePath ?? (0, import_node_path3.resolve)(request2.repoPath ?? process.cwd(), ".quorate", "cache", "webacy.json");
+  const cache = await readCacheFile(ttlMs > 0 ? cachePath : false);
+  const client = options.client ?? await createSdkClient(apiKey);
+  let cacheHits = 0;
+  const queries = [];
+  for (const indicator of indicators) {
+    if (indicator.kind === "address") {
+      for (const chain of chainsForIndicator(indicator, integration)) {
+        queries.push({ type: "address", indicator, chain });
+      }
+    } else {
+      queries.push({ type: "url", indicator });
+    }
+  }
+  const findings = [...staticIssues];
+  const settled = await mapLimited(queries, WEBACY_CONCURRENCY, async (query) => {
+    if (query.type === "url") {
+      const key = cacheKey("url", query.indicator.value);
+      const { value, hit } = await cached2(
+        cache,
+        key,
+        ttlMs,
+        now,
+        () => client.checkUrl(query.indicator.value, options.signal)
+      );
+      if (hit) cacheHits += 1;
+      const summary3 = normalizeUrlRisk(value);
+      return findingFromRisk(query.indicator, void 0, summary3, integration);
+    }
+    const addressKey = cacheKey("address", query.indicator.value, query.chain);
+    const sanctionedKey = cacheKey("sanctioned", query.indicator.value, query.chain);
+    const [{ value: risk, hit: riskHit }, { value: sanctioned, hit: sanctionedHit }] = await Promise.all([
+      cached2(
+        cache,
+        addressKey,
+        ttlMs,
+        now,
+        () => client.analyzeAddress(query.indicator.value, query.chain, options.signal)
+      ),
+      cached2(
+        cache,
+        sanctionedKey,
+        ttlMs,
+        now,
+        () => client.checkSanctioned(query.indicator.value, query.chain, options.signal)
+      )
+    ]);
+    if (riskHit) cacheHits += 1;
+    if (sanctionedHit) cacheHits += 1;
+    const summary2 = normalizeAddressRisk(risk, sanctioned);
+    return findingFromRisk(query.indicator, query.chain, summary2, integration);
+  });
+  let errorCount = 0;
+  const errors = [];
+  for (const outcome of settled) {
+    if (outcome.status === "fulfilled") {
+      if (outcome.value) findings.push(outcome.value);
+    } else {
+      errorCount += 1;
+      errors.push(sanitizedError(outcome.reason, apiKey));
+    }
+  }
+  if (errorCount > 0) {
+    findings.push({
+      providerId: PROVIDER_ID,
+      role: WEB3_DD_ROLE,
+      severity: "high",
+      title: "Webacy lookup failed",
+      body: `${errorCount} of ${settled.length} Webacy lookup${settled.length === 1 ? "" : "s"} failed while integrations.webacy.enabled is true. Treat this as an incomplete due-diligence gate until the lookup succeeds.`,
+      suggestion: "Check WEBACY_API_KEY, Webacy rate limits, and network reachability, then rerun Quorate."
+    });
+  }
+  if (ttlMs > 0) {
+    await writeCacheFile(cachePath, cache);
+  }
+  const status = errorCount > 0 && errorCount === settled.length ? "error" : "ok";
+  const errorSummary = errorCount > 0 ? ` ${errorCount} Webacy lookup${errorCount === 1 ? "" : "s"} failed.` : "";
+  const hitSummary = cacheHits > 0 ? ` ${cacheHits} cache hit${cacheHits === 1 ? "" : "s"}.` : "";
+  return {
+    providerId: PROVIDER_ID,
+    role: WEB3_DD_ROLE,
+    providerType: "api",
+    status,
+    summary: `Web3 DD scanned ${indicators.length} indicator${indicators.length === 1 ? "" : "s"} and produced ${findings.length} finding${findings.length === 1 ? "" : "s"}.${hitSummary}${errorSummary}`,
+    findings: applyInlineSuppressions(findings, addedLines2(diff)),
+    durationMs: Date.now() - startedAt,
+    error: errors[0]
+  };
+}
+
 // ../core/src/council.ts
 var severityWeight = {
   critical: 5,
@@ -49079,7 +53074,13 @@ function clusterFindings(findings) {
   const clusters = [];
   for (const finding of findings) {
     const target = clusters.find(
-      (cluster) => cluster.some((member) => areSameFinding(member, finding))
+      (cluster) => cluster.some((member) => {
+        const sameLane = member.providerId === finding.providerId && member.role === finding.role;
+        if (sameLane && member.title !== finding.title) {
+          return false;
+        }
+        return areSameFinding(member, finding);
+      })
     );
     if (target) {
       target.push(finding);
@@ -49219,17 +53220,25 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
   };
   const ctx = { councilRunId, emit, signal };
   const lanes = buildPlannedLanes(config2);
-  const requestedProviders = lanes.map((lane) => `${lane.provider.id}:${lane.role}`);
+  const includeWeb3Dd = web3DdReviewEnabled(config2, request2);
+  const web3DdProviderType = config2.integrations?.webacy?.enabled === true ? "api" : "mock";
+  const requestedProviders = [
+    ...lanes.map((lane) => `${lane.provider.id}:${lane.role}`),
+    ...includeWeb3Dd ? ["web3-dd:web3-due-diligence"] : []
+  ];
   emit({
     type: "council/started",
     councilRunId,
     mode: request2.mode,
     subject: request2.subject,
-    planned: lanes.map((lane) => ({
-      providerId: lane.provider.id,
-      role: lane.role,
-      providerType: providerTypeOf(lane.provider)
-    })),
+    planned: [
+      ...lanes.map((lane) => ({
+        providerId: lane.provider.id,
+        role: lane.role,
+        providerType: providerTypeOf(lane.provider)
+      })),
+      ...includeWeb3Dd ? [{ providerId: "web3-dd", role: "web3-due-diligence", providerType: web3DdProviderType }] : []
+    ],
     at: (/* @__PURE__ */ new Date()).toISOString()
   });
   const reviewRequest = {
@@ -49254,6 +53263,23 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       durationMs: 0
     };
   });
+  if (includeWeb3Dd && !signal?.aborted) {
+    try {
+      const web3DdResult = await runWeb3DdReview(reviewRequest, config2, { signal });
+      if (web3DdResult) providerResults.push(web3DdResult);
+    } catch (error52) {
+      providerResults.push({
+        providerId: "web3-dd",
+        role: "web3-due-diligence",
+        providerType: web3DdProviderType,
+        status: "error",
+        summary: "Web3 DD review threw before producing a result.",
+        findings: [],
+        error: error52 instanceof Error ? error52.message : String(error52),
+        durationMs: 0
+      });
+    }
+  }
   const rawFindings = providerResults.flatMap((result) => result.findings);
   let workingFindings = rawFindings;
   let mergedBy;
@@ -49542,6 +53568,36 @@ var providerSchema = external_exports.object({
     outputUsdPer1M: external_exports.number().nonnegative().optional()
   }).optional()
 });
+var webacyRiskLevelSchema = external_exports.enum(["low", "medium", "high"]);
+var webacySchema = external_exports.object({
+  enabled: external_exports.boolean().default(false),
+  apiKeyEnv: external_exports.string().min(1).default("WEBACY_API_KEY"),
+  chains: external_exports.array(external_exports.string().min(1)).default(["eth", "base", "sol"]),
+  failOn: external_exports.object({
+    riskLevel: webacyRiskLevelSchema.optional(),
+    sanctioned: external_exports.boolean().optional(),
+    maliciousUrl: external_exports.boolean().optional()
+  }).default({ riskLevel: "high", sanctioned: true, maliciousUrl: true }),
+  warnOn: external_exports.object({
+    riskLevel: webacyRiskLevelSchema.optional()
+  }).default({ riskLevel: "medium" }),
+  allowlist: external_exports.object({
+    addresses: external_exports.array(external_exports.string().min(1)).default([]),
+    domains: external_exports.array(external_exports.string().min(1)).default([]),
+    urls: external_exports.array(external_exports.string().min(1)).default([])
+  }).default({ addresses: [], domains: [], urls: [] }),
+  cache: external_exports.object({
+    ttlHours: external_exports.number().positive().default(24)
+  }).default({ ttlHours: 24 })
+}).default({
+  enabled: false,
+  apiKeyEnv: "WEBACY_API_KEY",
+  chains: ["eth", "base", "sol"],
+  failOn: { riskLevel: "high", sanctioned: true, maliciousUrl: true },
+  warnOn: { riskLevel: "medium" },
+  allowlist: { addresses: [], domains: [], urls: [] },
+  cache: { ttlHours: 24 }
+});
 var configSchema = external_exports.object({
   councils: external_exports.array(external_exports.string().min(1)).default([]),
   providers: external_exports.array(providerSchema).default([]),
@@ -49561,7 +53617,10 @@ var configSchema = external_exports.object({
     skipGenerated: external_exports.boolean().optional()
   }).optional(),
   merge: external_exports.object({ provider: external_exports.string().min(1) }).optional(),
-  roleGuidance: external_exports.record(external_exports.string(), external_exports.string()).optional()
+  roleGuidance: external_exports.record(external_exports.string(), external_exports.string()).optional(),
+  integrations: external_exports.object({
+    webacy: webacySchema.optional()
+  }).optional()
 });
 function parseConfig(source) {
   const parsed = import_yaml.default.parse(source) ?? {};
@@ -49576,7 +53635,8 @@ function parseConfig(source) {
     },
     budget: userConfig.budget,
     merge: userConfig.merge,
-    roleGuidance: userConfig.roleGuidance
+    roleGuidance: userConfig.roleGuidance,
+    integrations: userConfig.integrations
   };
 }
 
@@ -49678,6 +53738,24 @@ var move = {
     "resource-safety": "Review struct ability declarations (key, store, copy, drop) for correctness: value resources representing authority or assets must not carry copy (duplicable) or drop (silently destroyable) abilities. Audit every borrow_global_mut and move_from call to confirm the caller's address equals signer::address_of(account) before accessing or removing a stored resource.",
     "access-control": "Verify that every function performing privileged operations (withdraw, mint, burn, admin actions) performs an explicit signer::address_of check or requires a capability argument. Confirm that init / one-time admin functions are protected from re-invocation and that AdminCap issuance is restricted to the deployer.",
     "maintainer": "Assess overall code structure, test coverage, module upgrade path, and long-term maintainability. Identify dead code, unclear error codes, missing unit tests for critical functions, and any patterns that will make the module hard to audit or extend."
+  }
+};
+var web3Dd = {
+  id: "web3-dd",
+  description: "Web3 due diligence pack for DD.xyz/Webacy-backed address, URL, approval, and signing risk",
+  councils: [
+    "web3-due-diligence",
+    "wallet-safety",
+    "transaction-safety",
+    "phishing-safety",
+    "maintainer"
+  ],
+  roleGuidance: {
+    "web3-due-diligence": "Review added wallet, token, contract, program, and URL indicators as due-diligence evidence. Verify chain, ownership, trust boundaries, and whether Webacy/DD risk evidence should block the merge.",
+    "wallet-safety": "Scrutinize any wallet-facing change that introduces addresses, approvals, delegates, or spenders. Flag unlimited allowances, unverified spender addresses, and flows that make users authorize unclear permissions.",
+    "transaction-safety": "Review raw transaction, typed-data, signing, simulation, and submission paths. Confirm chain ids, verifying contracts, recipients, values, and confirmation handling are explicit and tested.",
+    "phishing-safety": "Check external URLs, token metadata endpoints, claim pages, explorers, and RPC endpoints for phishing or malware risk. Prefer trusted domains and explicit allowlists for production endpoints.",
+    "maintainer": "Assess whether the due-diligence controls are documented, testable, and maintainable. Confirm risky indicators are configurable rather than scattered as unexplained literals."
   }
 };
 var ci = {
@@ -49919,9 +53997,10 @@ var graphql3 = {
 var PACKS = {
   solana,
   evm,
+  move,
+  "web3-dd": web3Dd,
   iac,
   llm,
-  move,
   ci,
   fintech,
   web,
@@ -49949,6 +54028,9 @@ function detectPacks(signals) {
   }
   if (lowerFiles.some((f) => f.endsWith(".move")) || lowerFiles.some((f) => f.endsWith("move.toml"))) {
     matched.add("move");
+  }
+  if (lowerFiles.some((f) => f.endsWith(".sol") || f.endsWith(".move")) || lowerFiles.some((f) => f.endsWith("anchor.toml") || f.endsWith("move.toml")) || lowerFiles.some((f) => /(^|\/)(wagmi|viem|ethers|web3|solana|wallet|token|mint|program)\b/.test(f))) {
+    matched.add("web3-dd");
   }
   if (lowerFiles.some((f) => f.endsWith(".tf") || f.endsWith(".tfvars")) || lowerFiles.some(
     (f) => (f.endsWith(".yaml") || f.endsWith(".yml")) && (f.includes("k8s") || f.includes("kubernetes") || f.includes("deploy"))
@@ -50001,6 +54083,10 @@ function detectPacks(signals) {
     const fintechPattern = /^stripe$|^braintree$|^@stripe|^plaid$|^square$/;
     if (lowerDeps.some((d) => fintechPattern.test(d))) {
       matched.add("fintech");
+    }
+    const web3Pattern = /^@solana\/web3\.js$|^@coral-xyz\/anchor$|^ethers$|^viem$|^wagmi$|^web3$|^@mysten\/sui$|^aptos$/;
+    if (lowerDeps.some((d) => web3Pattern.test(d))) {
+      matched.add("web3-dd");
     }
     const healthcarePattern = /^fhir$|^hl7$|^@medplum|^cerner$|^epic$/;
     if (lowerDeps.some((d) => healthcarePattern.test(d))) {
@@ -50598,13 +54684,13 @@ var VERDICT_COLOR = {
 var SEVERITY_COLOR = PALETTE.severity;
 
 // src/index.ts
-var import_promises2 = require("node:fs/promises");
-var import_node_path3 = require("node:path");
+var import_promises3 = require("node:fs/promises");
+var import_node_path4 = require("node:path");
 
 // package.json
 var package_default = {
   name: "@quorate/github-action",
-  version: "0.10.0",
+  version: "1.0.0",
   main: "./dist/index.js",
   private: true,
   files: [
@@ -50617,7 +54703,7 @@ var package_default = {
   dependencies: {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@quorate/core": "0.10.0"
+    "@quorate/core": "1.0.0"
   }
 };
 
@@ -51104,9 +55190,9 @@ async function runAction(deps) {
   const sarifFile = input("sarif-file");
   if (sarifFile) {
     try {
-      const target = (0, import_node_path3.resolve)(process.cwd(), sarifFile);
-      await (0, import_promises2.mkdir)((0, import_node_path3.dirname)(target), { recursive: true });
-      await (0, import_promises2.writeFile)(target, renderSarif(report, { toolVersion: package_default.version }), "utf8");
+      const target = (0, import_node_path4.resolve)(process.cwd(), sarifFile);
+      await (0, import_promises3.mkdir)((0, import_node_path4.dirname)(target), { recursive: true });
+      await (0, import_promises3.writeFile)(target, renderSarif(report, { toolVersion: package_default.version }), "utf8");
       deps.setOutput("sarif-path", target);
       deps.info?.(`Wrote SARIF report to ${sarifFile} (set sarif-path output).`);
     } catch (error52) {
@@ -51118,9 +55204,9 @@ async function runAction(deps) {
   const reviewGraphFile = input("reviewgraph-file");
   if (reviewGraphFile) {
     try {
-      const target = (0, import_node_path3.resolve)(process.cwd(), reviewGraphFile);
-      await (0, import_promises2.mkdir)((0, import_node_path3.dirname)(target), { recursive: true });
-      await (0, import_promises2.writeFile)(target, renderReviewGraph(report), "utf8");
+      const target = (0, import_node_path4.resolve)(process.cwd(), reviewGraphFile);
+      await (0, import_promises3.mkdir)((0, import_node_path4.dirname)(target), { recursive: true });
+      await (0, import_promises3.writeFile)(target, renderReviewGraph(report), "utf8");
       deps.setOutput("reviewgraph-path", target);
       deps.info?.(`Wrote ReviewGraph report to ${reviewGraphFile} (set reviewgraph-path output).`);
     } catch (error52) {
