@@ -76,6 +76,41 @@ export interface QuorateBudgetConfig {
   skipGenerated?: boolean;
 }
 
+export type WebacyRiskLevel = "low" | "medium" | "high";
+
+export interface WebacyIntegrationConfig {
+  /** Enables DD.xyz/Webacy-backed web3 due diligence. Defaults to false. */
+  enabled: boolean;
+  /** Environment variable that holds the Webacy API key. Defaults to WEBACY_API_KEY. */
+  apiKeyEnv: string;
+  /** Chains to query when an added indicator cannot be inferred more precisely. */
+  chains: string[];
+  /** Conditions that should become blocking findings. */
+  failOn: {
+    riskLevel?: WebacyRiskLevel;
+    sanctioned?: boolean;
+    maliciousUrl?: boolean;
+  };
+  /** Conditions that should become warning findings. */
+  warnOn: {
+    riskLevel?: WebacyRiskLevel;
+  };
+  /** Trusted indicators that should not be queried or reported. */
+  allowlist: {
+    addresses: string[];
+    domains: string[];
+    urls: string[];
+  };
+  /** Best-effort local cache for risk responses. */
+  cache: {
+    ttlHours: number;
+  };
+}
+
+export interface QuorateIntegrationsConfig {
+  webacy?: WebacyIntegrationConfig;
+}
+
 export interface ReviewBudgetProviderEstimate {
   providerId: string;
   role: string;
@@ -117,6 +152,8 @@ export interface QuorateConfig {
   roleGuidance?: Record<string, string>;
   /** Regex heuristics loaded from trusted custom packs. */
   customHeuristics?: CustomHeuristicRule[];
+  /** Optional external evidence integrations. */
+  integrations?: QuorateIntegrationsConfig;
 }
 
 export interface DetectedProvider {

@@ -1,5 +1,6 @@
 import { parseFindings } from "./cli-provider.js";
 import { buildReviewPrompt } from "./prompt.js";
+import { redactSecrets } from "./redact.js";
 import type { CouncilRequest, ProviderConfig, ProviderResult } from "./types.js";
 
 const DEFAULT_BASE_URL = "http://localhost:11434/v1";
@@ -67,9 +68,13 @@ export async function runApiProvider(
   const prompt = buildReviewPrompt(provider, role, request);
 
   const headers: Record<string, string> = { "content-type": "application/json" };
+  let apiToken: string | undefined;
   if (provider.apiKeyEnv) {
     const token = process.env[provider.apiKeyEnv];
-    if (token) headers.authorization = `Bearer ${token}`;
+    if (token) {
+      apiToken = token;
+      headers.authorization = `Bearer ${token}`;
+    }
   }
 
   const controller = new AbortController();
@@ -107,7 +112,7 @@ export async function runApiProvider(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      const trimmed = errorText.trim();
+      const trimmed = redactSecrets(errorText.trim(), [apiToken]) ?? "";
       return fail(
         `API provider ${provider.id} returned HTTP ${response.status}.`,
         trimmed || `HTTP ${response.status} ${response.statusText}`.trim(),
@@ -155,7 +160,7 @@ export async function runApiProvider(
     }
     return fail(
       `API provider ${provider.id} request failed.`,
-      error instanceof Error ? error.message : String(error)
+      redactSecrets(error instanceof Error ? error.message : String(error), [apiToken])
     );
   } finally {
     clearTimeout(timer);

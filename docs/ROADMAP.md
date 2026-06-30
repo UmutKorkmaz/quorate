@@ -1,10 +1,10 @@
 # Quorate Feature Roadmap
 
-**As of:** v0.10.0 · 2026-06-24
+**As of:** v1.0.0 · 2026-06-24
 **Method:** grounded against the live codebase (19-agent capability map + architecture pass), not a wishlist.
 
 Quorate is already a strong *reviewer* — multi-agent council, dedup, agreement/confidence,
-verdict, 18 packs, 16 provider presets, Action + App + VS Code. The gap is everything
+verdict, 19 packs, 16 provider presets, Action + App + VS Code. The gap is everything
 **around the verdict** that makes a team trust it as a merge gate and adopt it without pain.
 This roadmap sequences by the **adoption funnel**, not by novelty: don't get rejected on day
 one → earn trust → control cost → improve precision → extend reach.

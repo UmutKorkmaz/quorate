@@ -41,6 +41,11 @@ const CARDS = [
     desc: "Sui/Aptos-aware Move security council + ten deterministic heuristics covering resource safety, capability misuse, and access-control gaps. Zero-setup Move review."
   },
   {
+    to: "/docs/web3-dd",
+    title: "Web3 DD / Webacy",
+    desc: "DD.xyz/Webacy-backed due diligence for added addresses, URLs, approvals, raw transaction paths, and typed-data signing changes. Pair it with Solana, EVM, or Move."
+  },
+  {
     to: "/docs/ci",
     title: "CI/CD & Supply Chain",
     desc: "Workflow-security and supply-chain council + ten deterministic heuristics covering script injection, unpinned actions, hardcoded secrets, and pipe-to-shell patterns. Zero-setup CI review."

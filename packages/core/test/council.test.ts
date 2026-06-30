@@ -88,6 +88,34 @@ describe("clusterFindings", () => {
     expect(finding.confidence).toBeGreaterThan(0.5);
   });
 
+  it("does not collapse distinct findings emitted by the same provider at nearby lines", () => {
+    const address: Finding = {
+      severity: "low",
+      title: "Hardcoded Web3 address introduced",
+      body: "0x1111...111111 was added in a Web3-sensitive context. Confirm the address, chain, ownership, and upgrade path before merge.",
+      file: "checkout.ts",
+      line: 1,
+      providerId: "web3-dd",
+      role: "web3-due-diligence"
+    };
+    const url: Finding = {
+      severity: "low",
+      title: "External Web3 URL introduced",
+      body: "evil.example was added in a wallet/token/transaction context. Verify it is not a phishing, malware, or untrusted metadata endpoint.",
+      file: "checkout.ts",
+      line: 3,
+      providerId: "web3-dd",
+      role: "web3-due-diligence"
+    };
+
+    const clustered = clusterFindings([address, url]);
+
+    expect(clustered.map((finding) => finding.title).sort()).toEqual([
+      "External Web3 URL introduced",
+      "Hardcoded Web3 address introduced"
+    ]);
+  });
+
   it("preserves a lone critical finding raised by a single provider (popularity-trap guard)", () => {
     const lone: Finding = {
       severity: "critical",

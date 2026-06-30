@@ -2,12 +2,15 @@
   "name": "quorate-vscode",
   "displayName": "Quorate — AI Review Council",
   "description": "Convene Quorate's multi-agent AI review council on your current change, right inside VS Code.",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",
   "icon": "media/icon.png",
-  "galleryBanner": { "color": "#0b0f17", "theme": "dark" },
+  "galleryBanner": {
+    "color": "#0b0f17",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/UmutKorkmaz/quorate.git",
@@ -16,21 +19,47 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Linters", "SCM Providers", "Other"],
-  "keywords": ["ai", "code review", "council", "pr review", "quorate"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Linters",
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "code review",
+    "council",
+    "pr review",
+    "quorate"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "activitybar": [
-        { "id": "quorate", "title": "Quorate", "icon": "media/quorate.svg" }
+        {
+          "id": "quorate",
+          "title": "Quorate",
+          "icon": "media/quorate.svg"
+        }
       ]
     },
     "views": {
       "quorate": [
-        { "id": "quorate.council", "name": "Council" },
-        { "id": "quorate.results", "name": "Results" },
-        { "id": "quorate.status", "name": "Status", "visibility": "collapsed" }
+        {
+          "id": "quorate.council",
+          "name": "Council"
+        },
+        {
+          "id": "quorate.results",
+          "name": "Results"
+        },
+        {
+          "id": "quorate.status",
+          "name": "Status",
+          "visibility": "collapsed"
+        }
       ]
     },
     "viewsWelcome": [
@@ -56,45 +85,197 @@
       }
     ],
     "commands": [
-      { "command": "quorate.run", "title": "Run Review", "category": "Quorate", "icon": "$(play)" },
-      { "command": "quorate.pickDiffSource", "title": "Change Diff Source", "category": "Quorate", "icon": "$(git-compare)" },
-      { "command": "quorate.refresh", "title": "Refresh", "category": "Quorate", "icon": "$(refresh)" },
-      { "command": "quorate.addProvider", "title": "Add Provider…", "category": "Quorate", "icon": "$(add)" },
-      { "command": "quorate.removeProvider", "title": "Remove Provider", "category": "Quorate", "icon": "$(trash)" },
-      { "command": "quorate.editRoles", "title": "Edit Roles…", "category": "Quorate", "icon": "$(gear)" },
-      { "command": "quorate.openConfig", "title": "Open .quorate.yml", "category": "Quorate", "icon": "$(go-to-file)" },
-      { "command": "quorate.openSettings", "title": "Open Settings", "category": "Quorate", "icon": "$(settings-gear)" },
-      { "command": "quorate.init", "title": "Run quorate init", "category": "Quorate" },
-      { "command": "quorate.installCli", "title": "Install Quorate CLI", "category": "Quorate" },
-      { "command": "quorate.runDoctor", "title": "Re-run Doctor", "category": "Quorate", "icon": "$(refresh)" },
-      { "command": "quorate.openFinding", "title": "Open Finding", "category": "Quorate" },
-      { "command": "quorate.clearFindings", "title": "Clear Findings", "category": "Quorate", "icon": "$(clear-all)" },
-      { "command": "quorate.setKey", "title": "Set API Key…", "category": "Quorate", "icon": "$(key)" },
-      { "command": "quorate.fixFinding", "title": "Fix Finding with Agent…", "category": "Quorate", "icon": "$(wrench)" },
-      { "command": "quorate.revertFix", "title": "Revert Last Fix", "category": "Quorate", "icon": "$(discard)" },
-      { "command": "quorate.suppressFinding", "title": "Ignore Finding (// quorate-ignore)", "category": "Quorate", "icon": "$(eye-closed)" },
-      { "command": "quorate.setupPack", "title": "Set Up Domain Pack…", "category": "Quorate", "icon": "$(extensions)" },
-      { "command": "quorate.openVerdict", "title": "Open Verdict Panel", "category": "Quorate", "icon": "$(graph)" }
+      {
+        "command": "quorate.run",
+        "title": "Run Review",
+        "category": "Quorate",
+        "icon": "$(play)"
+      },
+      {
+        "command": "quorate.pickDiffSource",
+        "title": "Change Diff Source",
+        "category": "Quorate",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "quorate.refresh",
+        "title": "Refresh",
+        "category": "Quorate",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "quorate.addProvider",
+        "title": "Add Provider…",
+        "category": "Quorate",
+        "icon": "$(add)"
+      },
+      {
+        "command": "quorate.removeProvider",
+        "title": "Remove Provider",
+        "category": "Quorate",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "quorate.editRoles",
+        "title": "Edit Roles…",
+        "category": "Quorate",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "quorate.openConfig",
+        "title": "Open .quorate.yml",
+        "category": "Quorate",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "quorate.openSettings",
+        "title": "Open Settings",
+        "category": "Quorate",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "quorate.init",
+        "title": "Run quorate init",
+        "category": "Quorate"
+      },
+      {
+        "command": "quorate.installCli",
+        "title": "Install Quorate CLI",
+        "category": "Quorate"
+      },
+      {
+        "command": "quorate.runDoctor",
+        "title": "Re-run Doctor",
+        "category": "Quorate",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "quorate.openFinding",
+        "title": "Open Finding",
+        "category": "Quorate"
+      },
+      {
+        "command": "quorate.clearFindings",
+        "title": "Clear Findings",
+        "category": "Quorate",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "quorate.setKey",
+        "title": "Set API Key…",
+        "category": "Quorate",
+        "icon": "$(key)"
+      },
+      {
+        "command": "quorate.fixFinding",
+        "title": "Fix Finding with Agent…",
+        "category": "Quorate",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "quorate.revertFix",
+        "title": "Revert Last Fix",
+        "category": "Quorate",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "quorate.suppressFinding",
+        "title": "Ignore Finding (// quorate-ignore)",
+        "category": "Quorate",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "quorate.setupPack",
+        "title": "Set Up Domain Pack…",
+        "category": "Quorate",
+        "icon": "$(extensions)"
+      },
+      {
+        "command": "quorate.openVerdict",
+        "title": "Open Verdict Panel",
+        "category": "Quorate",
+        "icon": "$(graph)"
+      }
     ],
     "menus": {
       "view/title": [
-        { "command": "quorate.run", "when": "view == quorate.council && quorate.cliReady", "group": "navigation@1" },
-        { "command": "quorate.pickDiffSource", "when": "view == quorate.council", "group": "navigation@2" },
-        { "command": "quorate.refresh", "when": "view == quorate.council", "group": "navigation@3" },
-        { "command": "quorate.setupPack", "when": "view == quorate.council", "group": "1_config@1" },
-        { "command": "quorate.addProvider", "when": "view == quorate.council", "group": "1_config@2" },
-        { "command": "quorate.openConfig", "when": "view == quorate.council", "group": "1_config@3" },
-        { "command": "quorate.openSettings", "when": "view == quorate.council", "group": "1_config@4" },
-        { "command": "quorate.openVerdict", "when": "view == quorate.results", "group": "navigation@0" },
-        { "command": "quorate.clearFindings", "when": "view == quorate.results", "group": "navigation@1" },
-        { "command": "quorate.revertFix", "when": "view == quorate.results", "group": "1_fix@1" },
-        { "command": "quorate.runDoctor", "when": "view == quorate.status", "group": "navigation@1" }
+        {
+          "command": "quorate.run",
+          "when": "view == quorate.council && quorate.cliReady",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quorate.pickDiffSource",
+          "when": "view == quorate.council",
+          "group": "navigation@2"
+        },
+        {
+          "command": "quorate.refresh",
+          "when": "view == quorate.council",
+          "group": "navigation@3"
+        },
+        {
+          "command": "quorate.setupPack",
+          "when": "view == quorate.council",
+          "group": "1_config@1"
+        },
+        {
+          "command": "quorate.addProvider",
+          "when": "view == quorate.council",
+          "group": "1_config@2"
+        },
+        {
+          "command": "quorate.openConfig",
+          "when": "view == quorate.council",
+          "group": "1_config@3"
+        },
+        {
+          "command": "quorate.openSettings",
+          "when": "view == quorate.council",
+          "group": "1_config@4"
+        },
+        {
+          "command": "quorate.openVerdict",
+          "when": "view == quorate.results",
+          "group": "navigation@0"
+        },
+        {
+          "command": "quorate.clearFindings",
+          "when": "view == quorate.results",
+          "group": "navigation@1"
+        },
+        {
+          "command": "quorate.revertFix",
+          "when": "view == quorate.results",
+          "group": "1_fix@1"
+        },
+        {
+          "command": "quorate.runDoctor",
+          "when": "view == quorate.status",
+          "group": "navigation@1"
+        }
       ],
       "view/item/context": [
-        { "command": "quorate.setKey", "when": "view == quorate.council && viewItem == providerApi", "group": "inline@1" },
-        { "command": "quorate.editRoles", "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/", "group": "inline@2" },
-        { "command": "quorate.removeProvider", "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/", "group": "inline@3" },
-        { "command": "quorate.fixFinding", "when": "view == quorate.results && viewItem == finding", "group": "inline@1" }
+        {
+          "command": "quorate.setKey",
+          "when": "view == quorate.council && viewItem == providerApi",
+          "group": "inline@1"
+        },
+        {
+          "command": "quorate.editRoles",
+          "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "quorate.removeProvider",
+          "when": "view == quorate.council && viewItem =~ /^provider(Api)?$/",
+          "group": "inline@3"
+        },
+        {
+          "command": "quorate.fixFinding",
+          "when": "view == quorate.results && viewItem == finding",
+          "group": "inline@1"
+        }
       ]
     },
     "configuration": {
@@ -121,7 +302,9 @@
               "image": "media/walkthrough/install-cli.svg",
               "altText": "A terminal showing npm i -g quorate being run and the version output."
             },
-            "completionEvents": ["onCommand:quorate.installCli"]
+            "completionEvents": [
+              "onCommand:quorate.installCli"
+            ]
           },
           {
             "id": "quorate.gettingStarted.setupPack",
@@ -131,7 +314,9 @@
               "image": "media/walkthrough/setup-pack.svg",
               "altText": "A QuickPick showing domain pack options including auto-detect."
             },
-            "completionEvents": ["onCommand:quorate.setupPack"]
+            "completionEvents": [
+              "onCommand:quorate.setupPack"
+            ]
           },
           {
             "id": "quorate.gettingStarted.runReview",
@@ -141,7 +326,9 @@
               "image": "media/walkthrough/run-review.svg",
               "altText": "The Quorate verdict panel showing a WARN verdict with findings grouped by file."
             },
-            "completionEvents": ["onCommand:quorate.run"]
+            "completionEvents": [
+              "onCommand:quorate.run"
+            ]
           },
           {
             "id": "quorate.gettingStarted.fixFinding",
@@ -151,7 +338,9 @@
               "image": "media/walkthrough/fix-finding.svg",
               "altText": "A terminal showing quorate fix applying a code change with a diff preview."
             },
-            "completionEvents": ["onCommand:quorate.fixFinding"]
+            "completionEvents": [
+              "onCommand:quorate.fixFinding"
+            ]
           }
         ]
       }

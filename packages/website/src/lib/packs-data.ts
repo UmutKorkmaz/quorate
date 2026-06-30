@@ -79,6 +79,21 @@ export const PACKS_DATA: PackInfo[] = [
     ]
   },
   {
+    id: "web3-dd",
+    label: "Web3 DD / Webacy",
+    tagline: "DD.xyz/Webacy-backed due diligence for addresses, URLs, approvals, raw transactions, and signing changes.",
+    councils: ["web3-due-diligence", "wallet-safety", "transaction-safety", "phishing-safety", "maintainer"],
+    classes: [
+      { title: "Webacy high-risk address introduced", standard: "DD.xyz / Webacy", reference: "address risk, sanctions, fund-flow screening" },
+      { title: "Webacy high-risk URL introduced", standard: "DD.xyz / Webacy", reference: "URL phishing and malware detection" },
+      { title: "Webacy medium-risk indicator introduced", standard: "DD.xyz / Webacy", reference: "configurable warnOn risk threshold" },
+      { title: "Hardcoded Web3 address introduced", standard: "Web3 Review", reference: "chain, owner, token, contract, and program due diligence" },
+      { title: "External Web3 URL introduced", standard: "Web3 Review", reference: "claim, metadata, RPC, explorer, and wallet URL review" },
+      { title: "High-risk token approval pattern", standard: "Web3 Review", reference: "approve, setApprovalForAll, MaxUint256 allowance checks" },
+      { title: "Raw transaction or typed-data signing path changed", standard: "Web3 Review", reference: "raw tx, signTypedData, verifyingContract, chain id review" }
+    ]
+  },
+  {
     id: "iac",
     label: "IaC (Terraform / K8s)",
     tagline: "CIS-benchmark council for Terraform, Kubernetes, and cloud infrastructure configs.",
