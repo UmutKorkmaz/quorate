@@ -90,7 +90,8 @@ export const PACKS_DATA: PackInfo[] = [
       { title: "Hardcoded Web3 address introduced", standard: "Web3 Review", reference: "chain, owner, token, contract, and program due diligence" },
       { title: "External Web3 URL introduced", standard: "Web3 Review", reference: "claim, metadata, RPC, explorer, and wallet URL review" },
       { title: "High-risk token approval pattern", standard: "Web3 Review", reference: "approve, setApprovalForAll, MaxUint256 allowance checks" },
-      { title: "Raw transaction or typed-data signing path changed", standard: "Web3 Review", reference: "raw tx, signTypedData, verifyingContract, chain id review" }
+      { title: "Typed-data signing path changed", standard: "Web3 Review", reference: "signTypedData, EIP-712 domain, verifyingContract, chain id review" },
+      { title: "Raw transaction submission path changed", standard: "Web3 Review", reference: "raw tx construction/submission, recipient, value, chain id, simulation review" }
     ]
   },
   {

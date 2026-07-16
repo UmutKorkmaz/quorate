@@ -1,6 +1,6 @@
 {
   "name": "quorate-workspace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "A multi-agent code review council for local CLI and GitHub PR workflows.",
   "type": "module",
@@ -22,7 +22,9 @@
     "clean": "rm -rf packages/*/dist coverage",
     "generate:command-docs": "node --experimental-strip-types scripts/generate-command-docs.ts",
     "dev:website": "npm run generate:command-docs && npm run dev --workspace @quorate/website",
-    "build:website": "npm run generate:command-docs && npm run build --workspace @quorate/website"
+    "build:website": "npm run generate:command-docs && npm run build --workspace @quorate/website",
+    "release:verify": "bash scripts/release.sh",
+    "release:publish": "bash scripts/release.sh --execute"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

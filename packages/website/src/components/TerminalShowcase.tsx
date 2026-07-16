@@ -23,7 +23,7 @@ export function TerminalShowcase() {
   const active = EMULATOR_PHASES.find((p) => p.id === phase);
 
   return (
-    <section id="see-it-in-action" className="relative px-6 py-20 md:py-28">
+    <section id="see-it-in-action" className="relative overflow-hidden px-6 py-20 md:py-28">
       <div className="mx-auto max-w-6xl">
         <div className="mb-4 flex items-center gap-3">
           <span
@@ -42,10 +42,9 @@ export function TerminalShowcase() {
           A review flow you can actually drive
         </h2>
         <p className="mt-4 max-w-2xl text-lg leading-relaxed text-quorate-muted">
-          The demo mirrors the real shell experience on a Solana escrow app: load a diff,
-          choose commands, watch providers run, and land on a single verdict. The same
-          shell flow works for every pack. Hover to pause, click a phase to jump, swap
-          the diff, or replay the full session.
+          The demo mirrors the real shell experience on a TypeScript API: load a diff,
+          choose commands, watch providers run, and land on a single verdict. Hover to
+          pause, click a phase to jump, swap the diff, or replay the full session.
         </p>
 
         <div className="mt-12 terminal-showcase-grid">
@@ -83,7 +82,7 @@ export function TerminalShowcase() {
             <ul className="terminal-showcase-checklist">
               {phase === "welcome" && (
                 <>
-                  <li>QUORATE opens with a clear path to the first Solana review</li>
+                  <li>QUORATE opens with a clear path to the first repository review</li>
                   <li>Installed agents and active agents are shown separately</li>
                   <li>Role chips reflect the pack-specific council you configured</li>
                 </>
@@ -97,7 +96,7 @@ export function TerminalShowcase() {
               )}
               {phase === "diff" && (
                 <>
-                  <li>/git loads the Solana app working tree with file count and +/-</li>
+                  <li>/git loads the working tree with file count and +/-</li>
                   <li>The status line names the active diff source</li>
                   <li>/review can load the working tree when no diff is staged</li>
                 </>

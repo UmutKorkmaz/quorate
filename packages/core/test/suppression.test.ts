@@ -74,6 +74,27 @@ describe("store create / serialize / parse round-trip", () => {
     });
     expect(() => parseSuppressionStore(bad)).toThrow();
   });
+
+  it("rejects invalid creation and expiry timestamps", () => {
+    const invalidCreatedAt = JSON.stringify({
+      version: 1,
+      suppressions: [{ fingerprint: "abc", reason: "risk", createdAt: "not-a-date" }]
+    });
+    const invalidExpiry = JSON.stringify({
+      version: 1,
+      suppressions: [
+        {
+          fingerprint: "abc",
+          reason: "risk",
+          createdAt: "2026-06-15T00:00:00.000Z",
+          expires: "not-a-date"
+        }
+      ]
+    });
+
+    expect(() => parseSuppressionStore(invalidCreatedAt)).toThrow(/suppression store/i);
+    expect(() => parseSuppressionStore(invalidExpiry)).toThrow(/suppression store/i);
+  });
 });
 
 describe("addSuppression / removeSuppression", () => {
@@ -100,6 +121,17 @@ describe("addSuppression / removeSuppression", () => {
         createdAt: "2026-06-15T00:00:00.000Z"
       })
     ).toThrow(/reason/i);
+  });
+
+  it("rejects invalid timestamps when adding a suppression", () => {
+    expect(() =>
+      addSuppression(createSuppressionStore(), {
+        fingerprint: "abc",
+        reason: "accepted",
+        createdAt: "not-a-date",
+        expires: "also-not-a-date"
+      })
+    ).toThrow(/timestamp|date/i);
   });
 
   it("removes by fingerprint (no-op if absent)", () => {

@@ -46,8 +46,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "FAIL",
       severity: "HIGH",
-      location: "programs/escrow/src/lib.rs:88",
-      note: "Anchor vault constraint removed"
+      location: "src/auth/session.ts:84",
+      note: "refresh token remains valid after rotation"
     },
     span: "lg:col-span-7",
     emphasis: true
@@ -60,8 +60,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "WARN",
       severity: "MED",
-      location: "programs/escrow/src/accounts.rs:44",
-      note: "authority boundary is split across handlers"
+      location: "src/services/session-service.ts:42",
+      note: "revocation boundary is split across handlers"
     },
     span: "lg:col-span-5",
     emphasis: true
@@ -74,8 +74,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "WARN",
       severity: "MED",
-      location: "tests/close-escrow.test.ts:19",
-      note: "unauthorized closer path has no test"
+      location: "test/auth/session.test.ts:119",
+      note: "concurrent refresh path has no test"
     },
     span: "lg:col-span-4"
   },
@@ -87,8 +87,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "PASS",
       severity: "LOW",
-      location: "app/actions/closeEscrow.ts:41",
-      note: "confirmation polling is bounded"
+      location: "src/cache/session-cache.ts:31",
+      note: "cache lookups remain bounded"
     },
     span: "lg:col-span-4"
   },
@@ -100,8 +100,8 @@ const VOICES: readonly RoleVoice[] = [
     sample: {
       verdict: "PASS",
       severity: "LOW",
-      location: "programs/escrow/src/state.rs:9",
-      note: "seed helper can move into shared module"
+      location: "src/auth/policy.ts:17",
+      note: "policy helper can move into shared module"
     },
     span: "lg:col-span-4"
   }

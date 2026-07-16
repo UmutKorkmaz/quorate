@@ -41,7 +41,7 @@ describe("buildPullRequestDiff", () => {
     expect(diff).toContain("+B");
   });
 
-  it("emits a fallback line for files with no textual patch (binary/renamed/removed)", async () => {
+  it("marks files with no textual patch as incomplete evidence", async () => {
     const client = {
       rest: { pulls: { listFiles: {} } },
       paginate: async () => [
@@ -53,13 +53,30 @@ describe("buildPullRequestDiff", () => {
 
     const diff = await buildPullRequestDiff(client, { owner: "o", repo: "r", pullNumber: 1 });
 
-    expect(diff).toContain("# added file has no textual patch");
-    expect(diff).toContain("# removed file has no textual patch");
-    expect(diff).toContain("# renamed file has no textual patch");
+    expect(diff).toContain("# quorate-supply-chain-incomplete: added file has no textual patch");
+    expect(diff).toContain("# quorate-supply-chain-incomplete: removed file has no textual patch");
+    expect(diff).toContain("# quorate-supply-chain-incomplete: renamed file has no textual patch");
+  });
+
+  it("marks a non-empty patch with an incomplete hunk as incomplete evidence", async () => {
+    const client = {
+      rest: { pulls: { listFiles: {} } },
+      paginate: async () => [
+        {
+          filename: ".github/workflows/release.yml",
+          status: "modified",
+          patch: "@@ -1,3 +1,3 @@\n-old\n+new"
+        }
+      ]
+    };
+
+    const diff = await buildPullRequestDiff(client, { owner: "o", repo: "r", pullNumber: 1 });
+
+    expect(diff).toContain("# quorate-supply-chain-incomplete: patch hunk is truncated");
   });
 
   it("truncates the diff once the running byte size exceeds maxBytes", async () => {
-    const big = (label: string) => `@@ -1 +1 @@\n${"+".repeat(200)}${label}`;
+    const big = (label: string) => `@@ -1 +1 @@\n-old\n+${"x".repeat(160)}${label}`;
     const client = {
       rest: { pulls: { listFiles: {} } },
       paginate: async () => [
@@ -73,6 +90,31 @@ describe("buildPullRequestDiff", () => {
 
     expect(diff).toContain("diff --git a/one.ts b/one.ts");
     expect(diff).not.toContain("diff --git a/three.ts b/three.ts");
-    expect(diff).toContain("# diff truncated to 300 bytes (1 of 3 files shown)");
+    expect(diff).toContain(
+      "# quorate-supply-chain-incomplete: diff truncated to 300 bytes (1 of 3 files shown)"
+    );
+  });
+
+  it("marks an oversized first patch incomplete instead of bypassing maxBytes", async () => {
+    const client = {
+      rest: { pulls: { listFiles: {} } },
+      paginate: async () => [
+        {
+          filename: "huge.ts",
+          status: "modified",
+          patch: `@@ -1 +1 @@\n+${"x".repeat(500)}`
+        }
+      ]
+    };
+
+    const diff = await buildPullRequestDiff(
+      client,
+      { owner: "o", repo: "r", pullNumber: 1 },
+      100
+    );
+
+    expect(Buffer.byteLength(diff, "utf8")).toBeLessThanOrEqual(200);
+    expect(diff).toContain("# quorate-supply-chain-incomplete: first patch exceeds 100 bytes");
+    expect(diff).not.toContain("x".repeat(100));
   });
 });

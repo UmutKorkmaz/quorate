@@ -1,22 +1,14 @@
 # Quorate
 
-> A council of AI reviewers for your code — in one CLI.
+> Multi-agent code review and deterministic merge gates — in one CLI.
 
-**Quorate** convenes a *quorate* (a body able to reach a binding decision) of AI
-code reviewers over a diff or a plan, aggregates their findings, and returns **one
-verdict** with concrete, file-and-line evidence. It runs the AI CLIs you already
-have on your machine — `claude`, `codex`, `qwen`, `kimi`, and more — and ships a
-Claude-Code-style interactive shell, a safe heuristic default, and a GitHub Action.
+**Quorate** reviews a diff or plan with several independent AI reviewers, combines
+their findings, and returns **one verdict** with concrete file-and-line evidence.
+It runs the CLIs you already use — `claude`, `codex`, `qwen`, `kimi`, and more —
+then adds deterministic policy gates for dependency, workflow, and release risk.
+Use the same engine in an interactive shell, headless CI, or a GitHub Action.
 
 **Docs:** [umutkorkmaz.github.io/quorate](https://umutkorkmaz.github.io/quorate)
-
-## Quorate Ship
-
-**Quorate Ship** is the paid SKU for teams that need merge-blocking council checks,
-plan governance, and audit trails — not just advisory PR comments. It bundles
-**VerdictGate** (CI merge gate), **PlanCourt** (plan-mode review), and **ReviewGraph**
-(multi-agent agreement evidence). **$49/repo/month.** Positioned for EU AI Act
-high-risk documentation (August 2026). See [docs/LAUNCH.md](./docs/LAUNCH.md).
 
 [![npm](https://img.shields.io/npm/v/quorate.svg)](https://www.npmjs.com/package/quorate)
 ![node](https://img.shields.io/node/v/quorate.svg)
@@ -42,9 +34,9 @@ Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interact
 - **Many models, one verdict.** Get several independent AI perspectives on a change, deduplicated and ranked into a single PASS / WARN / FAIL.
 - **Uses the CLIs you already have.** No API keys to wire up — Quorate detects local **agents** (`claude`, `codex`, `qwen`, `kimi`, `crush`, `goose`, …) and drives them in headless mode.
 - **Honest by default.** The built-in heuristic runs with zero setup and never pretends: a heuristic-only review is reported as **degraded**, not a confident green.
-- **Web3 DD when you need it.** Pair `web3-dd` with Solana/EVM/Move packs to flag added addresses, approvals, signing flows, and URLs, with optional DD.xyz/Webacy risk evidence from `WEBACY_API_KEY`.
+- **Deterministic where it matters.** SupplyChainGate checks manifests, lockfiles, workflow permissions, publish credentials, and container image pins without model variance.
 - **Safe by design.** Real agents are opt-in, spawned without a shell, with explicit headless args, byte/time caps, and a dangerous-flag denylist.
-- **A shell that feels like Claude Code.** Inline transcript, a `/` command palette with fuzzy-style filtering, an animated braille spinner, and native severity cards.
+- **Evidence that travels.** Export Markdown, JSON, SARIF, JUnit, HTML, and ReviewGraph artifacts from the same report used by the shell and Action.
 
 ## Quick start
 
@@ -53,6 +45,7 @@ quorate                                   # open the shell
 quorate doctor                            # see which AI CLIs are installed
 quorate review --diff changes.diff        # one-shot review of a diff
 quorate review --base main --head HEAD    # review the current branch
+quorate supply-chain scan --base main --json --gate
 quorate plan "migrate auth to passkeys"   # evaluate a plan instead of a diff
 ```
 
@@ -83,7 +76,9 @@ In the shell, type `/` to open the command palette:
 Bare text follows the current mode — in `review` it reviews the loaded diff with
 your text as the subject; in `plan` it evaluates the text as a plan.
 
-The full command reference is generated from the CLI registry for the [docs site](https://umutkorkmaz.github.io/quorate/docs/commands).
+The interactive-shell command reference is generated from its registry for the
+[docs site](https://umutkorkmaz.github.io/quorate/docs/commands). Top-level CLI
+commands are documented below and verified against `quorate --help` during release.
 
 ## CLI commands
 
@@ -92,7 +87,8 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | Command | What it does | Key flags |
 | --- | --- | --- |
 | `quorate` / `quorate shell` | Open the interactive shell (default). | `--providers <ids>`, `--mode review\|plan`, `--continue`, `--resume [id]`, `--classic` |
-| `quorate review` | One-shot review of a diff. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--subject <text>`, `--providers <ids>`, `--merge <id>`, `--json`, `--write-json <path>`, `--write-reviewgraph <path>`, `--reviewgraph`, `--no-pr-context` |
+| `quorate review` | One-shot review of a diff. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--providers <ids>`, `--json`, `--baseline`, `--suppress-path <path>`, `--fail-on <severity>`, `--write-json`, `--write-sarif`, `--write-junit`, `--write-html`, `--write-md`, `--write-reviewgraph`, `--reviewgraph`, `--no-pr-context` |
+| `quorate supply-chain scan` | Run SupplyChainGate over a full diff, including lockfiles. | `--diff <path>`, `--base <ref>`, `--head <ref>`, `--pr <n>`, `--json`, `--gate`, `--fail-on <severity>`, `--write-json <path>`, `--write-md <path>` |
 | `quorate plan "<text>"` | Evaluate an implementation/architecture plan. | `--providers <ids>`, `--json`, `--gate`, `--write-json <path>`, `--write-md <path>`, `--write-reviewgraph <path>` |
 | `quorate fix` | Delegate a finding to a write-mode agent — snapshotted, watchable, revertible. | `--list`, `--finding <n>`, `--provider <id>`, `--revert [fixId]`, `--force`, `--no-review` |
 | `quorate doctor` | Council-readiness verdict: environment + provider grid + next step. | `--json`, `--bundle`, `--bundle-file <path>` |
@@ -102,18 +98,17 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | `quorate provider models <id\|preset>` | List an endpoint's live models (`GET {baseUrl}/models`). | `--json` |
 | `quorate provider set-model <id> [model]` | Switch an api provider's model — interactive picker when no model given. | — |
 | `quorate provider remove <id>` / `presets` | Remove a provider; list API presets. | — |
-| `quorate solana doctor` | Offline Solana release gate over Anchor.toml, Cargo.toml, IDL, deployed-program evidence, and Quorate config. | `--json`, `--strict` |
-| `quorate solana test-plan` | Generate the next Solana release-test commands from the doctor signals. | `--json` |
 | `quorate pack scaffold <id>` | Create a custom pack template in `.quorate/packs/<id>.yml`. | `--force` |
 | `quorate init` | Write a starter `.quorate.yml` (real providers disabled). | `-f, --force` |
 
-`--diff`, `--base/--head`, and `--pr` select the diff source; `--json` streams NDJSON
-events with the final report as the last line, ideal for piping into other tools.
+`--diff`, `--base/--head`, and `--pr` select the diff source. For `quorate review`,
+`--json` streams NDJSON events with the final report as the last line; for
+`quorate supply-chain scan`, `--json` prints the report JSON directly.
 
 ## Domain packs
 
-`quorate init --auto` detects your repo's stack (Rust/Solidity/Move/Terraform/
-workflows/Swift/Kotlin + framework deps) and scaffolds the matching pack(s);
+`quorate init --auto` detects your repository from manifests, workflows, language
+files, and framework dependencies, then scaffolds the matching pack(s);
 `quorate init --pack <id>` (or a comma-separated `<id,id>`) picks them explicitly.
 Each scaffolds a domain-aware council — ecosystem-specific
 councils + per-role reviewer guidance — and turns on **deterministic, diff-based
@@ -122,16 +117,10 @@ layered under whatever real agents you enable). `quorate packs` lists them.
 
 | Pack | `init --pack` | Classes | Catches (examples) |
 | --- | --- | --- | --- |
-| **Solana / Anchor** | `solana` | 21 | unchecked accounts, remaining_accounts, CPI program pinning, confirmation/blockhash expiry, Token-2022, weakened constraints |
-| **EVM / Solidity** | `evm` | 10 | tx.origin auth, delegatecall, selfdestruct, unchecked call, reentrancy surface, unchecked ERC20 |
-| **Move (Sui/Aptos)** | `move` | 10 | public entry auth, borrow_global_mut, shared objects, copy/drop abilities, privileged fns |
-| **Web3 DD / Webacy** | `web3-dd` | 7 | Webacy address/URL risk, hardcoded wallet/program/token addresses, claim URLs, approvals, raw tx and typed-data signing |
-| **IaC (Terraform/K8s)** | `iac` | 11 | public ACLs, 0.0.0.0/0 ingress, encryption off, privileged containers, host namespaces |
-| **AI / LLM apps** | `llm` | 12 | prompt injection, output→eval, raw-HTML output, tool-arg validation, PII in prompts |
 | **CI/CD + supply chain** | `ci` | 10 | pull_request_target, expression injection, unpinned actions, install scripts, pipe-to-shell |
-| **Fintech / PCI** | `fintech` | 10 | money as float, card data in logs, CVV stored, unverified webhooks, financial PII |
 | **Web / API (OWASP)** | `web` | 10 | SSRF, command injection, path traversal, XSS, mass assignment, CORS, CSRF, deserialization |
-| **Healthcare / HIPAA** | `healthcare` | 10 | PHI in logs/URLs/responses, plaintext PHI, patient-record IDOR, clinical credentials |
+| **AI / LLM apps** | `llm` | 12 | prompt injection, output→eval, raw-HTML output, tool-arg validation, PII in prompts |
+| **IaC (Terraform/K8s)** | `iac` | 11 | public ACLs, 0.0.0.0/0 ingress, encryption off, privileged containers, host namespaces |
 | **Mobile (iOS/Android)** | `mobile` | 10 | insecure storage, cleartext/ATS, exported components, disabled TLS, debuggable builds |
 | **GraphQL API** | `graphql` | 10 | introspection in prod, no depth/complexity limit, resolver N+1, field auth, batch amplification |
 | **Accessibility (WCAG)** | `accessibility` | 10 | missing alt text, unlabelled inputs, non-interactive handlers, invalid ARIA, skipped headings |
@@ -140,7 +129,13 @@ layered under whatever real agents you enable). `quorate packs` lists them.
 | **Kubernetes** | `k8s` | 10 | privileged containers, runAsNonRoot:false, privilege escalation, empty limits, wildcard RBAC |
 | **Privacy (GDPR)** | `privacy` | 10 | PII in logs/URLs, analytics before consent, missing retention TTLs, soft-delete vs erasure |
 | **Performance & SRE** | `performance` | 10 | await-in-loop, N+1 queries, missing pagination, no fetch timeout, O(n²) scans, leaked intervals |
+| **Fintech / PCI** | `fintech` | 10 | money as float, card data in logs, CVV stored, unverified webhooks, financial PII |
+| **Healthcare / HIPAA** | `healthcare` | 10 | PHI in logs/URLs/responses, plaintext PHI, patient-record IDOR, clinical credentials |
 | **Embedded (MISRA)** | `embedded` | 10 | unbounded string ops, unchecked malloc/memcpy, missing volatile, alloc on ISR, float equality |
+| **Solana / Anchor** | `solana` | 21 | unchecked accounts, remaining_accounts, CPI program pinning, confirmation/blockhash expiry, Token-2022, weakened constraints |
+| **EVM / Solidity** | `evm` | 10 | tx.origin auth, delegatecall, selfdestruct, unchecked call, reentrancy surface, unchecked ERC20 |
+| **Move (Sui/Aptos)** | `move` | 10 | public entry auth, borrow_global_mut, shared objects, copy/drop abilities, privileged fns |
+| **Web3 DD / Webacy** | `web3-dd` | 7 | Webacy address/URL risk, hardcoded wallet/program/token addresses, claim URLs, approvals, raw tx and typed-data signing |
 
 The deterministic packs ship a vulnerable/clean demo corpus proving each class is detected
 with zero false positives on clean code; evidence-backed packs add focused mocked tests and
@@ -149,43 +144,33 @@ ready-to-copy GitHub Action example. A pack is **data, not a code path** where p
 an ecosystem stays a small registry change unless the pack intentionally connects to an external
 evidence source.
 
-### Web3 DD / DD.xyz-Webacy
+### SupplyChainGate
 
-`web3-dd` is fully opt-in and works with `solana`, `evm`, or `move`:
+SupplyChainGate is a deterministic dependency and provenance gate for npm package
+manifests, lockfiles, GitHub Actions, Docker bases, and npm publish workflows:
 
 ```bash
-quorate init --pack solana,web3-dd
+quorate supply-chain scan --base main --json --gate
 ```
 
-Add Webacy evidence by committing this to the base branch config and passing the key in CI:
+With `--base` alone, the command uses the complete tracked and untracked working-tree
+diff instead of the AI-review diff filter, so lockfile evidence is preserved. Supplying
+both `--base` and `--head` compares committed refs and cannot include untracked files. A lockfile counts only when
+its added lines name the new package. It writes the latest report to
+`.quorate/supply-chain/latest.json`; `--gate` applies the resolved severity and
+verdict rules while intentionally ignoring council-only coverage constraints such as
+required roles and real-provider floors.
 
-```yaml
-integrations:
-  webacy:
-    enabled: true
-    apiKeyEnv: WEBACY_API_KEY
-    chains: [eth, base, sol]
-    failOn:
-      riskLevel: high
-      sanctioned: true
-      maliciousUrl: true
-    warnOn:
-      riskLevel: medium
-```
+### Specialized blockchain packs
 
-In GitHub Actions:
-
-```yaml
-env:
-  WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
-with:
-  pack: solana,web3-dd
-```
-
-Quorate sends extracted indicators only — address, chain, or URL — not full source files or full diffs.
-For the DD.xyz Startup Accelerator use case, this covers threat risk and URL risk with live
-evidence, while approval, raw transaction, and typed-data signing changes are static PR gates.
-Invite-only holder analysis is intentionally outside the v1 pack.
+Blockchain-specific checks remain available as opt-in packs; they are not part of
+the default setup or examples. See the dedicated docs for
+[Solana / Anchor](https://umutkorkmaz.github.io/quorate/docs/solana),
+[EVM / Solidity](https://umutkorkmaz.github.io/quorate/docs/evm),
+[Move](https://umutkorkmaz.github.io/quorate/docs/move), and
+[Web3 DD / Webacy](https://umutkorkmaz.github.io/quorate/docs/web3-dd).
+The Webacy integration sends extracted indicators only — never full source files
+or full diffs.
 
 ### Custom packs
 
@@ -461,10 +446,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+`v1.1.0` is the unreleased-candidate placeholder. Before tagging, the release
+checklist replaces Action references with the reviewed bundle commit's full
+40-character SHA; production workflows should use that immutable ref.
 
 The Action posts a single PR summary comment (and optional inline review comments
 on changed lines) and can fail the check based on severity. Use a **self-hosted
@@ -476,7 +465,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -492,13 +481,18 @@ full CI provider guide.
 | Input | Default | Description |
 | --- | --- | --- |
 | `github-token` | — | Token to read PR files and write comments. |
-| `config-path` | `.quorate.yml` | Config file (read from the **base** branch). |
+| `config-path` | `.quorate.yml` | Canonical base-branch config path; alternate PR-controlled paths are rejected. |
 | `providers` | — | Comma-separated provider ids to enable for this run. |
-| `fail-on` | `high` | Minimum severity that fails the check (`critical`…`info`, or `never`). |
+| `pack` | — | Domain pack(s) to layer on, or `auto` to detect from changed files. |
+| `fail-on` | `high` | May tighten the committed base policy; `never` or a weaker threshold cannot relax it. |
 | `post-comment` | `true` | Post/update the Quorate summary comment. |
 | `inline-comments` | `false` | Post findings as inline review comments on changed lines. |
 | `inline-comment-limit` | `10` | Max inline comments per run. |
-| `runner-mode` | `auto` | Restrict providers by type: `auto` (all), `cli` (local agents only), `api` (HTTP endpoints only). The heuristic always runs. |
+| `runner-mode` | `auto` | Restrict providers by type: runner-aware `auto`, `cli` (local agents only), or `api` (HTTP endpoints only). The heuristic always runs. |
+| `baseline` | `false` | Deprecated compatibility input; the canonical valid, unexpired base baseline is automatic. |
+| `baseline-path` | `.quorate.baseline.json` | Canonical trusted baseline path; alternate paths are rejected. |
+| `suppress-path` | `.quorate/suppressions.json` | Canonical trusted suppression path; alternate paths are rejected. |
+| `policy-path` | `.quorate/policy.yml` | Canonical trusted policy path; alternate paths are rejected. |
 | `include-pr-context` | `false` | Include redacted PR title/body/commits as untrusted read-only prompt context. |
 | `reviewgraph` | `false` | Include ReviewGraph agreement evidence in the PR comment and job summary. |
 | `reviewgraph-file` | — | Write ReviewGraph JSON and expose `reviewgraph-path`. |
@@ -549,6 +543,10 @@ Shell command docs are generated from `packages/cli/src/tui/commands.ts`:
 ```bash
 npm run generate:command-docs
 ```
+
+Maintainers can run the complete no-side-effect release gate with
+`npm run release:verify -- <version>`. The reviewed tag → GitHub Release → npm
+workflow is documented in [`docs/RELEASE-CHECKLIST.md`](./docs/RELEASE-CHECKLIST.md).
 
 ## License
 

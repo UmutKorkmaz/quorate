@@ -110,6 +110,16 @@ export default function Commands() {
 /markdown .quorate/review.md
 /json .quorate/review.json`}</CodeBlock>
 
+      <h3>Run SupplyChainGate headlessly</h3>
+      <CodeBlock language="bash">{`quorate supply-chain scan --base main --json --gate
+quorate supplychain scan --base origin/main --fail-on medium`}</CodeBlock>
+      <p>
+        With <InlineCode>--base</InlineCode> alone, SupplyChainGate uses the full tracked and untracked
+        working-tree diff, including lockfiles. Adding <InlineCode>--head</InlineCode> switches to a
+        committed-ref comparison. The command writes the latest report to{" "}
+        <InlineCode>.quorate/supply-chain/latest.json</InlineCode>.
+      </p>
+
       <h3>Fix a finding — snapshotted and revertible</h3>
       <p>
         <InlineCode>/fix</InlineCode> lists fixable findings; the delegation itself runs in your

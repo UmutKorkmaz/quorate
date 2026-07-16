@@ -32,7 +32,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs/web3-dd":
     "Quorate Web3 DD pack — DD.xyz/Webacy-backed due diligence for added addresses, URLs, approvals, raw transaction paths, and typed-data signing changes in Solana/EVM dApps.",
   "/docs/ci":
-    "Quorate CI pack — workflow-security and supply-chain council and ten deterministic heuristics for script injection, unpinned actions, hardcoded secrets, and pipe-to-shell review.",
+    "Quorate CI pack — workflow-security and supply-chain council, SupplyChainGate CLI, and deterministic checks for script injection, unpinned actions, hardcoded secrets, and provenance review.",
   "/docs/fintech":
     "Quorate Fintech pack — payment-security and PCI-compliance council and ten deterministic heuristics for card data in logs, CVV persistence, float money types, webhook signature bypass, and SQL injection on financial tables.",
   "/docs/web":

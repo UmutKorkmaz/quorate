@@ -1,9 +1,9 @@
 import { CopyButton } from "./CopyButton";
 
 const REVIEWERS = [
-  { id: "heuristic", role: "solana-security", state: "2 findings", tone: "pass" },
-  { id: "reviewer-a", role: "anchor-accounts", state: "1 finding", tone: "pass" },
-  { id: "reviewer-b", role: "transaction-safety", state: "merged", tone: "dim" }
+  { id: "heuristic", role: "security", state: "2 findings", tone: "pass" },
+  { id: "claude", role: "architect", state: "1 finding", tone: "pass" },
+  { id: "codex", role: "qa", state: "merged", tone: "dim" }
 ] as const;
 
 const TONE: Record<string, string> = {
@@ -30,48 +30,46 @@ export function Hero() {
       />
       <div className="chamber-bg pointer-events-none absolute inset-0 opacity-70" aria-hidden />
 
-      <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.08fr_0.92fr]">
         {/* ── Left: the stance ───────────────────────────────────── */}
         <div className="reveal is-visible text-center lg:text-left">
           <p className="hero-badge mx-auto lg:mx-0">
-            <span className="text-quorate-amber">✦</span>
-            AI review council for any repo
+            Multi-agent review · deterministic gates
           </p>
 
-          <h1 className="display-hero mt-6 text-[2.9rem] leading-[1.04] md:text-6xl lg:text-[4.2rem]">
-            Convene a council.
+          <h1 className="display-hero mt-6 text-[clamp(2.5rem,11vw,4.2rem)] leading-[1.02] md:text-6xl lg:text-[4.2rem]">
+            Review with a council.
             <span className="mt-1 block bg-gradient-to-r from-quorate-accent via-[#a8c4ff] to-quorate-accent bg-clip-text text-transparent">
-              Get one verdict.
+              Ship with evidence.
             </span>
           </h1>
 
           <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-quorate-muted lg:mx-0">
-            Send any diff or plan to several local AI reviewers. Solana/Anchor is the
-            front-page example, but the same council workflow works across web, LLM,
-            infra, data, mobile, and other pack-driven codebases. Quorate dedupes the
-            findings and returns a single{" "}
+            Quorate runs the AI reviewers you already use, adds deterministic policy
+            checks, and turns every result into one accountable{" "}
             <span className="text-quorate-pass">PASS</span>,{" "}
             <span className="text-quorate-warn">WARN</span>, or{" "}
-            <span className="text-quorate-fail">FAIL</span> — with file-and-line evidence.
+            <span className="text-quorate-fail">FAIL</span>. Every finding carries file,
+            line, severity, and reviewer agreement so teams can decide what ships.
           </p>
 
-          <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row lg:items-start lg:justify-start">
+          <div className="mt-9 flex w-full flex-col items-stretch justify-center gap-4 sm:w-auto sm:flex-row sm:items-center lg:justify-start">
             <CopyButton text="npm install -g quorate" variant="hero" />
             <a
-              href="#solana-app-example"
-              className="group inline-flex items-center gap-2 rounded-xl border border-quorate-border bg-quorate-surface/60 px-5 py-3 text-sm font-medium text-quorate-muted transition hover:border-quorate-accent/50 hover:text-quorate-accent"
+              href="#review-gate-example"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl border border-quorate-border bg-quorate-surface/60 px-5 py-3 text-sm font-medium text-quorate-muted transition hover:border-quorate-accent/50 hover:text-quorate-accent"
             >
-              Review a Solana app
+              See the review flow
               <span className="transition group-hover:translate-x-0.5">→</span>
             </a>
           </div>
 
-          <p className="mt-5 text-sm leading-relaxed text-quorate-dim">
-            Interactive shell · headless{" "}
-            <code className="rounded bg-quorate-elevated px-1.5 py-0.5 text-quorate-accent">review</code>{" "}
-            for CI · 19 domain packs · a GitHub Action for PRs · honest{" "}
-            <span className="text-quorate-degraded">degraded</span> mode when only heuristics run
-          </p>
+          <ul className="mt-6 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-quorate-dim lg:justify-start">
+            <li>Local-first</li>
+            <li>GitHub Action</li>
+            <li>SARIF · JUnit · JSON · HTML</li>
+            <li>Honest degraded mode</li>
+          </ul>
         </div>
 
         {/* ── Right: the council reaching a verdict (the payoff) ──── */}
@@ -83,7 +81,7 @@ export function Hero() {
                 <span className="h-3 w-3 rounded-full bg-quorate-amber/80" />
                 <span className="h-3 w-3 rounded-full bg-quorate-pass/80" />
                 <span className="ml-2 font-mono text-xs text-quorate-dim">
-                  quorate — review · Solana escrow PR
+                  quorate — review · session rotation PR
                 </span>
               </div>
 
@@ -119,10 +117,10 @@ export function Hero() {
 
                 <div className="!mt-4 leading-relaxed">
                   <span className="font-bold text-quorate-fail">FAIL HIGH</span>{" "}
-                  <span className="font-bold text-gray-200">programs/escrow/src/lib.rs:88</span>
+                  <span className="font-bold text-gray-200">src/auth/session.ts:84</span>
                   <p className="mt-1 text-quorate-muted">
-                    Anchor account constraint removed — close_escrow no longer proves
-                    the vault belongs to the escrow authority.
+                    A rotated refresh token can be reused because the previous token
+                    remains valid after the session update commits.
                   </p>
                   <p className="mt-1.5 text-xs text-quorate-dim">
                     agreed by 3 reviewers · confidence 0.86

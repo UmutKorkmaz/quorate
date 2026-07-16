@@ -79,6 +79,40 @@ const webacySchema = z
     cache: { ttlHours: 24 }
   });
 
+const supplyChainRuleSchema = z.object({
+  enabled: z.boolean().optional(),
+  severity: severitySchema.optional()
+});
+
+const supplyChainSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    mode: z.literal("diff").optional(),
+    ecosystems: z.array(z.string().min(1)).optional(),
+    lockfiles: z
+      .object({
+        requireFor: z.array(z.string().min(1)).optional(),
+        onMissing: z.enum(["off", "warn", "fail"]).optional()
+      })
+      .optional(),
+    rules: z
+      .object({
+        dependencyWithoutLockfile: supplyChainRuleSchema.optional(),
+        unpinnedActions: supplyChainRuleSchema.optional(),
+        mutableBaseImage: supplyChainRuleSchema.optional(),
+        npmPublishWithoutProvenance: supplyChainRuleSchema.optional()
+      })
+      .optional(),
+    allowlist: z
+      .object({
+        actions: z.array(z.string().min(1)).optional(),
+        images: z.array(z.string().min(1)).optional(),
+        packages: z.array(z.string().min(1)).optional()
+      })
+      .optional()
+  })
+  .optional();
+
 const configSchema = z.object({
   councils: z.array(z.string().min(1)).default([]),
   providers: z.array(providerSchema).default([]),
@@ -103,6 +137,7 @@ const configSchema = z.object({
       skipGenerated: z.boolean().optional()
     })
     .optional(),
+  supplyChain: supplyChainSchema,
   merge: z.object({ provider: z.string().min(1) }).optional(),
   roleGuidance: z.record(z.string(), z.string()).optional(),
   integrations: z
@@ -125,6 +160,7 @@ export function parseConfig(source: string): QuorateConfig {
       ...userConfig.github
     },
     budget: userConfig.budget,
+    supplyChain: userConfig.supplyChain,
     merge: userConfig.merge,
     roleGuidance: userConfig.roleGuidance,
     integrations: userConfig.integrations

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`;
 
@@ -53,8 +53,8 @@ export function GitHubAction() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-8 lg:grid-cols-5">
-          <div className="lg:col-span-3">
+        <div className="mt-12 grid min-w-0 gap-8 lg:grid-cols-5">
+          <div className="min-w-0 lg:col-span-3">
             <div className="overflow-hidden rounded-2xl border border-quorate-border bg-quorate-surface/60 shadow-terminal backdrop-blur">
               <div className="flex items-center justify-between border-b border-quorate-border bg-quorate-elevated/60 px-4 py-3">
                 <span className="font-mono text-xs text-quorate-dim">.github/workflows/quorate.yml</span>
@@ -71,7 +71,7 @@ export function GitHubAction() {
               </pre>
             </div>
           </div>
-          <div className="flex flex-col justify-center gap-4 lg:col-span-2">
+          <div className="min-w-0 flex flex-col justify-center gap-4 lg:col-span-2">
             <div className="rounded-2xl border border-quorate-border bg-quorate-surface/60 p-5 backdrop-blur">
               <h3 className="font-semibold text-quorate-pass">Secure by default</h3>
               <p className="mt-2 text-sm leading-relaxed text-quorate-muted">

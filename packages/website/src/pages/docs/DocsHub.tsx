@@ -48,7 +48,7 @@ const CARDS = [
   {
     to: "/docs/ci",
     title: "CI/CD & Supply Chain",
-    desc: "Workflow-security and supply-chain council + ten deterministic heuristics covering script injection, unpinned actions, hardcoded secrets, and pipe-to-shell patterns. Zero-setup CI review."
+    desc: "Workflow-security and supply-chain council, SupplyChainGate CLI, and deterministic checks covering script injection, unpinned actions, hardcoded secrets, and pipe-to-shell patterns."
   },
   {
     to: "/docs/fintech",

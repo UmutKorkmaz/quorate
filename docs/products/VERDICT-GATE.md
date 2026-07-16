@@ -53,7 +53,7 @@ VerdictGate solves merge enforcement and multi-agent agreement in one GitHub che
  compute verdict (pass · warn · fail)
     │
     ▼
- shouldFailForReport() — policy gate
+ shouldFailForPolicy() — resolved policy gate
     │
     ├── PASS/WARN (or FAIL below threshold) → check green, comment posted
     └── FAIL (policy match) → check red, merge blocked
@@ -162,7 +162,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         id: quorate
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -202,7 +202,7 @@ With `block_on_verdict: [fail]`, only FAIL blocks; WARN allows merge (unless
 | **WARN** | Findings below `fail_on`, or degraded heuristic-only | Merge allowed (Ship default) |
 | **FAIL** | Any finding ≥ `fail_on`, or agreement gate tripped, or degraded when `fail_on_degraded` | **Merge blocked** |
 
-Agreement gate (from `@quorate/core` `shouldFailForReport`):
+Agreement gate (from `@quorate/core` `shouldFailForPolicy`):
 
 ```typescript
 // Fails check when finding.severity >= gate.severity

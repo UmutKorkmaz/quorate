@@ -80,6 +80,19 @@ describe("createBaseline / serialize / parse round-trip", () => {
       )
     ).toThrow(/version/i);
   });
+
+  it("rejects an invalid generated timestamp", () => {
+    expect(() =>
+      parseBaseline(
+        JSON.stringify({
+          version: 1,
+          generatedAt: "not-a-date",
+          expiresAfterDays: 30,
+          findings: []
+        })
+      )
+    ).toThrow(/baseline/i);
+  });
 });
 
 describe("filterBaselineFindings", () => {
