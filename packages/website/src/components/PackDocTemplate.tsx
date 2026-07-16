@@ -3,7 +3,7 @@ import { CodeBlock } from "./CodeBlock";
 import { InlineCode } from "./InlineCode";
 import type { PackDocData } from "../lib/pack-docs";
 
-const ACTION_REF = "UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b";
+const ACTION_REF = "UmutKorkmaz/quorate@81deb42f04b3b21557b0a055001c48daa4d01baf";
 
 /**
  * Renders a full domain-pack documentation article from a {@link PackDocData}
