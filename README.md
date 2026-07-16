@@ -73,6 +73,14 @@ In the shell, type `/` to open the command palette:
 /exit                 leave
 ```
 
+Run a deterministic SupplyChainGate scan from the same shell:
+
+```text
+quorate
+/supply-chain scan --base main --gate
+# Ctrl+C clears the screen; press Ctrl+C again immediately to exit.
+```
+
 Bare text follows the current mode — in `review` it reviews the loaded diff with
 your text as the subject; in `plan` it evaluates the text as a plan.
 
