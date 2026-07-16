@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createDefaultConfig, fingerprintFinding, reportCommentMarker } from "@quorate/core";
 import {
   applyOverrides,
+  loadBaseRepositoryLockfiles,
   normalizeInput,
   parseBoolean,
   resolveBaseRef,
@@ -77,6 +78,9 @@ function makeDeps(overrides: Partial<ActionDeps> = {}): {
  */
 function makeOctokit() {
   const rest = {
+    git: {
+      getTree: async () => ({ data: { truncated: false, tree: [] } })
+    },
     repos: {
       // No base config in the repo -> 404 -> safe default config.
       getContent: async () => {
@@ -239,6 +243,37 @@ describe("resolveBaseRef", () => {
 
   it("falls back to main as a last resort", () => {
     expect(resolveBaseRef(ctx({ pull_request: { number: 1 } }))).toBe("main");
+  });
+});
+
+describe("loadBaseRepositoryLockfiles", () => {
+  it("returns only package-manager lockfiles from the trusted base tree", async () => {
+    const client = makeOctokit();
+    client.rest.git.getTree = async () =>
+      ({
+        data: {
+          truncated: false,
+          tree: [
+            { type: "blob", path: "package-lock.json" },
+            { type: "blob", path: "packages/app/pnpm-lock.yaml" },
+            { type: "blob", path: "src/index.ts" },
+            { type: "tree", path: "packages" }
+          ]
+        }
+      }) as never;
+
+    await expect(
+      loadBaseRepositoryLockfiles(client as never, { owner: "o", repo: "r", ref: "base" })
+    ).resolves.toEqual(["package-lock.json", "packages/app/pnpm-lock.yaml"]);
+  });
+
+  it("fails closed when GitHub truncates the trusted base tree", async () => {
+    const client = makeOctokit();
+    client.rest.git.getTree = async () => ({ data: { truncated: true, tree: [] } }) as never;
+
+    await expect(
+      loadBaseRepositoryLockfiles(client as never, { owner: "o", repo: "r", ref: "base" })
+    ).rejects.toThrow(/truncated/i);
   });
 });
 

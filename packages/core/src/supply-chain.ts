@@ -1,5 +1,4 @@
-import { existsSync } from "node:fs";
-import { posix as path, resolve as resolveFsPath } from "node:path";
+import { posix as path } from "node:path";
 import type { DiffLine } from "./heuristics.js";
 import { computeReviewId, fingerprintFinding } from "./identity.js";
 import type {
@@ -446,7 +445,7 @@ function declaredPackageManager(file: ParsedDiffFile): PackageManager | undefine
 function expectedPackageManager(
   packageJson: ParsedDiffFile,
   files: ParsedDiffFile[],
-  repoPath?: string
+  repositoryFiles: ReadonlySet<string>
 ): PackageManager | "ambiguous" | undefined {
   const packageDir = path.dirname(packageJson.file);
   const candidates = new Set<PackageManager>();
@@ -462,19 +461,14 @@ function expectedPackageManager(
     }
   }
 
-  if (
-    repoPath &&
-    !path.isAbsolute(packageJson.file) &&
-    packageDir !== ".." &&
-    !packageDir.startsWith("../")
-  ) {
+  if (!path.isAbsolute(packageJson.file) && packageDir !== ".." && !packageDir.startsWith("../")) {
     let directory = packageDir;
     while (true) {
       for (const lockfile of NPM_LOCKFILES) {
         const relative = directory === "." ? lockfile : path.join(directory, lockfile);
         const changed = files.find((file) => file.file === relative);
         if (changed?.newFile === true || changed?.deleted === true) continue;
-        if (existsSync(resolveFsPath(repoPath, relative))) {
+        if (repositoryFiles.has(relative)) {
           const manager = lockfileManager(relative);
           if (manager) candidates.add(manager);
         }
@@ -593,11 +587,9 @@ function hasCorrespondingLockfile(
   packageJson: ParsedDiffFile,
   dependency: DependencyAddition,
   locks: ParsedDiffFile[],
-  files: ParsedDiffFile[],
-  repoPath?: string
+  manager: PackageManager | "ambiguous" | undefined
 ): boolean {
   const packageDir = path.dirname(packageJson.file);
-  const manager = expectedPackageManager(packageJson, files, repoPath);
   if (manager === "ambiguous") return false;
   return locks.some((lockfile) => {
     const lockDir = path.dirname(lockfile.file);
@@ -942,6 +934,9 @@ export function runSupplyChainReview(request: CouncilRequest, config?: QuorateCo
   const diff = request.fullDiff ?? request.diff ?? "";
   const files = parseDiff(diff);
   const locks = changedNpmLockfiles(files);
+  const repositoryFiles = new Set(
+    (request.repositoryFiles ?? []).map((file) => file.replaceAll("\\", "/").replace(/^\.\//, ""))
+  );
   const findings: Finding[] = [];
   const seen = new Set<string>();
   const npmEnabled = ecosystemEnabled(config, ["npm", "node", "javascript"]);
@@ -981,9 +976,13 @@ export function runSupplyChainReview(request: CouncilRequest, config?: QuorateCo
             (dependency) => !allowlisted(config?.supplyChain?.allowlist?.packages, [dependency.name])
           )
         : [];
+    const manager =
+      addedDependencies.length > 0
+        ? expectedPackageManager(file, files, repositoryFiles)
+        : undefined;
     const missingLockfileEvidence = addedDependencies.filter(
       (dependency) =>
-        !hasCorrespondingLockfile(file, dependency, locks, files, request.repoPath)
+        !hasCorrespondingLockfile(file, dependency, locks, manager)
     );
     if (missingLockfileEvidence.length > 0) {
       const first = missingLockfileEvidence[0];

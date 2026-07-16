@@ -90,7 +90,7 @@ import {
   writeCustomPackScaffold
 } from "./custom-packs.js";
 import { formatProviderTestResult, testProvider } from "./provider-test.js";
-import { runSupplyChainScan } from "./supply-chain-command.js";
+import { readRepositoryFiles, runSupplyChainScan } from "./supply-chain-command.js";
 
 interface GlobalOptions {
   config?: string;
@@ -1084,6 +1084,7 @@ export function buildProgram(): Command {
         diff,
         fullDiff: diff,
         repoPath: cwd,
+        repositoryFiles: readRepositoryFiles(cwd),
         context: prContext,
         pullRequest: options.pr ? { number: Number(options.pr) } : undefined
       };

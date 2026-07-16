@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import * as core from "@quorate/core";
 import {
   renderMarkdownReport,
@@ -61,30 +62,51 @@ function runGit(args: string[], cwd: string): string {
   }
 }
 
+function runUntrackedGit(args: string[], cwd: string, indexPath: string): string {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    shell: false,
+    maxBuffer: 50 * 1024 * 1024,
+    env: { ...process.env, GIT_INDEX_FILE: indexPath }
+  });
+  if (result.error) {
+    throw new Error(`git ${args.join(" ")} failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || "").trim();
+    throw new Error(`git ${args.join(" ")} failed: ${detail}`);
+  }
+  return result.stdout;
+}
+
 function readUntrackedDiff(cwd: string): string {
   const paths = runGit(["ls-files", "--others", "--exclude-standard", "-z"], cwd)
     .split("\0")
     .filter(Boolean);
+  if (paths.length === 0) return "";
 
-  return paths
-    .map((file) => {
-      const result = spawnSync("git", ["diff", "--no-index", "--", "/dev/null", file], {
-        cwd,
-        encoding: "utf8",
-        shell: false,
-        maxBuffer: 50 * 1024 * 1024
-      });
-      if (result.error) {
-        throw new Error(`git diff --no-index failed for ${file}: ${result.error.message}`);
-      }
-      if (result.status !== 0 && result.status !== 1) {
-        const detail = (result.stderr || result.stdout || "").trim();
-        throw new Error(`git diff --no-index failed for ${file}: ${detail}`);
-      }
-      return result.stdout;
-    })
-    .filter(Boolean)
-    .join("\n");
+  const temporaryDirectory = mkdtempSync(join(tmpdir(), "quorate-untracked-index-"));
+  const temporaryIndex = join(temporaryDirectory, "index");
+  try {
+    runUntrackedGit(["read-tree", "--empty"], cwd, temporaryIndex);
+    runUntrackedGit(["add", "--intent-to-add", "--", ...paths], cwd, temporaryIndex);
+    return runUntrackedGit(["diff", "--no-ext-diff", "--binary", "--", ...paths], cwd, temporaryIndex);
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+}
+
+export function readRepositoryFiles(cwd = process.cwd()): string[] {
+  try {
+    return runGit(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd)
+      .split("\0")
+      .filter(Boolean);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/No git repository found|git not found on PATH/i.test(message)) return [];
+    throw error;
+  }
 }
 
 /**
@@ -155,6 +177,7 @@ export function runSupplyChainScan(options: SupplyChainScanOptions, context: Sup
     subject: options.subject ?? "SupplyChainGate scan",
     diff,
     repoPath: context.cwd,
+    repositoryFiles: readRepositoryFiles(context.cwd),
     pullRequest: options.pr ? { number: Number(options.pr) } : undefined
   };
   const report = buildSupplyChainReport(request, context.config);

@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   council-only role or real-provider coverage requirements.
 - Working-tree scans include untracked files, `--head` requires `--base`, unsupported
   `mode: repo` config is rejected, and `lockfiles.requireFor` is enforced.
+- Untracked-file collection uses a bounded Git process count, and package-manager
+  resolution consumes a trusted repository inventory without synchronous core I/O.
 - Degraded council summaries refer to all deterministic reviewers when real
   providers fail.
 
