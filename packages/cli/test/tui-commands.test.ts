@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -117,7 +117,12 @@ describe("parseAndRun", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-supply-chain-tui-"));
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }) + "\n", "utf8");
     execSync("git init -q -b main", { cwd: dir });
-    execSync("git add package.json && git -c user.email=test@example.com -c user.name='Quorate Test' commit -q -m baseline", { cwd: dir });
+    execFileSync("git", ["add", "package.json"], { cwd: dir });
+    execFileSync(
+      "git",
+      ["-c", "user.email=test@example.com", "-c", "user.name=Quorate Test", "commit", "-q", "-m", "baseline"],
+      { cwd: dir }
+    );
     writeFileSync(
       join(dir, "package.json"),
       JSON.stringify({ name: "fixture", version: "1.0.0", dependencies: { "left-pad": "^1.3.0" } }) + "\n",
