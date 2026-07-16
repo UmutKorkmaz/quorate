@@ -16,10 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
+
+`v1.1.0` is the unreleased-candidate placeholder. The release checklist replaces
+it with the reviewed bundle commit's full 40-character SHA before tagging;
+production workflows should use that immutable ref.
 
 ## Which reviewers run in CI?
 
@@ -62,7 +66,7 @@ providers:
 Then pass the key through as an environment variable:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -80,18 +84,21 @@ committing.
 | Input | Default | Description |
 | --- | --- | --- |
 | `github-token` | — | Token to read PR files and write comments. |
-| `config-path` | `.quorate.yml` | Config file, read from the **base** branch. |
+| `config-path` | `.quorate.yml` | Canonical base-branch config path; alternate PR-controlled paths are rejected. |
 | `providers` | — | Comma-separated provider ids to enable for this run. |
 | `pack` | — | Domain pack(s) to layer on: a list (e.g. `solana,web3-dd`) or `auto` to detect from the PR's changed files. |
-| `fail-on` | `high` | Minimum severity that fails the check (`critical`…`info`, or `never`). |
+| `fail-on` | `high` | May tighten the committed base policy; `never` or a weaker threshold cannot relax it. |
 | `post-comment` | `true` | Post/update the Quorate summary comment. |
 | `inline-comments` | `false` | Post findings as inline review comments on changed lines. |
 | `inline-comment-limit` | `10` | Max inline comments per run. |
 | `runner-mode` | `auto` | Restrict providers by type: `auto` (runner-aware), `cli` (local agents only), `api` (HTTP endpoints only). The heuristic always runs. |
-| `baseline` | `false` | Gate only on findings absent from a committed baseline read from the base branch. |
-| `baseline-path` | `.quorate.baseline.json` | Path to the committed baseline file. |
-| `suppress-path` | `.quorate/suppressions.json` | Path to the committed suppression store. Suppressed findings stay visible but ungated. |
-| `policy-path` | `.quorate/policy.yml` | Path to a VerdictGate policy file read from the base branch. |
+| `baseline` | `false` | Deprecated compatibility input; the canonical valid, unexpired base baseline is automatic. |
+| `baseline-path` | `.quorate.baseline.json` | Canonical trusted baseline path; alternate paths are rejected. |
+| `suppress-path` | `.quorate/suppressions.json` | Canonical trusted suppression path; alternate paths are rejected. |
+| `policy-path` | `.quorate/policy.yml` | Canonical trusted policy path; alternate paths are rejected. |
+| `include-pr-context` | `false` | Include redacted PR title/body/commit context as untrusted read-only prompt input. |
+| `reviewgraph` | `false` | Include ReviewGraph agreement evidence in the comment and summary. |
+| `reviewgraph-file` | — | Write ReviewGraph JSON and expose `reviewgraph-path`. |
 | `sarif-file` | — | Path to write a SARIF 2.1.0 report; exposed as the `sarif-path` output for upload-sarif. |
 | `mode` | `review` | Only `review` is implemented for the Action. |
 
@@ -100,10 +107,11 @@ committing.
 - `verdict` — the final verdict, lowercase `pass` / `warn` / `fail`.
 - `findings` — the number of findings in the report.
 - `sarif-path` — absolute path of the written SARIF file when `sarif-file` is set.
+- `reviewgraph-path` — absolute path of ReviewGraph JSON when `reviewgraph-file` is set.
 
 ```yaml
       - id: quorate
-        uses: UmutKorkmaz/quorate@v1.0.0
+        uses: UmutKorkmaz/quorate@v1.1.0
         with: { github-token: ${{ secrets.GITHUB_TOKEN }} }
       - if: steps.quorate.outputs.verdict == 'fail'
         run: echo "Quorate found ${{ steps.quorate.outputs.findings }} findings"
@@ -194,7 +202,7 @@ integrations:
 Then pass the key as a normal secret:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         env:
           WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -363,6 +371,26 @@ to your base branch — that is all that is needed for real AI review on a stand
 GitHub-hosted runner.
 
 Full reference: [umutkorkmaz.github.io/quorate/docs/ci](https://umutkorkmaz.github.io/quorate/docs/ci).
+
+### SupplyChainGate in the Action
+
+SupplyChainGate is opt-in for normal council runs. Commit the setting on the base
+branch so a pull request cannot enable, disable, or weaken its own gate:
+
+```yaml
+supplyChain:
+  enabled: true
+  ecosystems: [npm, github-actions, docker]
+  lockfiles:
+    requireFor: [npm]
+    onMissing: fail
+```
+
+The deterministic lane uses the unfiltered PR diff so lockfile evidence survives
+AI-review budget filtering. Missing or truncated GitHub patches fail closed with a
+high-severity incomplete-evidence finding. PR-controlled inline ignore comments do
+not suppress SupplyChainGate; use trusted base-branch allowlists or suppression
+policy for reviewed exceptions.
 
 ## Fintech / PCI
 

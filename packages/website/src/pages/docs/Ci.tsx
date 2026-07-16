@@ -107,6 +107,45 @@ export default function Ci() {
         packs and their bundled councils.
       </p>
 
+      <h2>SupplyChainGate</h2>
+      <p>
+        Run the deterministic supply-chain lane directly when you want a machine-readable dependency
+        and provenance gate without launching AI providers:
+      </p>
+      <CodeBlock language="bash">{`quorate supply-chain scan --base main --json --gate`}</CodeBlock>
+      <p>
+        With <InlineCode>--base</InlineCode> alone, <InlineCode>quorate supply-chain scan</InlineCode>{" "}
+        reads the complete working-tree diff, including lockfiles and untracked files. Supplying both{" "}
+        <InlineCode>--base</InlineCode> and <InlineCode>--head</InlineCode> compares committed refs and
+        excludes untracked files. The command delegates report construction to the core
+        SupplyChainGate scanner. It requires matching lockfile evidence for added npm packages,
+        full commit SHAs for third-party Actions, full image digests for containers, and provenance
+        scoped to each token-based npm publishing job. The latest report is persisted at{" "}
+        <InlineCode>.quorate/supply-chain/latest.json</InlineCode>.
+      </p>
+      <CodeBlock language="yaml">{`supplyChain:
+  enabled: true
+  ecosystems: [npm, github-actions, docker]
+  lockfiles:
+    requireFor: [npm]
+    onMissing: fail`}</CodeBlock>
+      <p>
+        Set <InlineCode>supplyChain.enabled</InlineCode> when you want the same deterministic lane
+        included in normal <InlineCode>quorate review</InlineCode> runs.
+      </p>
+      <p>
+        Add <InlineCode>--fail-on medium</InlineCode> when you want medium-severity findings such as
+        unpinned actions to block immediately. <InlineCode>--gate</InlineCode> uses resolved
+        severity and verdict rules, while council-only coverage rules such as required roles and
+        real-provider floors do not apply to this standalone deterministic command.
+      </p>
+      <p>
+        In the GitHub Action, enable the lane in the base-branch config with{" "}
+        <InlineCode>supplyChain.enabled: true</InlineCode>. Missing or truncated GitHub diff patches
+        become a high-severity incomplete-evidence finding, and PR-controlled{" "}
+        <InlineCode>quorate-ignore</InlineCode> comments cannot suppress this gate.
+      </p>
+
       <h2>What it catches</h2>
       <p>
         The heuristic reviewer runs with zero setup — no model, no API key, no CLI install.
@@ -172,7 +211,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:

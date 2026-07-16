@@ -13,6 +13,35 @@ export interface PullRequestDiffClient {
   };
 }
 
+function patchHasCompleteHunks(patch: string): boolean {
+  let sawHunk = false;
+  let oldRemaining = 0;
+  let newRemaining = 0;
+
+  const complete = (): boolean => oldRemaining === 0 && newRemaining === 0;
+  for (const line of patch.split(/\r?\n/)) {
+    if (line.startsWith("@@")) {
+      if (sawHunk && !complete()) return false;
+      const match = /-(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))?/.exec(line);
+      if (!match) return false;
+      oldRemaining = Number(match[2] ?? "1");
+      newRemaining = Number(match[4] ?? "1");
+      sawHunk = true;
+      continue;
+    }
+    if (!sawHunk || line.startsWith("\\ No newline at end of file")) continue;
+    if (line.startsWith("+")) newRemaining -= 1;
+    else if (line.startsWith("-")) oldRemaining -= 1;
+    else if (line.startsWith(" ")) {
+      oldRemaining -= 1;
+      newRemaining -= 1;
+    }
+    if (oldRemaining < 0 || newRemaining < 0) return false;
+  }
+
+  return sawHunk && complete();
+}
+
 export async function buildPullRequestDiff(
   client: PullRequestDiffClient,
   input: { owner: string; repo: string; pullNumber: number },
@@ -34,13 +63,26 @@ export async function buildPullRequestDiff(
     // status values like removed/renamed/binary have no textual patch; the
     // fallback line covers any file where `patch` is absent so we never crash.
     const block = file.patch
-      ? `${header}\n${file.patch}`
-      : `${header}\n# ${file.status ?? "changed"} file has no textual patch`;
+      ? `${header}\n${file.patch}${
+          patchHasCompleteHunks(file.patch)
+            ? ""
+            : `\n# quorate-supply-chain-incomplete: patch hunk is truncated (${file.filename})`
+        }`
+      : `${header}\n# quorate-supply-chain-incomplete: ${file.status ?? "changed"} file has no textual patch`;
 
     const blockBytes = Buffer.byteLength(block, "utf8");
     const separatorBytes = blocks.length > 0 ? 1 : 0;
-    if (shown > 0 && size + separatorBytes + blockBytes > maxBytes) {
-      blocks.push(`# diff truncated to ${maxBytes} bytes (${shown} of ${files.length} files shown)`);
+    if (size + separatorBytes + blockBytes > maxBytes) {
+      if (shown === 0) {
+        blocks.push(header);
+        blocks.push(
+          `# quorate-supply-chain-incomplete: first patch exceeds ${maxBytes} bytes (${file.filename})`
+        );
+      } else {
+        blocks.push(
+          `# quorate-supply-chain-incomplete: diff truncated to ${maxBytes} bytes (${shown} of ${files.length} files shown)`
+        );
+      }
       return blocks.join("\n");
     }
 

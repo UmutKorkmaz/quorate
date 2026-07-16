@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         env:
           WEBACY_API_KEY: \${{ secrets.WEBACY_API_KEY }}
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}

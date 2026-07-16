@@ -6,6 +6,7 @@ import { computeReviewId, fingerprintFinding } from "./identity.js";
 import { createDefaultConfig } from "./providers.js";
 import { mergeWithMaster } from "./merge.js";
 import { areSameFinding } from "./similarity.js";
+import { runSupplyChainReview, supplyChainReviewEnabled } from "./supply-chain.js";
 import { runWeb3DdReview, web3DdReviewEnabled } from "./web3-dd.js";
 import type {
   QuorateConfig,
@@ -271,9 +272,36 @@ async function runProviderWithEvents(
 }
 
 const DEGRADED_NO_REAL_PROVIDER =
-  "Only the built-in heuristic ran — enable a real provider (`/use available`) for a trustworthy verdict.";
+  "Only the built-in heuristic and deterministic reviewers ran — enable a real provider (`/use available`) for a trustworthy verdict.";
 const DEGRADED_ALL_REAL_FAILED =
-  "All real providers failed or were interrupted — this verdict is based only on the heuristic.";
+  "All real providers failed or were interrupted — this verdict is based only on deterministic reviewers.";
+
+function supplyChainFailureResult(
+  status: "error" | "interrupted",
+  summary: string,
+  error?: string
+): ProviderResult {
+  return {
+    providerId: "supply-chain",
+    role: "supply-chain",
+    providerType: "mock",
+    status,
+    summary,
+    findings: [
+      {
+        providerId: "supply-chain",
+        role: "supply-chain",
+        severity: "high",
+        title: "SupplyChainGate did not complete",
+        body:
+          "The deterministic supply-chain lane did not finish, so this review cannot prove that dependency, workflow, and container changes were gated.",
+        suggestion: "Re-run the review and require SupplyChainGate to complete before merging."
+      }
+    ],
+    error,
+    durationMs: 0
+  };
+}
 
 export async function runCouncil(
   request: CouncilRequest,
@@ -295,11 +323,14 @@ export async function runCouncil(
 
   const ctx: RunContext = { councilRunId, emit, signal };
   const lanes = buildPlannedLanes(config);
+  const includeSupplyChain = supplyChainReviewEnabled(request, config);
   const includeWeb3Dd = web3DdReviewEnabled(config, request);
+  const supplyChainProviderType: ProviderType = "mock";
   const web3DdProviderType: ProviderType = config.integrations?.webacy?.enabled === true ? "api" : "mock";
 
   const requestedProviders = [
     ...lanes.map((lane) => `${lane.provider.id}:${lane.role}`),
+    ...(includeSupplyChain ? ["supply-chain:supply-chain"] : []),
     ...(includeWeb3Dd ? ["web3-dd:web3-due-diligence"] : [])
   ];
 
@@ -314,6 +345,9 @@ export async function runCouncil(
         role: lane.role,
         providerType: providerTypeOf(lane.provider)
       })),
+      ...(includeSupplyChain
+        ? [{ providerId: "supply-chain", role: "supply-chain", providerType: supplyChainProviderType }]
+        : []),
       ...(includeWeb3Dd
         ? [{ providerId: "web3-dd", role: "web3-due-diligence", providerType: web3DdProviderType }]
         : [])
@@ -349,6 +383,48 @@ export async function runCouncil(
       durationMs: 0
     };
   });
+  if (includeSupplyChain) {
+    emit({
+      type: "provider/started",
+      councilRunId,
+      providerId: "supply-chain",
+      role: "supply-chain",
+      providerType: supplyChainProviderType,
+      at: new Date().toISOString()
+    });
+
+    let supplyChainResult: ProviderResult;
+    if (signal?.aborted) {
+      supplyChainResult = supplyChainFailureResult(
+        "interrupted",
+        "SupplyChainGate review was interrupted before it started."
+      );
+    } else {
+      try {
+        supplyChainResult =
+          runSupplyChainReview(reviewRequest, config) ??
+          supplyChainFailureResult(
+            "error",
+            "SupplyChainGate was planned but did not produce a result."
+          );
+      } catch (error) {
+        supplyChainResult = supplyChainFailureResult(
+          "error",
+          "SupplyChainGate review threw before producing a result.",
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+
+    providerResults.push(supplyChainResult);
+    emit({
+      type: "provider/done",
+      councilRunId,
+      providerId: "supply-chain",
+      role: "supply-chain",
+      result: supplyChainResult
+    });
+  }
   if (includeWeb3Dd && !signal?.aborted) {
     try {
       const web3DdResult = await runWeb3DdReview(reviewRequest, config, { signal });
@@ -433,8 +509,11 @@ export async function runCouncil(
       reviewId: computeReviewId({
         mode: request.mode,
         subject: request.subject,
-        diff: request.diff,
-        providerIds: lanes.map((lane) => lane.provider.id),
+        diff: includeSupplyChain ? request.fullDiff ?? request.diff : request.diff,
+        providerIds: [
+          ...lanes.map((lane) => lane.provider.id),
+          ...(includeSupplyChain ? ["supply-chain"] : [])
+        ],
         councils: config.councils
       })
     }

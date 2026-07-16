@@ -105,4 +105,54 @@ integrations:
       cache: { ttlHours: 24 }
     });
   });
+
+  it("parses SupplyChainGate settings", () => {
+    const config = parseConfig(`
+supplyChain:
+  enabled: true
+  mode: diff
+  ecosystems: [npm, github-actions, docker]
+  lockfiles:
+    requireFor: [npm]
+    onMissing: fail
+  rules:
+    dependencyWithoutLockfile:
+      severity: high
+    unpinnedActions:
+      enabled: false
+  allowlist:
+    actions:
+      - actions/checkout
+    images:
+      - node
+    packages:
+      - internal-package
+`);
+
+    expect(config.supplyChain).toMatchObject({
+      enabled: true,
+      mode: "diff",
+      ecosystems: ["npm", "github-actions", "docker"],
+      lockfiles: { requireFor: ["npm"], onMissing: "fail" },
+      rules: {
+        dependencyWithoutLockfile: { severity: "high" },
+        unpinnedActions: { enabled: false }
+      },
+      allowlist: {
+        actions: ["actions/checkout"],
+        images: ["node"],
+        packages: ["internal-package"]
+      }
+    });
+  });
+
+  it("rejects the unimplemented SupplyChainGate repo mode", () => {
+    expect(() =>
+      parseConfig(`
+supplyChain:
+  enabled: true
+  mode: repo
+`)
+    ).toThrow();
+  });
 });

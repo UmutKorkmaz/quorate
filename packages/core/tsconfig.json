@@ -6,7 +6,7 @@
     "declarationMap": true,
     "outDir": "dist",
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "tsBuildInfoFile": ".tsc/.tsbuildinfo"
   },
   "include": ["src/**/*.ts"]
 }

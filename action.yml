@@ -9,9 +9,8 @@ branding:
 inputs:
   config-path:
     description: >-
-      Path to a .quorate.yml config file (read from the base branch). Defines the
-      council: enable type:api providers (hosted/local models) to review on
-      GitHub-hosted runners, or type:cli agents on a self-hosted runner.
+      Trusted base-branch config path. For pull_request safety this must remain
+      .quorate.yml; alternate PR-controlled paths are rejected.
     required: false
     default: .quorate.yml
   mode:
@@ -31,7 +30,9 @@ inputs:
       the deterministic heuristics for a language always run regardless.
     required: false
   fail-on:
-    description: "Minimum severity that fails the action: critical, high, medium, low, info, or never."
+    description: >-
+      Requested minimum failing severity. It may tighten the committed base
+      policy, but never or a weaker value cannot relax that policy.
     required: false
     default: high
   post-comment:
@@ -59,28 +60,26 @@ inputs:
     default: "10"
   baseline:
     description: >-
-      Gate only on findings absent from a committed baseline. Reads the baseline
-      from the base branch (never the PR head), so legacy issues recorded with
-      `quorate baseline` don't block adoption — only new findings can fail the gate.
+      Deprecated compatibility input. A canonical .quorate.baseline.json on the
+      base branch is applied automatically when valid and unexpired; PR input
+      cannot enable, disable, or redirect it.
     required: false
     default: "false"
   baseline-path:
-    description: Path to the committed baseline file (read from the base branch).
+    description: Canonical trusted baseline path; alternate paths are rejected.
     required: false
     default: .quorate.baseline.json
   suppress-path:
     description: >-
-      Path to a committed suppression store, read from the base branch. When
-      present, accepted-risk findings are tagged suppressed (visible but
-      ungated). A PR cannot suppress its own new findings.
+      Canonical trusted suppression-store path. Alternate paths are rejected;
+      accepted-risk findings remain visible but ungated.
     required: false
     default: .quorate/suppressions.json
   policy-path:
     description: >-
-      Path to a VerdictGate policy file (read from the base branch). When present
-      it defines the merge gate (fail-on, agreement, required roles, provider
-      floor); otherwise the gate is derived from the github config. See
-      docs/products/VERDICT-GATE.md.
+      Canonical trusted VerdictGate policy path. Alternate paths are rejected;
+      the base policy defines fail-on, agreement, required roles, and provider
+      floor.
     required: false
     default: .quorate/policy.yml
   include-pr-context:

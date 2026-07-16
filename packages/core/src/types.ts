@@ -76,6 +76,38 @@ export interface QuorateBudgetConfig {
   skipGenerated?: boolean;
 }
 
+export interface SupplyChainRuleConfig {
+  enabled?: boolean;
+  severity?: Severity;
+}
+
+export interface SupplyChainGateConfig {
+  /** Enables SupplyChainGate as an extra deterministic review lane. */
+  enabled?: boolean;
+  /** SupplyChainGate currently scans unified diffs only. */
+  mode?: "diff";
+  /** Ecosystems to inspect. Defaults to npm, GitHub Actions, and Docker. */
+  ecosystems?: string[];
+  /** Lockfile policy for manifest dependency changes. */
+  lockfiles?: {
+    requireFor?: string[];
+    onMissing?: "off" | "warn" | "fail";
+  };
+  /** Per-rule enablement and severity overrides. */
+  rules?: {
+    dependencyWithoutLockfile?: SupplyChainRuleConfig;
+    unpinnedActions?: SupplyChainRuleConfig;
+    mutableBaseImage?: SupplyChainRuleConfig;
+    npmPublishWithoutProvenance?: SupplyChainRuleConfig;
+  };
+  /** Trusted references that should not produce findings. */
+  allowlist?: {
+    actions?: string[];
+    images?: string[];
+    packages?: string[];
+  };
+}
+
 export type WebacyRiskLevel = "low" | "medium" | "high";
 
 export interface WebacyIntegrationConfig {
@@ -146,6 +178,8 @@ export interface QuorateConfig {
   github: GithubConfig;
   /** Optional review-budget guardrails. */
   budget?: QuorateBudgetConfig;
+  /** Optional deterministic supply-chain review lane. */
+  supplyChain?: SupplyChainGateConfig;
   /** Optional master agent that semantically merges duplicate findings. */
   merge?: { provider: string };
   /** Per-role reviewer guidance appended to that role's prompt (packs fill this). */
@@ -169,7 +203,11 @@ export interface CouncilRequest {
   mode: CouncilMode;
   subject: string;
   diff?: string;
+  /** Original unfiltered diff, used by deterministic lanes that need generated-file evidence such as lockfiles. */
+  fullDiff?: string;
   repoPath?: string;
+  /** Trusted base/worktree file inventory used by deterministic repository-aware checks. */
+  repositoryFiles?: string[];
   pullRequest?: {
     number: number;
     title?: string;

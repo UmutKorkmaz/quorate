@@ -5,6 +5,50 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - Unreleased
+
+### Added
+
+- **SupplyChainGate.** A deterministic `quorate supply-chain scan` command and
+  opt-in normal-review lane for npm dependency/lockfile evidence, GitHub Action
+  pinning, Docker digest pinning, and npm publish provenance.
+- Machine-readable JSON and Markdown output, persistent
+  `.quorate/supply-chain/latest.json`, VerdictGate severity gating, base/head/PR
+  diff sources, and the `supplychain` CLI alias.
+- Base-branch GitHub Action configuration and complete-diff integration so
+  lockfiles remain visible even when generated files are excluded from AI prompts.
+
+### Security
+
+- Incomplete or missing GitHub API patches now fail closed instead of silently
+  producing a partial supply-chain scan.
+- Lockfile evidence must use the repository's resolved package manager and prove the
+  exact dependency block, compatible version, resolution URL, and integrity/checksum;
+  adjacent-package metadata, new unrelated lockfiles, and ambiguous managers fail closed.
+- Docker references require a full 64-hex SHA-256 digest, including Docker-based
+  Actions. npm provenance and authentication are checked per publishing job across
+  npm, pnpm, Yarn, Bun, npmrc token setup, and changed package publish scripts.
+- PR-controlled inline ignore markers cannot suppress SupplyChainGate findings.
+- GitHub Action gate files use canonical base-branch paths, PR inputs may only tighten
+  the committed severity policy, stale baselines are not applied, and malformed
+  baseline/suppression timestamps fail secure.
+
+### Fixed
+
+- Standalone gate runs no longer fail because deterministic scans cannot satisfy
+  council-only role or real-provider coverage requirements.
+- Working-tree scans include untracked files, `--head` requires `--base`, unsupported
+  `mode: repo` config is rejected, and `lockfiles.requireFor` is enforced.
+- Untracked-file collection uses a bounded Git process count, and package-manager
+  resolution consumes a trusted repository inventory without synchronous core I/O.
+- Degraded council summaries refer to all deterministic reviewers when real
+  providers fail.
+
+### Changed
+
+- The active roadmap, horizon product plan, GTM checklist, Action contract, CLI
+  docs, website docs, and release checklist now describe one release sequence.
+
 ## [0.9.0] - 2026-06-23
 
 ### Added

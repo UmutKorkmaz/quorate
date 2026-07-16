@@ -34,7 +34,7 @@ export interface BaselineEntry {
 export interface BaselineStore {
   version: number;
   generatedAt: string;
-  /** Optional advisory expiry; staleness is signalled, never enforced. */
+  /** Optional expiry. Consumers may reject stale baselines; the Action does. */
   expiresAfterDays?: number;
   findings: BaselineEntry[];
 }
@@ -55,7 +55,7 @@ const baselineEntrySchema = z.object({
 
 const baselineStoreSchema = z.object({
   version: z.number().int(),
-  generatedAt: z.string(),
+  generatedAt: z.string().datetime({ offset: true }),
   expiresAfterDays: z.number().int().positive().optional(),
   findings: z.array(baselineEntrySchema)
 });

@@ -45,6 +45,7 @@ Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interact
 quorate                                   # open the interactive shell
 quorate doctor                            # see which AI CLIs are installed
 quorate review --base main --head HEAD    # one-shot review of the current branch
+quorate supply-chain scan --base main --json --gate
 quorate solana doctor --strict            # Solana release-readiness gate
 quorate solana test-plan                  # next Solana release-test commands
 quorate fix --list                        # then delegate a finding to an agent — revertible
@@ -76,13 +77,27 @@ quorate provider set-model local                  # switch a provider's model by
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: UmutKorkmaz/quorate@v1.0.0
+- uses: UmutKorkmaz/quorate@v1.1.0
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 `type: api` providers run real model review on standard GitHub-hosted runners — no
 self-hosting required.
+
+## SupplyChainGate
+
+```bash
+quorate supply-chain scan --base main --json --gate
+```
+
+With `--base` alone, SupplyChainGate runs deterministic dependency and provenance checks
+over the complete working-tree diff, including lockfiles and untracked files. Supplying
+both `--base` and `--head` compares committed refs and excludes untracked files. It requires matching
+lockfile evidence for added npm packages, full commit SHAs for third-party actions,
+full image digests for Docker references, and per-publishing-job npm provenance.
+`--gate` applies resolved severity/verdict rules but not council-only coverage
+constraints, and writes `.quorate/supply-chain/latest.json`.
 
 ## Solana / Anchor
 
