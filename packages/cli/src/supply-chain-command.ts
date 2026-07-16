@@ -38,6 +38,12 @@ type BuildSupplyChainReport = (request: CouncilRequest, config?: QuorateConfig) 
 
 const VALID_FAIL_ON = new Set<string>([...severities, "never"]);
 
+export interface SupplyChainScanResult {
+  report: CouncilReport;
+  latestReportPath: string;
+  gateFailed: boolean;
+}
+
 function buildSupplyChainReport(request: CouncilRequest, config: QuorateConfig): CouncilReport {
   const buildReport = (core as { buildSupplyChainReport?: BuildSupplyChainReport }).buildSupplyChainReport;
   if (typeof buildReport !== "function") {
@@ -164,13 +170,103 @@ function failOnFromOption(value: string | undefined): Severity | "never" | undef
   return value as Severity | "never";
 }
 
-export function runSupplyChainScan(options: SupplyChainScanOptions, context: SupplyChainScanContext): CouncilReport | undefined {
-  const diff = readSupplyChainDiff(options, context.cwd);
-  if (diff.trim().length === 0) {
-    console.error("No changes to scan. Pass --diff <file>, --base/--head, or --pr <number>.");
-    process.exitCode = 1;
-    return undefined;
+function splitSupplyChainShellArgs(input: string): string[] {
+  const tokens: string[] = [];
+  let token = "";
+  let tokenStarted = false;
+  let quote: "'" | '"' | undefined;
+  let escaped = false;
+
+  for (const character of input) {
+    if (escaped) {
+      token += character;
+      tokenStarted = true;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true;
+      tokenStarted = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      } else {
+        token += character;
+      }
+      tokenStarted = true;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      tokenStarted = true;
+    } else if (/\s/.test(character)) {
+      if (tokenStarted) {
+        tokens.push(token);
+        token = "";
+        tokenStarted = false;
+      }
+    } else {
+      token += character;
+      tokenStarted = true;
+    }
   }
+
+  if (quote) throw new Error("Unterminated quote in SupplyChainGate arguments.");
+  if (escaped) token += "\\";
+  if (tokenStarted) tokens.push(token);
+  return tokens;
+}
+
+export function parseSupplyChainShellArgs(input: string): SupplyChainScanOptions {
+  const tokens = splitSupplyChainShellArgs(input);
+  if (tokens[0] === "scan") tokens.shift();
+
+  const options: SupplyChainScanOptions = {};
+  const valueOptions: Record<string, keyof SupplyChainScanOptions> = {
+    "--diff": "diff",
+    "--base": "base",
+    "--head": "head",
+    "--pr": "pr",
+    "--subject": "subject",
+    "--write-json": "writeJson",
+    "--write-md": "writeMd",
+    "--fail-on": "failOn"
+  };
+  const booleanOptions = new Set(["--json", "--gate"]);
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const valueKey = valueOptions[token];
+    if (valueKey) {
+      const value = tokens[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error(`${token} requires a value.`);
+      }
+      options[valueKey] = value as never;
+      index += 1;
+      continue;
+    }
+    if (booleanOptions.has(token)) {
+      if (token === "--json") options.json = true;
+      if (token === "--gate") options.gate = true;
+      continue;
+    }
+    if (token.startsWith("--")) {
+      throw new Error(`Unknown option: ${token}.`);
+    }
+    throw new Error("SupplyChainGate shell parser only supports scan as the command.");
+  }
+  return options;
+}
+
+export function scanSupplyChain(
+  options: SupplyChainScanOptions,
+  context: SupplyChainScanContext
+): SupplyChainScanResult | undefined {
+  const diff = readSupplyChainDiff(options, context.cwd);
+  if (diff.trim().length === 0) return undefined;
 
   const request: CouncilRequest = {
     mode: "review",
@@ -189,12 +285,7 @@ export function runSupplyChainScan(options: SupplyChainScanOptions, context: Sup
   writeReport(options.writeJson, context.cwd, `${JSON.stringify(report, null, 2)}\n`);
   writeReport(options.writeMd, context.cwd, renderMarkdownReport(report));
 
-  if (options.json) {
-    console.log(JSON.stringify(report, null, 2));
-  } else {
-    console.log(renderMarkdownReport(report));
-  }
-
+  let gateFailed = false;
   if (options.gate) {
     const resolvedPolicy = resolvePolicy(context.config, {
       policy: loadPolicyFile(context.cwd) ?? undefined,
@@ -207,10 +298,26 @@ export function runSupplyChainScan(options: SupplyChainScanOptions, context: Sup
       rolesRequired: [],
       minRealProviders: 0
     };
-    if (shouldFailForPolicy(report, policy)) {
-      process.exitCode = 1;
-    }
+    gateFailed = shouldFailForPolicy(report, policy);
   }
 
-  return report;
+  return { report, latestReportPath, gateFailed };
+}
+
+export function runSupplyChainScan(options: SupplyChainScanOptions, context: SupplyChainScanContext): CouncilReport | undefined {
+  const result = scanSupplyChain(options, context);
+  if (!result) {
+    console.error("No changes to scan. Pass --diff <file>, --base/--head, or --pr <number>.");
+    process.exitCode = 1;
+    return undefined;
+  }
+
+  if (options.json) {
+    console.log(JSON.stringify(result.report, null, 2));
+  } else {
+    console.log(renderMarkdownReport(result.report));
+  }
+
+  if (result.gateFailed) process.exitCode = 1;
+  return result.report;
 }
