@@ -15,8 +15,8 @@ side effects. With --execute, creates and pushes the tag, creates the GitHub
 Release, and then publishes the self-contained quorate CLI to npm.
 
 Examples:
-  scripts/release.sh 1.2.0
-  CONFIRM_RELEASE=v1.2.0 scripts/release.sh --execute 1.2.0
+  scripts/release.sh 1.2.1
+  CONFIRM_RELEASE=v1.2.1 scripts/release.sh --execute 1.2.1
 
 Environment:
   RELEASE_BRANCH=main         Required release branch (default: main)
