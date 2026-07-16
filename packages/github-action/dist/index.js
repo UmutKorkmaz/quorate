@@ -30396,6 +30396,7 @@ __export(index_exports, {
   loadBaseConfig: () => loadBaseConfig,
   loadBaseCustomPacks: () => loadBaseCustomPacks,
   loadBasePolicy: () => loadBasePolicy,
+  loadBaseRepositoryLockfiles: () => loadBaseRepositoryLockfiles,
   loadBaseSuppressionStore: () => loadBaseSuppressionStore,
   normalizeInput: () => normalizeInput,
   parseBoolean: () => parseBoolean,
@@ -52489,7 +52490,6 @@ function areSameFinding(a, b, threshold = DEFAULT_SIMILARITY_THRESHOLD) {
 }
 
 // ../core/src/supply-chain.ts
-var import_node_fs2 = require("node:fs");
 var import_node_path3 = require("node:path");
 var PROVIDER_ID = "supply-chain";
 var ROLE = "supply-chain";
@@ -52814,7 +52814,7 @@ function declaredPackageManager(file2) {
   }
   return void 0;
 }
-function expectedPackageManager(packageJson, files, repoPath) {
+function expectedPackageManager(packageJson, files, repositoryFiles) {
   const packageDir = import_node_path3.posix.dirname(packageJson.file);
   const candidates = /* @__PURE__ */ new Set();
   const declared = declaredPackageManager(packageJson);
@@ -52827,14 +52827,14 @@ function expectedPackageManager(packageJson, files, repoPath) {
       candidates.add(manager);
     }
   }
-  if (repoPath && !import_node_path3.posix.isAbsolute(packageJson.file) && packageDir !== ".." && !packageDir.startsWith("../")) {
+  if (!import_node_path3.posix.isAbsolute(packageJson.file) && packageDir !== ".." && !packageDir.startsWith("../")) {
     let directory = packageDir;
     while (true) {
       for (const lockfile of NPM_LOCKFILES) {
         const relative = directory === "." ? lockfile : import_node_path3.posix.join(directory, lockfile);
         const changed = files.find((file2) => file2.file === relative);
         if (changed?.newFile === true || changed?.deleted === true) continue;
-        if ((0, import_node_fs2.existsSync)((0, import_node_path3.resolve)(repoPath, relative))) {
+        if (repositoryFiles.has(relative)) {
           const manager = lockfileManager(relative);
           if (manager) candidates.add(manager);
         }
@@ -52911,9 +52911,8 @@ function lockfileHasResolvedDependency(lockfile, dependency) {
   }
   return false;
 }
-function hasCorrespondingLockfile(packageJson, dependency, locks, files, repoPath) {
+function hasCorrespondingLockfile(packageJson, dependency, locks, manager) {
   const packageDir = import_node_path3.posix.dirname(packageJson.file);
-  const manager = expectedPackageManager(packageJson, files, repoPath);
   if (manager === "ambiguous") return false;
   return locks.some((lockfile) => {
     const lockDir = import_node_path3.posix.dirname(lockfile.file);
@@ -53165,6 +53164,9 @@ function runSupplyChainReview(request2, config2) {
   const diff = request2.fullDiff ?? request2.diff ?? "";
   const files = parseDiff(diff);
   const locks = changedNpmLockfiles(files);
+  const repositoryFiles = new Set(
+    (request2.repositoryFiles ?? []).map((file2) => file2.replaceAll("\\", "/").replace(/^\.\//, ""))
+  );
   const findings = [];
   const seen = /* @__PURE__ */ new Set();
   const npmEnabled = ecosystemEnabled(config2, ["npm", "node", "javascript"]);
@@ -53193,8 +53195,9 @@ function runSupplyChainReview(request2, config2) {
     const addedDependencies = npmEnabled && lockfileRequiredFor(config2, ["npm", "node", "javascript"]) && ruleEnabled(config2, "dependencyWithoutLockfile") ? dependencyAdditions(file2).filter(
       (dependency) => !allowlisted(config2?.supplyChain?.allowlist?.packages, [dependency.name])
     ) : [];
+    const manager = addedDependencies.length > 0 ? expectedPackageManager(file2, files, repositoryFiles) : void 0;
     const missingLockfileEvidence = addedDependencies.filter(
-      (dependency) => !hasCorrespondingLockfile(file2, dependency, locks, files, request2.repoPath)
+      (dependency) => !hasCorrespondingLockfile(file2, dependency, locks, manager)
     );
     if (missingLockfileEvidence.length > 0) {
       const first = missingLockfileEvidence[0];
@@ -55810,6 +55813,23 @@ function changedFilesFromDiff(diff) {
   }
   return files;
 }
+var NPM_LOCKFILE_PATH_RE = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/;
+async function loadBaseRepositoryLockfiles(client, params) {
+  const response = await client.rest.git.getTree({
+    owner: params.owner,
+    repo: params.repo,
+    tree_sha: params.ref,
+    recursive: "true"
+  });
+  if (response.data.truncated) {
+    throw new Error(
+      "The base repository tree was truncated, so SupplyChainGate cannot determine the trusted package-manager lockfile inventory."
+    );
+  }
+  return response.data.tree.flatMap(
+    (entry) => entry.type === "blob" && entry.path && NPM_LOCKFILE_PATH_RE.test(entry.path) ? [entry.path] : []
+  );
+}
 function applyPacks(config2, packInput, changedFiles) {
   const raw = (packInput ?? "").trim();
   if (!raw) return config2;
@@ -56045,6 +56065,7 @@ async function runAction(deps) {
   });
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   const config2 = applyPacks(baseConfig, input("pack"), changedFilesFromDiff(diff));
+  const repositoryFiles = config2.supplyChain?.enabled === true ? await loadBaseRepositoryLockfiles(client, { owner, repo, ref: baseRef }) : void 0;
   const prContext = parseBoolean(input("include-pr-context"), false) ? await buildActionPullRequestContext(client, { owner, repo, pullNumber, pullRequest }) : void 0;
   const budget = analyzeReviewBudget({
     diff,
@@ -56098,6 +56119,7 @@ async function runAction(deps) {
       diff: budget.diff,
       fullDiff: diff,
       repoPath: process.cwd(),
+      repositoryFiles,
       context: prContext,
       budget: budget.summary,
       pullRequest: {
@@ -56267,6 +56289,7 @@ if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
   loadBaseConfig,
   loadBaseCustomPacks,
   loadBasePolicy,
+  loadBaseRepositoryLockfiles,
   loadBaseSuppressionStore,
   normalizeInput,
   parseBoolean,

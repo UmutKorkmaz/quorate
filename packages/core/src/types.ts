@@ -206,6 +206,8 @@ export interface CouncilRequest {
   /** Original unfiltered diff, used by deterministic lanes that need generated-file evidence such as lockfiles. */
   fullDiff?: string;
   repoPath?: string;
+  /** Trusted base/worktree file inventory used by deterministic repository-aware checks. */
+  repositoryFiles?: string[];
   pullRequest?: {
     number: number;
     title?: string;

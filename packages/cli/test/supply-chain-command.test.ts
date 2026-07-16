@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildProgram } from "../src/index.js";
 import { readSupplyChainDiff } from "../src/supply-chain-command.js";
+
+vi.mock("node:child_process", async () => {
+  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
+  return { ...actual, spawnSync: vi.fn(actual.spawnSync) };
+});
 
 let dir: string;
 
@@ -61,6 +66,23 @@ describe("quorate supply-chain scan", () => {
 
     expect(diff).toContain("diff --git a/Dockerfile b/Dockerfile");
     expect(diff).toContain("+FROM node:latest");
+  });
+
+  it("uses a bounded number of Git processes when many files are untracked", () => {
+    writeFileSync(resolve(dir, "README.md"), "baseline\n", "utf8");
+    commit("baseline");
+    for (let index = 0; index < 12; index += 1) {
+      const serviceDir = resolve(dir, `service-${index}`);
+      mkdirSync(serviceDir, { recursive: true });
+      writeFileSync(resolve(serviceDir, "Dockerfile"), "FROM node:latest\n", "utf8");
+    }
+    vi.mocked(spawnSync).mockClear();
+
+    const diff = readSupplyChainDiff({}, dir);
+    const gitProcesses = vi.mocked(spawnSync).mock.calls.filter(([command]) => command === "git");
+
+    expect(diff).toContain("diff --git a/service-11/Dockerfile b/service-11/Dockerfile");
+    expect(gitProcesses.length).toBeLessThanOrEqual(6);
   });
 
   it("scans --base/--head, prints JSON, persists the report, and gates on policy", async () => {

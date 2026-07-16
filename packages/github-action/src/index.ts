@@ -149,6 +149,29 @@ export function changedFilesFromDiff(diff: string): string[] {
   return files;
 }
 
+const NPM_LOCKFILE_PATH_RE = /(?:^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?)$/;
+
+/** Trusted lockfile inventory from the pull request's base tree. */
+export async function loadBaseRepositoryLockfiles(
+  client: Octokit,
+  params: { owner: string; repo: string; ref: string }
+): Promise<string[]> {
+  const response = await client.rest.git.getTree({
+    owner: params.owner,
+    repo: params.repo,
+    tree_sha: params.ref,
+    recursive: "true"
+  });
+  if (response.data.truncated) {
+    throw new Error(
+      "The base repository tree was truncated, so SupplyChainGate cannot determine the trusted package-manager lockfile inventory."
+    );
+  }
+  return response.data.tree.flatMap((entry) =>
+    entry.type === "blob" && entry.path && NPM_LOCKFILE_PATH_RE.test(entry.path) ? [entry.path] : []
+  );
+}
+
 /**
  * Layer one or more domain packs onto the resolved config: union the pack
  * councils into `config.councils` and merge their `roleGuidance` (existing
@@ -501,6 +524,10 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   const diff = await buildPullRequestDiff(client, { owner, repo, pullNumber });
   // Layer domain pack(s) — explicit list or "auto" detected from the PR's files.
   const config = applyPacks(baseConfig, input("pack"), changedFilesFromDiff(diff));
+  const repositoryFiles =
+    config.supplyChain?.enabled === true
+      ? await loadBaseRepositoryLockfiles(client, { owner, repo, ref: baseRef })
+      : undefined;
   const prContext = parseBoolean(input("include-pr-context"), false)
     ? await buildActionPullRequestContext(client, { owner, repo, pullNumber, pullRequest })
     : undefined;
@@ -559,6 +586,7 @@ export async function runAction(deps: ActionDeps): Promise<void> {
       diff: budget.diff,
       fullDiff: diff,
       repoPath: process.cwd(),
+      repositoryFiles,
       context: prContext,
       budget: budget.summary,
       pullRequest: {

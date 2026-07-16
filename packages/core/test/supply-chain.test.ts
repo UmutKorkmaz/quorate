@@ -255,6 +255,29 @@ diff --git a/yarn.lock b/yarn.lock
     );
   });
 
+  it("uses repository inventory to reject a changed lockfile from the wrong package manager", () => {
+    const diff = `${packageJsonDependencyDiff}
+diff --git a/yarn.lock b/yarn.lock
+--- a/yarn.lock
++++ b/yarn.lock
+@@ -1 +1,5 @@
+ # yarn lockfile v1
++left-pad@^1.3.0:
++  version "1.3.0"
++  resolved "https://registry.yarnpkg.com/left-pad/-/left-pad-1.3.0.tgz"
++  integrity sha512-test`;
+    const result = runSupplyChainReview({
+      mode: "review",
+      subject: "dependency",
+      diff,
+      repositoryFiles: ["package-lock.json"]
+    });
+
+    expect(result?.findings).toContainEqual(
+      expect.objectContaining({ title: "Dependency added without lockfile update" })
+    );
+  });
+
   it("does not reuse pnpm integrity metadata from another package block", () => {
     const diff = `diff --git a/package.json b/package.json
 --- a/package.json
