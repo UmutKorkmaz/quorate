@@ -321,6 +321,7 @@ export function shellHelp(extra: string[] = []): string {
     "  /pr number            Load a pull request diff with gh",
     "  /review [subject]     Review the loaded/current diff",
     "  /plan text            Ask the council to evaluate a plan",
+    "  /supply-chain [scan] Run deterministic dependency and release-pipeline checks",
     "  /last                 Show the last report",
     "  /rerun                Run the last request again",
     "  /history              Show recent shell commands",

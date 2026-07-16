@@ -86,7 +86,7 @@ describe("commandRegistry", () => {
     const names = commandRegistry.map((c) => c.name);
     for (const expected of [
       "providers", "doctor", "inspect", "setup", "status", "use", "enable", "disable", "roles",
-      "route", "mode", "diff", "git", "pr", "review", "plan", "last", "logs", "rerun",
+      "route", "mode", "diff", "git", "pr", "review", "plan", "supply-chain", "last", "logs", "rerun",
       "history", "json", "markdown", "resume", "rename", "clear", "help", "exit"
     ]) {
       expect(names).toContain(expected);
@@ -100,6 +100,7 @@ describe("commandRegistry", () => {
     expect(resolveCommand("?")?.name).toBe("help");
     expect(resolveCommand("ask")?.name).toBe("plan");
     expect(resolveCommand("md")?.name).toBe("markdown");
+    expect(resolveCommand("supplychain")?.name).toBe("supply-chain");
   });
 
   it("commandNames() lists doctor as its own command (not a providers alias)", () => {
@@ -112,6 +113,41 @@ describe("commandRegistry", () => {
 });
 
 describe("parseAndRun", () => {
+  it("runs a SupplyChainGate scan and retains its report", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-supply-chain-tui-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }) + "\n", "utf8");
+    execSync("git init -q -b main", { cwd: dir });
+    execSync("git add package.json && git -c user.email=test@example.com -c user.name='Quorate Test' commit -q -m baseline", { cwd: dir });
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "fixture", version: "1.0.0", dependencies: { "left-pad": "^1.3.0" } }) + "\n",
+      "utf8"
+    );
+
+    const { ctx, cells, getState } = makeCtx(dir);
+    await parseAndRun(ctx, "/supply-chain scan --gate --fail-on high");
+
+    expect(getState().lastReport).toBeDefined();
+    expect(cells.some((cell) => cell.kind === "findings")).toBe(true);
+    const textCells = cells.flatMap((cell) => (cell.kind === "text" ? [cell.text] : []));
+    expect(textCells.some((cell) => /^SupplyChainGate policy: (PASS|FAIL)\.$/.test(cell))).toBe(true);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("keeps the Ink shell active when a SupplyChainGate scan has no changes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-supply-chain-empty-tui-"));
+    execSync("git init -q", { cwd: dir });
+    const { ctx, cells, getState } = makeCtx(dir);
+
+    await parseAndRun(ctx, "/supplychain scan");
+
+    expect(getState().lastReport).toBeUndefined();
+    expect(cells).toContainEqual(expect.objectContaining({
+      kind: "text",
+      text: "No changes to scan. Pass --diff, --base/--head, or --pr."
+    }));
+  });
+
   it("/help emits a help reference cell", async () => {
     const { ctx, cells } = makeCtx(process.cwd());
     await parseAndRun(ctx, "/help");
