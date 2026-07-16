@@ -2,7 +2,7 @@
   "name": "quorate-vscode",
   "displayName": "Quorate — AI Review Council",
   "description": "Convene Quorate's multi-agent AI review council on your current change, right inside VS Code.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",

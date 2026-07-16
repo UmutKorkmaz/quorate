@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-16
+
+### Added
+
+- Native `/supply-chain [scan]` and `/supplychain` commands in both interactive
+  CLI interfaces, with the latest scan available through the existing `/last`
+  report flow.
+
+### Changed
+
+- The first `Ctrl+C` now clears the active interactive CLI presentation and keeps
+  the session open; a second consecutive `Ctrl+C` exits cleanly. Normal input
+  disarms the pending exit, and `/clear` keeps its existing behavior.
+- Interactive command documentation now includes supply-chain scans and the new
+  interrupt behavior.
+
+### Fixed
+
+- Classic readline sessions now reset their visible input line correctly, handle
+  mixed input chunks without leaving `Ctrl+C` armed, and remove interrupt
+  listeners during cleanup.
+- The Ink launcher now delegates `Ctrl+C` handling to the application and awaits
+  the renderer exit before returning.
+
 ## [1.1.0] - 2026-07-16
 
 ### Added
