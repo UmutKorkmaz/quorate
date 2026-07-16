@@ -224,7 +224,8 @@ export function parseSupplyChainShellArgs(input: string): SupplyChainScanOptions
   if (tokens[0] === "scan") tokens.shift();
 
   const options: SupplyChainScanOptions = {};
-  const valueOptions: Record<string, keyof SupplyChainScanOptions> = {
+  type StringOption = "diff" | "base" | "head" | "pr" | "subject" | "writeJson" | "writeMd" | "failOn";
+  const valueOptions: Record<string, StringOption> = {
     "--diff": "diff",
     "--base": "base",
     "--head": "head",
@@ -244,7 +245,32 @@ export function parseSupplyChainShellArgs(input: string): SupplyChainScanOptions
       if (!value || value.startsWith("--")) {
         throw new Error(`${token} requires a value.`);
       }
-      options[valueKey] = value as never;
+      switch (valueKey) {
+        case "diff":
+          options.diff = value;
+          break;
+        case "base":
+          options.base = value;
+          break;
+        case "head":
+          options.head = value;
+          break;
+        case "pr":
+          options.pr = value;
+          break;
+        case "subject":
+          options.subject = value;
+          break;
+        case "writeJson":
+          options.writeJson = value;
+          break;
+        case "writeMd":
+          options.writeMd = value;
+          break;
+        case "failOn":
+          options.failOn = value;
+          break;
+      }
       index += 1;
       continue;
     }

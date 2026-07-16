@@ -62,6 +62,9 @@ describe("quorate supply-chain scan", () => {
       diff: "fixtures/dependency change.diff",
       json: true
     });
+    expect(parseSupplyChainShellArgs("--subject 'dependency change' ")).toEqual({
+      subject: "dependency change"
+    });
   });
 
   it("rejects unsupported positional tokens and options", () => {
@@ -94,6 +97,20 @@ describe("quorate supply-chain scan", () => {
     expect(result?.gateFailed).toBe(true);
     expect(existsSync(resolve(dir, ".quorate", "supply-chain", "latest.json"))).toBe(true);
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it("returns undefined for an empty diff without output, persistence, or exit-code changes", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    process.exitCode = 7;
+
+    const result = scanSupplyChain({}, { cwd: dir, config: createDefaultConfig([]) });
+
+    expect(result).toBeUndefined();
+    expect(existsSync(resolve(dir, ".quorate", "supply-chain", "latest.json"))).toBe(false);
+    expect(log).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(7);
   });
 
   it("rejects --head without --base instead of silently scanning the working tree", () => {
