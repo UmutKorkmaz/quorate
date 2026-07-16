@@ -1,7 +1,7 @@
 # Quorate Engineering Roadmap
 
 **Canonical status source**
-**As of:** v1.1.0 release candidate · 2026-07-16
+**As of:** v1.1.0 release · 2026-07-16
 
 This file is the active engineering sequence. Product concepts in
 [`AI-PRODUCT-SUITE-PLAN.md`](./AI-PRODUCT-SUITE-PLAN.md) are horizon/backlog material, and
@@ -56,15 +56,14 @@ a merge gate across the CLI, normal council runs, and the GitHub Action.
 
 - [x] Core, CLI, normal council, and opt-in Action paths implemented.
 - [x] Fail-open regression cases covered by automated tests.
-- [x] v1.1.0 workspace versions and changelog prepared as an unreleased candidate.
+- [x] v1.1.0 workspace versions, changelog, and immutable Action refs finalized.
 - [x] Action bundle and public docs included in the release surface.
 - [x] Full local release verification passes: build, typecheck, all tests, website,
   GitHub App, VS Code package, package dry-runs, and CLI pass/fail smokes.
 - [x] Changes are reviewed and handed off without publishing from a dirty tree.
 
-The complete gate was rehearsed from a clean snapshot with
-[`scripts/release.sh`](../scripts/release.sh); no tag, GitHub Release, or npm
-package was published.
+The complete gate was verified from a clean snapshot with
+[`scripts/release.sh`](../scripts/release.sh) before the v1.1.0 GitHub and npm release.
 
 ## Phase 1 — ProofRunner Lite
 

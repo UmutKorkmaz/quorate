@@ -16,14 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.1.0
+      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-`v1.1.0` is the unreleased-candidate placeholder. The release checklist replaces
-it with the reviewed bundle commit's full 40-character SHA before tagging;
-production workflows should use that immutable ref.
+The Action is pinned to the reviewed v1.1.0 bundle commit. Keep the full
+40-character SHA in production workflows so upstream changes cannot alter a run.
 
 ## Which reviewers run in CI?
 
@@ -66,7 +65,7 @@ providers:
 Then pass the key through as an environment variable:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v1.1.0
+      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -111,7 +110,7 @@ committing.
 
 ```yaml
       - id: quorate
-        uses: UmutKorkmaz/quorate@v1.1.0
+        uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
         with: { github-token: ${{ secrets.GITHUB_TOKEN }} }
       - if: steps.quorate.outputs.verdict == 'fail'
         run: echo "Quorate found ${{ steps.quorate.outputs.findings }} findings"
@@ -202,7 +201,7 @@ integrations:
 Then pass the key as a normal secret:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v1.1.0
+      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
         env:
           WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

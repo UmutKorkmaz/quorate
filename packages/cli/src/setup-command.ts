@@ -6,7 +6,7 @@ import type { QuorateConfig } from "@quorate/core";
  * the command layer handles filesystem writes and console output.
  */
 
-const ACTION_REF = "UmutKorkmaz/quorate@v1.1.0";
+const ACTION_REF = "UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78";
 const VSCODE_EXTENSION_ID = "umutkorkmaz.quorate-vscode";
 
 /** A starter `.github/workflows/quorate.yml`. Heuristic runs with zero setup; a
