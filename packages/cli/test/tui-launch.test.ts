@@ -24,13 +24,32 @@ describe("launchInkShell", () => {
   });
 
   it("lets the Quorate app own Ctrl+C instead of Ink exiting first", async () => {
-    await launchInkShell({
+    let resolveWaitUntilExit!: () => void;
+    const waitUntilExitPromise = new Promise<void>((resolve) => {
+      resolveWaitUntilExit = resolve;
+    });
+    waitUntilExitMock.mockReturnValue(waitUntilExitPromise);
+
+    let settled = false;
+    const launchPromise = launchInkShell({
       cwd: "/tmp/quorate-tui-launch-test",
       config: createDefaultConfig([])
     });
+    void launchPromise.then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+
+    expect(settled).toBe(false);
 
     expect(renderMock).toHaveBeenCalledTimes(1);
     expect(renderMock.mock.calls[0]?.[1]).toMatchObject({ exitOnCtrlC: false });
     expect(waitUntilExitMock).toHaveBeenCalledTimes(1);
+
+    resolveWaitUntilExit();
+    await launchPromise;
+
+    expect(settled).toBe(true);
   });
 });
