@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Ink prompt now uses a steady caret, preventing its idle cursor timer from
+  repainting the full terminal frame and making the footer flicker.
 - The release helper now publishes only the self-contained public `quorate` CLI;
   the workspace-only `@quorate/core` package is still built and package-smoked
   but no longer blocks releases by targeting an unavailable npm scope.

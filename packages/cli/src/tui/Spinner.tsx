@@ -49,14 +49,9 @@ export function Elapsed({ since }: { since: number }): React.ReactElement {
   return <Text>{formatElapsed(Date.now() - since)}</Text>;
 }
 
-/** A blinking block caret for the prompt, like the design's animated cursor. */
+/** A steady block caret that keeps the idle prompt from repainting on a timer. */
 export function Cursor(): React.ReactElement {
-  const [on, setOn] = useState(true);
-  useEffect(() => {
-    const id = setInterval(() => setOn((value) => !value), 530);
-    return () => clearInterval(id);
-  }, []);
-  return on ? <Text color={PALETTE.command}>{"█"}</Text> : <Text>{" "}</Text>;
+  return <Text color={PALETTE.command}>{"█"}</Text>;
 }
 
 const BUSY_STAGES = [

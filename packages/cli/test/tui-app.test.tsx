@@ -141,6 +141,22 @@ describe("App", () => {
     unmount();
   }, INK_INTERACTION_TIMEOUT_MS);
 
+  it("keeps the idle prompt frame stable instead of repainting the footer on a timer", async () => {
+    const rendered = mount();
+    try {
+      await flush();
+      const initialFrame = rendered.lastFrame();
+      const initialFrameCount = rendered.frames.length;
+
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      expect(rendered.lastFrame()).toBe(initialFrame);
+      expect(rendered.frames).toHaveLength(initialFrameCount);
+    } finally {
+      rendered.unmount();
+    }
+  }, INK_INTERACTION_TIMEOUT_MS);
+
   it("typing /zzz shows the no-matches row", async () => {
     const { lastFrame, stdin, unmount } = mount();
     stdin.write("/zzz");
