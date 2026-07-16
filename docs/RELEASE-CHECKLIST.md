@@ -23,10 +23,11 @@ version confirmation:
 CONFIRM_RELEASE=v1.2.0 npm run release:publish -- 1.2.0
 ```
 
-Publishing enforces this order: annotated Git tag → GitHub Release →
-`@quorate/core` → `quorate`. GitHub Actions adds npm provenance. A local publish
-fails closed unless `ALLOW_NO_PROVENANCE=1` is explicitly set; the provenance
-path is recommended.
+Publishing enforces this order: annotated Git tag → GitHub Release → `quorate`.
+The CLI bundles the workspace core, so `@quorate/core` is package-smoked but is
+not a separate public npm artifact. GitHub Actions adds npm provenance. A local
+publish fails closed unless `ALLOW_NO_PROVENANCE=1` is explicitly set; the
+provenance path is recommended.
 
 ## 1. Confirm scope
 

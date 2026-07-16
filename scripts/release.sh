@@ -12,7 +12,7 @@ Usage: scripts/release.sh [--execute] [version]
 
 Without --execute, verifies the merged release candidate and performs no release
 side effects. With --execute, creates and pushes the tag, creates the GitHub
-Release, and then publishes @quorate/core and quorate to npm in that order.
+Release, and then publishes the self-contained quorate CLI to npm.
 
 Examples:
   scripts/release.sh 1.2.0
@@ -221,7 +221,6 @@ run git fetch origin "$RELEASE_BRANCH" --tags
 git rev-parse "$TAG" >/dev/null 2>&1 && fail "local tag already exists: $TAG"
 git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1 && fail "remote tag already exists: $TAG"
 gh release view "$TAG" >/dev/null 2>&1 && fail "GitHub Release already exists: $TAG"
-npm view "@quorate/core@$VERSION" version >/dev/null 2>&1 && fail "@quorate/core@$VERSION is already published"
 npm view "quorate@$VERSION" version >/dev/null 2>&1 && fail "quorate@$VERSION is already published"
 
 PUBLISH_ARGS=(--access public)
@@ -243,10 +242,8 @@ run git tag -a "$TAG" -m "Quorate $TAG"
 run git push origin "$TAG"
 run gh release create "$TAG" --verify-tag --target "$(git rev-parse HEAD)" \
   --title "Quorate $TAG" --notes-file "$NOTES_FILE"
-run npm publish --workspace @quorate/core "${PUBLISH_ARGS[@]}"
 run npm publish --workspace quorate "${PUBLISH_ARGS[@]}"
 
-[[ "$(npm view "@quorate/core@$VERSION" version)" == "$VERSION" ]] || fail "core package verification failed"
 [[ "$(npm view "quorate@$VERSION" version)" == "$VERSION" ]] || fail "CLI package verification failed"
 
 PUBLISHED_CLI=(npm exec --yes --package "quorate@$VERSION" -- quorate)
@@ -262,4 +259,4 @@ if "${PUBLISHED_CLI[@]}" --cwd "$SMOKE_DIR" supply-chain scan \
   fail "published CLI unsafe smoke unexpectedly passed"
 fi
 
-printf '\nReleased %s: Git tag, GitHub Release, @quorate/core, and quorate are live.\n' "$TAG"
+printf '\nReleased %s: Git tag, GitHub Release, and quorate are live.\n' "$TAG"
