@@ -105,5 +105,18 @@ The helper validates the clean branch, aligned workspace versions, release notes
 GitHub/npm authentication, immutable public Action references, absent tag/release/
 package versions, and `origin/main` parity before it creates any release artifact.
 
+### v1.1.0 Action evidence
+
+- Reviewed source: PR #27.
+- Canonical Action commit: `2eb62eed7bff80d1697455ba9653fa872ddabf78`,
+  already merged into `main` before the immutable-reference follow-up.
+- Bundled runtime SHA-256:
+  `319a1b8bafb0376c40b0f06e82f5eb22a55943bec006049504005de0505654c0`.
+
+The Action pin intentionally predates the docs/setup follow-up: a commit cannot
+contain its own hash. The release helper proves that every public ref uses this
+single commit, that it is an ancestor of the release commit, and that its
+`packages/github-action/dist/index.js` is byte-identical to the release bundle.
+
 If any stage fails, fix it and restart verification from the earliest affected
 stage. Do not skip ahead to npm publication.

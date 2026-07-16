@@ -453,6 +453,8 @@ jobs:
 
 The Action is pinned to the reviewed v1.1.0 bundle commit. Keep the full
 40-character SHA in production workflows so upstream changes cannot alter a run.
+The release verifier proves that this commit is on `main` and its bundled Action
+is byte-identical to the v1.1.0 release commit.
 
 The Action posts a single PR summary comment (and optional inline review comments
 on changed lines) and can fail the check based on severity. Use a **self-hosted
