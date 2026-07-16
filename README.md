@@ -446,14 +446,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.1.0
+      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-`v1.1.0` is the unreleased-candidate placeholder. Before tagging, the release
-checklist replaces Action references with the reviewed bundle commit's full
-40-character SHA; production workflows should use that immutable ref.
+The Action is pinned to the reviewed v1.1.0 bundle commit. Keep the full
+40-character SHA in production workflows so upstream changes cannot alter a run.
 
 The Action posts a single PR summary comment (and optional inline review comments
 on changed lines) and can fail the check based on severity. Use a **self-hosted
@@ -465,7 +464,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@v1.1.0
+      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:

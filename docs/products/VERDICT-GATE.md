@@ -162,7 +162,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: UmutKorkmaz/quorate@v1.1.0
+      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
         id: quorate
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
