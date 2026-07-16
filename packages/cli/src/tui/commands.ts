@@ -17,6 +17,7 @@ import {
 import { formatDoctorReport } from "../doctor.js";
 import { readDiff } from "../diff.js";
 import { projectMemoryInspectLines } from "../project-memory.js";
+import { parseSupplyChainShellArgs, scanSupplyChain } from "../supply-chain-command.js";
 import {
   splitList,
   splitWords,
@@ -564,6 +565,28 @@ export const baseCommandRegistry: SlashCommand[] = [
         return;
       }
       await runReviewWithReport(ctx, "plan", prompt, undefined);
+    }
+  },
+  {
+    name: "supply-chain",
+    aliases: ["supplychain"],
+    summary: "Run deterministic dependency and release-pipeline checks",
+    argHint: "[scan] [--base <ref> | --diff <path> | --pr <n>] [--gate]",
+    run(ctx, args) {
+      const options = parseSupplyChainShellArgs(args);
+      const result = scanSupplyChain(options, {
+        cwd: ctx.getState().cwd,
+        config: ctx.getState().config
+      });
+      if (!result) {
+        text(ctx, "No changes to scan. Pass --diff, --base/--head, or --pr.");
+        return;
+      }
+      ctx.dispatch({ type: "setLastRequest", request: undefined });
+      ctx.dispatch({ type: "setLastReport", report: result.report });
+      if (options.json) text(ctx, JSON.stringify(result.report, null, 2));
+      else ctx.emit({ id: cellId(), kind: "findings", report: result.report });
+      if (options.gate) text(ctx, `SupplyChainGate policy: ${result.gateFailed ? "FAIL" : "PASS"}.`);
     }
   },
   {

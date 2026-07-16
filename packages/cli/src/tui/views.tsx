@@ -531,6 +531,7 @@ const HELP_GROUPS: Array<[string, Array<[string, string]>]> = [
     [
       ["/review [subject]", "convene the council on the loaded diff"],
       ["/plan <text> (ask)", "evaluate a plan prompt"],
+      ["/supply-chain [scan]", "run deterministic dependency and release-pipeline checks"],
       ["/mode review|plan", "how bare text in the prompt is read"],
       ["/roles <ids>", "limit which roles review"],
       ["/rerun", "run the last request again"]

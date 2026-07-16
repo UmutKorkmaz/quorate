@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,19 @@ const riskyDiff = `diff --git a/src/example.ts b/src/example.ts
 @@ -1,3 +1,5 @@
 +const apiKey = "sk-example-secret-value";
 +test.only("focused", () => {});
+`;
+
+const dependencyDiff = `diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,4 +1,7 @@
+ {
+   "name": "fixture",
++  "dependencies": {
++    "left-pad": "^1.3.0"
++  },
+   "version": "1.0.0"
+ }
 `;
 
 function createState(cwd: string): ShellState {
@@ -39,6 +53,11 @@ describe("parseShellCommand", () => {
     });
     expect(parseShellCommand("/mode plan")).toEqual({ kind: "mode", mode: "plan" });
     expect(parseShellCommand("/pr 42")).toEqual({ kind: "pr", number: "42" });
+    expect(parseShellCommand("/supply-chain scan --base main --json")).toEqual({
+      kind: "supply-chain",
+      args: "scan --base main --json"
+    });
+    expect(parseShellCommand("/supplychain scan")).toEqual({ kind: "supply-chain", args: "scan" });
     expect(parseShellCommand("check this migration", "plan")).toEqual({
       kind: "plan",
       prompt: "check this migration"
@@ -52,6 +71,36 @@ describe("parseShellCommand", () => {
 });
 
 describe("handleShellLine", () => {
+  it("runs a SupplyChainGate scan without exiting the classic shell", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-supply-chain-shell-"));
+    writeFileSync(join(dir, "dependency.diff"), dependencyDiff, "utf8");
+    const state = createState(dir);
+    const output: string[] = [];
+    const io = { write: (message: string) => output.push(message) };
+
+    const result = await handleShellLine(state, "/supply-chain scan --diff dependency.diff --gate --fail-on high", io);
+
+    expect(result.exit).toBe(false);
+    expect(state.lastReport).toBeDefined();
+    expect(state.lastRequest).toBeUndefined();
+    expect(output.join("\n")).toContain("Quorate Report");
+    expect(output.join("\n")).toContain("SupplyChainGate policy: FAIL.");
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("keeps the classic shell active when a SupplyChainGate scan has no changes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-supply-chain-empty-shell-"));
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    const state = createState(dir);
+    const output: string[] = [];
+
+    const result = await handleShellLine(state, "/supplychain scan", { write: (message) => output.push(message) });
+
+    expect(result.exit).toBe(false);
+    expect(state.lastReport).toBeUndefined();
+    expect(output.join("\n")).toContain("No changes to scan. Pass --diff, --base/--head, or --pr.");
+  });
+
   it("loads a diff, runs a review, and saves JSON", async () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-shell-"));
     const diffPath = join(dir, "sample.diff");

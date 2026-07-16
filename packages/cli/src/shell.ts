@@ -15,6 +15,7 @@ import {
 } from "@quorate/core";
 import { readDiff } from "./diff.js";
 import { formatDoctorReport } from "./doctor.js";
+import { parseSupplyChainShellArgs, scanSupplyChain } from "./supply-chain-command.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
 import { applyProjectMemoryDefaults, loadProjectMemory, projectDefaultsLine } from "./project-memory.js";
@@ -43,7 +44,7 @@ import {
  *  hints on typos. Every entry must map to a `case` in `parseShellCommand`. */
 const SHELL_COMMAND_NAMES = [
   "help", "providers", "doctor", "status", "inspect", "use", "enable", "disable", "roles",
-  "mode", "diff", "git", "pr", "review", "plan", "ask", "last", "rerun", "history",
+  "mode", "diff", "git", "pr", "review", "plan", "ask", "supply-chain", "supplychain", "last", "rerun", "history",
   "json", "markdown", "md", "clear", "reset", "exit"
 ];
 
@@ -68,6 +69,7 @@ export type ParsedShellCommand =
   | { kind: "pr"; number: string }
   | { kind: "review"; subject?: string }
   | { kind: "plan"; prompt: string }
+  | { kind: "supply-chain"; args: string }
   | { kind: "last" }
   | { kind: "rerun" }
   | { kind: "history" }
@@ -151,6 +153,9 @@ export function parseShellCommand(line: string, currentMode: CouncilMode = "revi
     case "ask":
     case "plan":
       return value ? { kind: "plan", prompt: value } : { kind: "unknown", name: rawName };
+    case "supply-chain":
+    case "supplychain":
+      return { kind: "supply-chain", args: value };
     case "last":
       return { kind: "last" };
     case "rerun":
@@ -414,6 +419,19 @@ export async function handleShellLine(
       if (!state.lastReport) break;
       out = renderMarkdownReport(state.lastReport);
       break;
+    case "supply-chain": {
+      const options = parseSupplyChainShellArgs(command.args);
+      const result = scanSupplyChain(options, { cwd: state.cwd, config: state.config });
+      if (!result) {
+        out = "No changes to scan. Pass --diff, --base/--head, or --pr.";
+        break;
+      }
+      state.lastRequest = undefined;
+      state.lastReport = result.report;
+      out = options.json ? JSON.stringify(result.report, null, 2) : renderMarkdownReport(result.report);
+      if (options.gate) out += `\nSupplyChainGate policy: ${result.gateFailed ? "FAIL" : "PASS"}.`;
+      break;
+    }
     case "last":
       out = state.lastReport ? renderMarkdownReport(state.lastReport) : "No report yet.";
       break;

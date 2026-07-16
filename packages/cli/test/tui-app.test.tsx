@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,8 +21,9 @@ async function flush(): Promise<void> {
 // Mount on a fresh temp cwd so the suite is HERMETIC: saved sessions live at
 // ~/.quorate/sessions/<repoHash(cwd)>, so using the real repo cwd let pre-existing
 // sessions leak in (e.g. `/resume` finding sessions when the test assumes none).
-function mount() {
+function mount(setup?: (cwd: string) => void) {
   const cwd = mkdtempSync(join(tmpdir(), "quorate-tui-"));
+  setup?.(cwd);
   return render(<App cwd={cwd} config={createDefaultConfig([])} mode="review" />);
 }
 
@@ -41,6 +43,21 @@ describe("App", () => {
     const frame = lastFrame() ?? "";
     expect(frame).toContain("/review");
     expect(frame).toContain("/mode");
+    expect(frame).toContain("/supply-chain");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("keeps the Ink shell available after a no-change SupplyChainGate scan", async () => {
+    const { lastFrame, stdin, unmount } = mount((cwd) => {
+      execFileSync("git", ["init", "-q"], { cwd });
+    });
+    stdin.write("/supply-chain scan");
+    await flush();
+    stdin.write(ENTER);
+    await flush();
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("No changes to scan. Pass --diff, --base/--head, or --pr.");
+    expect(frame).toContain("›");
     unmount();
   }, INK_INTERACTION_TIMEOUT_MS);
 
