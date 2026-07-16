@@ -25,6 +25,7 @@ Type `/` in the Quorate interactive shell to open the command palette.
 | `/pr <number>` | Load a PR diff with gh |
 | `/review [subject]` | Review the loaded/current diff |
 | `/plan <text>` (`ask`) | Evaluate a plan prompt |
+| `/supply-chain [scan] [--base <ref> \| --diff <path> \| --pr <n>] [--gate]` (`supplychain`) | Run deterministic dependency and release-pipeline checks |
 | `/last` | Show the last report |
 | `/logs [provider\|provider:role]` (`agent`) | Review each agent's full output after a run |
 | `/rerun` | Run the last request again |
