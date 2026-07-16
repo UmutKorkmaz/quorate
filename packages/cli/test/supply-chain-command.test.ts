@@ -4,8 +4,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createDefaultConfig } from "@quorate/core";
 import { buildProgram } from "../src/index.js";
-import { readSupplyChainDiff } from "../src/supply-chain-command.js";
+import {
+  parseSupplyChainShellArgs,
+  readSupplyChainDiff,
+  scanSupplyChain
+} from "../src/supply-chain-command.js";
 
 vi.mock("node:child_process", async () => {
   const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
@@ -46,6 +51,51 @@ function captureLog(): string[] {
 }
 
 describe("quorate supply-chain scan", () => {
+  it("parses scan options with an optional command token and quoted values", () => {
+    expect(parseSupplyChainShellArgs("scan --base main --head HEAD --gate --fail-on high")).toEqual({
+      base: "main",
+      head: "HEAD",
+      gate: true,
+      failOn: "high"
+    });
+    expect(parseSupplyChainShellArgs('--diff "fixtures/dependency change.diff" --json')).toEqual({
+      diff: "fixtures/dependency change.diff",
+      json: true
+    });
+  });
+
+  it("rejects unsupported positional tokens and options", () => {
+    expect(() => parseSupplyChainShellArgs("audit")).toThrow(/only supports scan/i);
+    expect(() => parseSupplyChainShellArgs("scan --wat")).toThrow(/unknown option/i);
+  });
+
+  it("returns and persists a structured scan result without mutating the exit code", () => {
+    writeFileSync(
+      resolve(dir, "package.json"),
+      JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2) + "\n",
+      "utf8"
+    );
+    commit("baseline package");
+    git(["checkout", "-b", "feature"]);
+    writeFileSync(
+      resolve(dir, "package.json"),
+      JSON.stringify({ name: "fixture", version: "1.0.0", dependencies: { "left-pad": "^1.3.0" } }, null, 2) +
+        "\n",
+      "utf8"
+    );
+
+    const result = scanSupplyChain(
+      { base: "main", gate: true, failOn: "high" },
+      { cwd: dir, config: createDefaultConfig([]) }
+    );
+
+    expect(result?.report.summary).toContain("SupplyChainGate");
+    expect(result?.latestReportPath).toBe(resolve(dir, ".quorate", "supply-chain", "latest.json"));
+    expect(result?.gateFailed).toBe(true);
+    expect(existsSync(resolve(dir, ".quorate", "supply-chain", "latest.json"))).toBe(true);
+    expect(process.exitCode).toBeUndefined();
+  });
+
   it("rejects --head without --base instead of silently scanning the working tree", () => {
     expect(() => readSupplyChainDiff({ head: "HEAD" }, dir)).toThrow(/--head requires --base/i);
   });
