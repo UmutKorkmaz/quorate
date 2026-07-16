@@ -74,6 +74,17 @@ describe("attachClassicInterruptHandlers", () => {
     cleanup();
   });
 
+  it("leaves exit disarmed after a Ctrl+C plus normal-byte chunk completes", () => {
+    const { readline, stdin, clearPresentation, cleanup } = classicFixture();
+
+    stdin.emit("data", "\u0003x");
+    readline.emit("SIGINT");
+
+    expect(readline.close).not.toHaveBeenCalled();
+    expect(clearPresentation).toHaveBeenCalledTimes(2);
+    cleanup();
+  });
+
   it("closes readline on a second consecutive SIGINT", () => {
     const { readline, clearPresentation, cleanup } = classicFixture();
 

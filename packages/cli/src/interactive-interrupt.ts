@@ -30,6 +30,7 @@ export function attachClassicInterruptHandlers(options: {
     if (disarmCurrentChunk) exitArmed = false;
   };
   const afterInput = () => {
+    if (disarmCurrentChunk) exitArmed = false;
     disarmCurrentChunk = false;
   };
   const onSigint = () => {
