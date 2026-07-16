@@ -20,7 +20,8 @@ export async function launchInkShell(options: LaunchInkShellOptions): Promise<vo
       providers: options.providers,
       mode: options.mode,
       restoredSession: options.restoredSession
-    })
+    }),
+    { exitOnCtrlC: false }
   );
   await instance.waitUntilExit();
 }
