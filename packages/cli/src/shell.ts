@@ -18,6 +18,7 @@ import { formatDoctorReport } from "./doctor.js";
 import { parseSupplyChainShellArgs, scanSupplyChain } from "./supply-chain-command.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
+import { nextInterruptAction } from "./interactive-interrupt.js";
 import { applyProjectMemoryDefaults, loadProjectMemory, projectDefaultsLine } from "./project-memory.js";
 import {
   splitList,
@@ -47,6 +48,7 @@ const SHELL_COMMAND_NAMES = [
   "mode", "diff", "git", "pr", "review", "plan", "ask", "supply-chain", "supplychain", "last", "rerun", "history",
   "json", "markdown", "md", "clear", "reset", "exit"
 ];
+const TERMINAL_CLEAR = "\u001Bc";
 
 export { providerSnapshots, validateProviderSelection };
 export type { ProviderSnapshot, ShellState };
@@ -510,6 +512,24 @@ export async function startShell(options: {
   printShellBanner(state);
 
   const rl = createInterface({ input, output });
+  let exitArmed = false;
+  const onInput = (chunk: Buffer | string) => {
+    if (Buffer.from(chunk).some((byte) => byte !== 3)) exitArmed = false;
+  };
+  const onSigint = () => {
+    if (nextInterruptAction(exitArmed) === "exit") {
+      rl.close();
+      return;
+    }
+    output.write("\r\u001B[2K");
+    output.write(TERMINAL_CLEAR);
+    printShellBanner(state);
+    output.write("Press Ctrl+C again to exit.\n");
+    output.write(promptFor(state));
+    exitArmed = true;
+  };
+  rl.on("SIGINT", onSigint);
+  input.on("data", onInput);
 
   try {
     for await (const line of rl) {
@@ -518,6 +538,8 @@ export async function startShell(options: {
       if (result.exit) break;
     }
   } finally {
+    rl.off("SIGINT", onSigint);
+    input.off("data", onInput);
     rl.close();
   }
 }
