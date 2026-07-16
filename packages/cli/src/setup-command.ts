@@ -27,8 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ${ACTION_REF}
-        # Before production use, replace the release-candidate tag above with
-        # the reviewed Action bundle commit's full 40-character SHA.
+        # Already pinned to the reviewed v1.1.0 Action bundle commit.
         # Add a type: api provider to .quorate.yml and pass its key here to get
         # real model review (e.g. OPENROUTER_API_KEY). The heuristic always runs.
         # env:
