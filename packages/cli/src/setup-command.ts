@@ -6,7 +6,7 @@ import type { QuorateConfig } from "@quorate/core";
  * the command layer handles filesystem writes and console output.
  */
 
-const ACTION_REF = "UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78";
+const ACTION_REF = "UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b";
 const VSCODE_EXTENSION_ID = "umutkorkmaz.quorate-vscode";
 
 /** A starter `.github/workflows/quorate.yml`. Heuristic runs with zero setup; a
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ${ACTION_REF}
-        # Already pinned to the reviewed v1.1.0 Action bundle commit.
+        # Already pinned to the reviewed v1.2.0 Action bundle commit.
         # Add a type: api provider to .quorate.yml and pass its key here to get
         # real model review (e.g. OPENROUTER_API_KEY). The heuristic always runs.
         # env:

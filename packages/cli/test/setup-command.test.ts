@@ -28,7 +28,7 @@ describe("generateGithubActionWorkflow", () => {
     expect(yaml).toContain("pull_request");
     expect(yaml).toContain("UmutKorkmaz/quorate@");
     expect(yaml).toMatch(/UmutKorkmaz\/quorate@[0-9a-f]{40}/);
-    expect(yaml).toContain("pinned to the reviewed v1.1.0 Action bundle commit");
+    expect(yaml).toContain("pinned to the reviewed v1.2.0 Action bundle commit");
     expect(yaml).not.toContain("replace the release-candidate tag");
     expect(yaml).toContain("github-token: ${{ secrets.GITHUB_TOKEN }}");
     // pull-requests write permission is required to post the comment

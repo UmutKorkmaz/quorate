@@ -105,13 +105,12 @@ The helper validates the clean branch, aligned workspace versions, release notes
 GitHub/npm authentication, immutable public Action references, absent tag/release/
 package versions, and `origin/main` parity before it creates any release artifact.
 
-### v1.1.0 Action evidence
+### v1.2.0 Action evidence
 
-- Reviewed source: PR #27.
-- Canonical Action commit: `2eb62eed7bff80d1697455ba9653fa872ddabf78`,
-  already merged into `main` before the immutable-reference follow-up.
+- Canonical Action commit: `34afb7c13faa405bdf833a096f401a42a71f6f1b`,
+  committed on `main` before the immutable-reference follow-up.
 - Bundled runtime SHA-256:
-  `319a1b8bafb0376c40b0f06e82f5eb22a55943bec006049504005de0505654c0`.
+  `8abbb1bf1f927ef1a4224eb3c5396928ef3f0fd35579ec6800386f1c049052b1`.
 
 The Action pin intentionally predates the docs/setup follow-up: a commit cannot
 contain its own hash. The release helper proves that every public ref uses this
