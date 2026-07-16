@@ -40,8 +40,8 @@ export interface SuppressionStore {
 const entrySchema = z.object({
   fingerprint: z.string().min(1),
   reason: z.string().min(1),
-  createdAt: z.string().min(1),
-  expires: z.string().optional()
+  createdAt: z.string().datetime({ offset: true }),
+  expires: z.string().datetime({ offset: true }).optional()
 });
 
 const storeSchema = z.object({
@@ -105,9 +105,17 @@ export function addSuppression(store: SuppressionStore, input: AddSuppressionInp
     createdAt: input.createdAt,
     ...(input.expires !== undefined ? { expires: input.expires } : {})
   };
+  const validated = entrySchema.safeParse(entry);
+  if (!validated.success) {
+    throw new Error(
+      `Invalid suppression timestamp: ${validated.error.issues[0]?.message ?? "invalid date"}.`
+    );
+  }
   const rest = store.suppressions.filter((e) => e.fingerprint !== input.fingerprint);
   // Stable order by fingerprint so the committed file has a clean diff.
-  const suppressions = [...rest, entry].sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
+  const suppressions = [...rest, validated.data].sort((a, b) =>
+    a.fingerprint.localeCompare(b.fingerprint)
+  );
   return { ...store, suppressions };
 }
 

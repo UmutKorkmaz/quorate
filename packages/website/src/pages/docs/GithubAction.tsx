@@ -22,9 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@v1.0.0
+      - uses: UmutKorkmaz/quorate@v1.1.0
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
+      <p>
+        <InlineCode>v1.1.0</InlineCode> is the unreleased-candidate placeholder. Before tagging,
+        the release checklist replaces Action references with the reviewed bundle commit&apos;s full
+        40-character SHA; production workflows should use that immutable ref.
+      </p>
 
       <h2>Inputs</h2>
       <table>
@@ -50,7 +55,7 @@ jobs:
             <td>
               <InlineCode>.quorate.yml</InlineCode>
             </td>
-            <td>Config file, read from the base branch.</td>
+            <td>Canonical base-branch config path; alternate PR-controlled paths are rejected.</td>
           </tr>
           <tr>
             <td>
@@ -77,8 +82,8 @@ jobs:
               <InlineCode>high</InlineCode>
             </td>
             <td>
-              Minimum severity that fails the check (<InlineCode>critical</InlineCode>…
-              <InlineCode>info</InlineCode>, or <InlineCode>never</InlineCode>).
+              May tighten the committed base policy; <InlineCode>never</InlineCode> or a weaker
+              threshold cannot relax it.
             </td>
           </tr>
           <tr>
@@ -129,7 +134,8 @@ jobs:
               <InlineCode>false</InlineCode>
             </td>
             <td>
-              Gate only on findings absent from a committed baseline (read from the base branch).
+              Deprecated compatibility input; the canonical valid, unexpired base baseline is
+              automatic.
             </td>
           </tr>
           <tr>
@@ -139,7 +145,7 @@ jobs:
             <td>
               <InlineCode>.quorate.baseline.json</InlineCode>
             </td>
-            <td>Path to the committed baseline file, read from the base branch.</td>
+            <td>Canonical trusted baseline path; alternate paths are rejected.</td>
           </tr>
           <tr>
             <td>
@@ -149,7 +155,7 @@ jobs:
               <InlineCode>.quorate/suppressions.json</InlineCode>
             </td>
             <td>
-              Path to the committed suppression store, read from the base branch. Suppressed
+              Canonical trusted suppression path; alternate paths are rejected. Suppressed
               findings stay visible but are not gated.
             </td>
           </tr>
@@ -161,8 +167,8 @@ jobs:
               <InlineCode>.quorate/policy.yml</InlineCode>
             </td>
             <td>
-              VerdictGate merge policy, read from the base branch. Defines the gate when present;
-              otherwise it&apos;s derived from the github config.
+              Canonical trusted VerdictGate policy path; alternate paths are rejected. The base
+              policy defines the merge gate when present.
             </td>
           </tr>
           <tr>
@@ -236,7 +242,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: quorate
-        uses: UmutKorkmaz/quorate@v1.0.0
+        uses: UmutKorkmaz/quorate@v1.1.0
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -295,7 +301,7 @@ integrations:
       riskLevel: medium
 
 # workflow step
-- uses: UmutKorkmaz/quorate@v1.0.0
+- uses: UmutKorkmaz/quorate@v1.1.0
   env:
     WEBACY_API_KEY: \${{ secrets.WEBACY_API_KEY }}
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
@@ -323,7 +329,7 @@ integrations:
 steps:
   - uses: actions/checkout@v4
   - id: quorate
-    uses: UmutKorkmaz/quorate@v1.0.0
+    uses: UmutKorkmaz/quorate@v1.1.0
     with:
       github-token: \${{ secrets.GITHUB_TOKEN }}
       sarif-file: quorate.sarif
@@ -349,11 +355,11 @@ steps:
 quorate baseline                                # write .quorate.baseline.json
 git add .quorate.baseline.json && git commit -m "chore: quorate baseline"`}</CodeBlock>
       <p>
-        Then set <InlineCode>baseline: true</InlineCode> on the Action (or pass{" "}
-        <InlineCode>--baseline</InlineCode> to the CLI). Quorate reads the baseline from the{" "}
-        <strong>base branch</strong>, never the PR head, so a pull request can&apos;t baseline away its
-        own new findings. A baselined critical that resurfaces is suppressed and the verdict is
-        recomputed on what remains; refresh anytime with{" "}
+        The Action applies the canonical baseline automatically; pass <InlineCode>--baseline</InlineCode>{" "}
+        only for CLI reviews. Quorate reads the baseline from the <strong>base branch</strong>, never
+        the PR head, so a pull request can&apos;t baseline away its own new findings. Stale baselines are
+        rejected and all findings remain gated. A current baselined critical that resurfaces is
+        suppressed and the verdict is recomputed on what remains; refresh anytime with{" "}
         <InlineCode>quorate baseline --update</InlineCode>.
       </p>
 
@@ -389,6 +395,10 @@ git add -f .quorate/suppressions.json && git commit -m "chore: suppress fixture 
         <li>
           <InlineCode>sarif-path</InlineCode> — the absolute path of the written SARIF file when{" "}
           <InlineCode>sarif-file</InlineCode> is set.
+        </li>
+        <li>
+          <InlineCode>reviewgraph-path</InlineCode> — the absolute path of ReviewGraph JSON when{" "}
+          <InlineCode>reviewgraph-file</InlineCode> is set.
         </li>
       </ul>
 
@@ -428,7 +438,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v1.0.0
+- uses: UmutKorkmaz/quorate@v1.1.0
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:
@@ -457,7 +467,7 @@ providers:
     apiKeyEnv: GLM_API_KEY
     roles: [architect, security, performance]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@v1.0.0
+- uses: UmutKorkmaz/quorate@v1.1.0
   env:
     GLM_API_KEY: \${{ secrets.GLM_API_KEY }}
   with:

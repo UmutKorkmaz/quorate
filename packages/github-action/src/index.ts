@@ -94,6 +94,43 @@ export function parseBoolean(value: string | undefined, fallback: boolean): bool
   return ["1", "true", "yes", "on"].includes(normalized.toLowerCase());
 }
 
+function trustedBasePath(
+  value: string | undefined,
+  inputName: string,
+  canonicalPath: string
+): string {
+  const normalized = normalizeInput(value);
+  if (normalized !== undefined && normalized !== canonicalPath) {
+    throw new Error(
+      `${inputName} must use the trusted base-branch path ${canonicalPath}; pull requests cannot select alternate gate files.`
+    );
+  }
+  return canonicalPath;
+}
+
+function tightenPolicy(
+  policy: QuoratePolicy,
+  requested: string | undefined
+): QuoratePolicy {
+  const normalized = normalizeInput(requested)?.toLowerCase();
+  if (normalized === undefined || normalized === "never") return policy;
+  const strictness: Record<Severity, number> = {
+    info: 1,
+    low: 2,
+    medium: 3,
+    high: 4,
+    critical: 5
+  };
+  if (!(normalized in strictness)) {
+    throw new Error(`Invalid fail-on input: ${requested}.`);
+  }
+  const severity = normalized as Severity;
+  if (policy.failOn === "never" || strictness[severity] < strictness[policy.failOn]) {
+    return { ...policy, enabled: true, failOn: severity };
+  }
+  return policy;
+}
+
 /**
  * Resolve the trusted base ref: prefer the PR base sha, then base ref, then the
  * repository default branch, and only fall back to "main" as a last resort.
@@ -436,13 +473,26 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   const pullNumber = pullRequest.number;
   const client = deps.getOctokit(token);
   const baseRef = resolveBaseRef(deps.context);
-  const configPath = input("config-path");
-  const candidates = configPath ? [configPath] : [".quorate.yml", ".quorate.yaml", "quorate.config.yml"];
+  const configPathInput = input("config-path");
+  const configPath = trustedBasePath(configPathInput, "config-path", ".quorate.yml");
+  const baselinePath = trustedBasePath(
+    input("baseline-path"),
+    "baseline-path",
+    DEFAULT_BASELINE_PATH
+  );
+  const suppressPath = trustedBasePath(
+    input("suppress-path"),
+    "suppress-path",
+    DEFAULT_SUPPRESSION_PATH
+  );
+  const policyPath = trustedBasePath(input("policy-path"), "policy-path", DEFAULT_POLICY_PATH);
+  const candidates = configPathInput
+    ? [configPath]
+    : [configPath, ".quorate.yaml", "quorate.config.yml"];
   const loadedBaseConfig = await loadBaseConfig(client, { owner, repo, ref: baseRef, candidates });
   const customPackDefinitions = await loadBaseCustomPacks(client, { owner, repo, ref: baseRef });
   const baseConfig = applyOverrides(applyCustomPackDefinitions(loadedBaseConfig, customPackDefinitions), {
     providers: input("providers"),
-    failOn: input("fail-on"),
     runnerMode: input("runner-mode"),
     inlineComments: input("inline-comments"),
     inlineCommentLimit: input("inline-comment-limit"),
@@ -507,6 +557,7 @@ export async function runAction(deps: ActionDeps): Promise<void> {
       mode: "review",
       subject: `PR #${pullNumber}: ${pullRequest.title ?? "Untitled pull request"}`,
       diff: budget.diff,
+      fullDiff: diff,
       repoPath: process.cwd(),
       context: prContext,
       budget: budget.summary,
@@ -519,41 +570,35 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     config
   );
 
-  // Optional baseline: gate only on findings absent from the committed baseline,
-  // read from the BASE ref so a PR cannot baseline away its own new findings. A
-  // malformed/oversized base baseline must NOT brick the gate for every PR — on
-  // any error we warn and fall back to gating on all findings (fail-secure).
+  // A canonical committed baseline is automatic and read from the BASE ref, so a
+  // PR cannot enable, redirect, or edit away its own findings. Malformed, stale,
+  // or oversized baselines fall back to gating on all findings (fail-secure).
   let report: CouncilReport = rawReport;
-  if (parseBoolean(input("baseline"), false)) {
-    const baselinePath = input("baseline-path") ?? DEFAULT_BASELINE_PATH;
-    try {
-      const baseline = await loadBaseBaseline(client, { owner, repo, ref: baseRef, path: baselinePath });
-      if (!baseline) {
-        deps.info?.(`No baseline at ${baselinePath} on the base ref — gating on all findings.`);
+  try {
+    const baseline = await loadBaseBaseline(client, { owner, repo, ref: baseRef, path: baselinePath });
+    if (baseline) {
+      if (isBaselineStale(baseline)) {
+        deps.warning?.(
+          `Quorate baseline is past its ${baseline.expiresAfterDays}-day expiry (generated ${baseline.generatedAt}) and was not applied. Refresh with \`quorate baseline --update\`.`
+        );
       } else {
-        if (isBaselineStale(baseline)) {
-          deps.warning?.(
-            `Quorate baseline is past its ${baseline.expiresAfterDays}-day expiry (generated ${baseline.generatedAt}). Refresh with \`quorate baseline --update\`.`
-          );
-        }
         report = applyBaseline(rawReport, baseline);
         if (report.metadata.baselinedFindings) {
           deps.info?.(`Suppressed ${report.metadata.baselinedFindings} finding(s) matching the committed baseline.`);
         }
       }
-    } catch (error: unknown) {
-      deps.warning?.(
-        `Could not apply the committed baseline (${error instanceof Error ? error.message : String(error)}) — gating on all findings.`
-      );
-      report = rawReport;
     }
+  } catch (error: unknown) {
+    deps.warning?.(
+      `Could not apply the committed baseline (${error instanceof Error ? error.message : String(error)}) — gating on all findings.`
+    );
+    report = rawReport;
   }
 
   // Committed suppression store (always-on when present): accept-risk entries
   // tag matching findings `suppressed` (visible but ungated). Read from the BASE
   // ref so a PR cannot suppress its own new findings; a malformed store warns
   // and falls back to gating on all findings (fail-secure).
-  const suppressPath = input("suppress-path") ?? DEFAULT_SUPPRESSION_PATH;
   try {
     const store = await loadBaseSuppressionStore(client, { owner, repo, ref: baseRef, path: suppressPath });
     if (store) {
@@ -650,13 +695,15 @@ export async function runAction(deps: ActionDeps): Promise<void> {
   // floor, agreement gate) is unknown and must not silently relax to the weaker
   // github-config default. (Contrast with the baseline, where fail-open is strictly
   // safer because it gates on MORE findings.)
-  const failOnOverride = input("fail-on") as Severity | "never" | undefined;
+  const failOnOverride = input("fail-on");
   let gatePolicy: QuoratePolicy;
   let policyLoadFailed = false;
   try {
-    const policyPath = input("policy-path") ?? DEFAULT_POLICY_PATH;
     const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
-    gatePolicy = resolvePolicy(config, { policy: basePolicy ?? undefined, failOn: failOnOverride });
+    gatePolicy = tightenPolicy(
+      resolvePolicy(config, { policy: basePolicy ?? undefined }),
+      failOnOverride
+    );
     if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : String(error);
@@ -664,7 +711,7 @@ export async function runAction(deps: ActionDeps): Promise<void> {
       `Could not load the committed merge policy (${reason}). The check will fail — the policy's intended strictness is unknown and must not silently relax. Fix the policy file on the base branch.`
     );
     // Still derive a gate so the review/comment runs, but force the check to fail below.
-    gatePolicy = resolvePolicy(config, { failOn: failOnOverride });
+    gatePolicy = tightenPolicy(resolvePolicy(config), failOnOverride);
     policyLoadFailed = true;
   }
 
