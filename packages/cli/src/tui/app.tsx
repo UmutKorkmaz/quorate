@@ -52,6 +52,7 @@ import {
 import { SlashPalette } from "./SlashPalette.js";
 import { Spinner, Elapsed, BusyLabel, Cursor } from "./Spinner.js";
 import { readVersion } from "../version.js";
+import { nextInterruptAction } from "../interactive-interrupt.js";
 import {
   Welcome,
   DiffCard,
@@ -252,6 +253,7 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
       })
     ];
   });
+  const [presentationKey, setPresentationKey] = useState(0);
   const [buffer, setBuffer] = useState("");
   const [selected, setSelected] = useState(0);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
@@ -262,6 +264,7 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
   const idRef = useRef(0);
   const nextId = useCallback(() => `c${idRef.current++}`, []);
   const abortRef = useRef<AbortController | null>(null);
+  const exitArmedRef = useRef(false);
   const busyRef = useRef(false);
   busyRef.current = busy;
   const queuedInputRef = useRef<string | null>(null);
@@ -456,6 +459,22 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
   }, [stdin]);
 
   useInput((char, key) => {
+    const isCtrlC = char === "\u0003" || (key.ctrl && char === "c");
+    if (!isCtrlC) exitArmedRef.current = false;
+    if (isCtrlC) {
+      if (nextInterruptAction(exitArmedRef.current) === "exit") {
+        exit();
+        return;
+      }
+      setCells([]);
+      setPresentationKey((key) => key + 1);
+      setBuffer("");
+      setSelected(0);
+      setHistoryIndex(null);
+      writeStdout(TERMINAL_CLEAR);
+      exitArmedRef.current = true;
+      return;
+    }
     if (key.escape && busy) {
       // Two-stage Esc: a focused lane catches the first Esc (return to overview);
       // at the overview (or unfocused) Esc still aborts on the first press.
@@ -581,16 +600,6 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
       setHistoryIndex(null);
       return;
     }
-    if (key.ctrl && char === "c") {
-      if (buffer.length > 0) {
-        setBuffer("");
-        setSelected(0);
-        setHistoryIndex(null);
-        return;
-      }
-      exit();
-      return;
-    }
     if (key.return) {
       void submit(buffer);
       return;
@@ -625,7 +634,7 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
     : [];
   return (
     <Box flexDirection="column">
-      <Static items={cells}>{(cell) => <TranscriptItem key={cell.id} cell={cell} />}</Static>
+      <Static key={presentationKey} items={cells}>{(cell) => <TranscriptItem key={cell.id} cell={cell} />}</Static>
       <Box flexDirection="column" marginTop={1}>
         {busy && progress && progress.rows.length > 0 ? (
           focusedLane ? (

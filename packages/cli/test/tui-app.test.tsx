@@ -12,6 +12,7 @@ const DOWN = "\u001B[B";
 const TAB = "\t";
 const ENTER = "\r";
 const ESC = "\u001B";
+const CTRL_C = "\u0003";
 const INK_INTERACTION_TIMEOUT_MS = 15_000;
 
 async function flush(): Promise<void> {
@@ -79,6 +80,41 @@ describe("App", () => {
     stdin.write(ESC);
     await flush();
     expect(lastFrame() ?? "").not.toContain("hello world");
+    unmount();
+  }, INK_INTERACTION_TIMEOUT_MS);
+
+  it("clears presentation on Ctrl+C without exiting and disarms exit after normal input", async () => {
+    const { lastFrame, stdin, unmount } = mount();
+    stdin.write("/help");
+    await flush();
+    stdin.write(ENTER);
+    await flush();
+    expect(lastFrame() ?? "").toContain("/supply-chain");
+
+    stdin.write(CTRL_C);
+    await flush();
+    expect(lastFrame() ?? "").not.toContain("/supply-chain");
+
+    stdin.write("/status");
+    await flush();
+    stdin.write(ENTER);
+    await flush();
+    expect(lastFrame() ?? "").toContain("Mode: review");
+    expect(lastFrame() ?? "").not.toContain("/supply-chain");
+
+    stdin.write(CTRL_C);
+    await flush();
+    stdin.write("x");
+    await flush();
+    stdin.write(CTRL_C);
+    await flush();
+    expect(lastFrame() ?? "").not.toContain("Mode: review");
+
+    stdin.write("/status");
+    await flush();
+    stdin.write(ENTER);
+    await flush();
+    expect(lastFrame() ?? "").toContain("Mode: review");
     unmount();
   }, INK_INTERACTION_TIMEOUT_MS);
 

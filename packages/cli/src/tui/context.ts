@@ -109,7 +109,7 @@ export function composerPlaceholder(state: SessionState, hints: SessionUxHints):
 }
 
 export function idleFooterHint(state: SessionState, hints: SessionUxHints, separator: string): string {
-  const parts = ["Enter send", "/ commands", "! shell", "ctrl+c quit"];
+  const parts = ["Enter send", "/ commands", "! shell", "ctrl+c clear · twice exit"];
   if (hints.heuristicOnly && hints.beforeFirstReview) {
     parts.push("heuristic only → /use available");
   } else if (!hints.hasDiff && state.mode === "review") {

@@ -600,7 +600,7 @@ export function HelpView(): React.ReactElement {
         <Keycap>Esc</Keycap>
         <Text color={PALETTE.dim}>{" interrupt   "}</Text>
         <Keycap>Ctrl+C</Keycap>
-        <Text color={PALETTE.dim}>{" clear / exit   "}</Text>
+        <Text color={PALETTE.dim}>{" clear screen / twice exit   "}</Text>
         <Text color={PALETTE.dim}>{"bare text in the prompt → subject (review) or plan (plan mode)"}</Text>
       </Box>
     </Box>
