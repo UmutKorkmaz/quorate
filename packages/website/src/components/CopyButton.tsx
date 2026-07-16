@@ -25,7 +25,7 @@ export function CopyButton({ text, className = "", variant = "default" }: CopyBu
         type="button"
         onClick={copy}
         aria-label={copied ? "Copied" : "Copy install command"}
-        className={`group hero-cta-primary ${className}`}
+        className={`group hero-cta-primary w-full justify-center sm:w-auto ${className}`}
       >
         <span className="text-quorate-amber font-bold">$</span>
         <span className="tracking-wide">{text}</span>

@@ -90,6 +90,7 @@ import {
   writeCustomPackScaffold
 } from "./custom-packs.js";
 import { formatProviderTestResult, testProvider } from "./provider-test.js";
+import { readRepositoryFiles, runSupplyChainScan } from "./supply-chain-command.js";
 
 interface GlobalOptions {
   config?: string;
@@ -402,6 +403,7 @@ function helpExamples(): string {
     "  $ quorate                            open the interactive council shell",
     "  $ quorate doctor                     see which AI CLIs are installed",
     "  $ quorate review --base main         review the current branch against main",
+    "  $ quorate supply-chain scan --base main --head HEAD --gate",
     "  $ quorate review --pr 42             review a pull request (uses gh)",
     "  $ quorate review --diff changes.diff one-shot review of a diff file",
     '  $ quorate plan "add a rate limiter"  evaluate a plan instead of a diff',
@@ -659,6 +661,42 @@ export function buildProgram(): Command {
       } else {
         console.log(formatSolanaTestPlan(plan));
       }
+    });
+
+  const supplyChainCmd = program
+    .command("supply-chain")
+    .alias("supplychain")
+    .helpGroup("Review:")
+    .description("Run deterministic supply-chain checks over a full diff, including lockfiles.");
+
+  supplyChainCmd
+    .command("scan")
+    .description("Scan a diff for dependency, workflow, container, and publish-provenance risks.")
+    .option("--diff <path>", "Read a unified diff from a file")
+    .option("--base <ref>", "Base ref for git diff")
+    .option("--head <ref>", "Head ref for git diff")
+    .option("--pr <number>", "Read a pull request diff with gh pr diff")
+    .option("--subject <text>", "Review subject", "SupplyChainGate scan")
+    .option("--json", "Print the CouncilReport JSON")
+    .option("--write-json <path>", "Write the JSON report to a file")
+    .option("--write-md <path>", "Write the Markdown report to a file")
+    .option("--gate", "Exit non-zero when the resolved policy fails")
+    .option("--fail-on <severity>", "Override the gate threshold (critical…info, or never)")
+    .action((options: {
+      diff?: string;
+      base?: string;
+      head?: string;
+      pr?: string;
+      subject: string;
+      json?: boolean;
+      writeJson?: string;
+      writeMd?: string;
+      gate?: boolean;
+      failOn?: string;
+    }) => {
+      const cwd = cwdFrom(program);
+      const config = configFrom(program);
+      runSupplyChainScan(options, { cwd, config });
     });
 
   const setupCmd = program
@@ -1044,7 +1082,9 @@ export function buildProgram(): Command {
         mode: "review" as const,
         subject: options.subject,
         diff,
+        fullDiff: diff,
         repoPath: cwd,
+        repositoryFiles: readRepositoryFiles(cwd),
         context: prContext,
         pullRequest: options.pr ? { number: Number(options.pr) } : undefined
       };

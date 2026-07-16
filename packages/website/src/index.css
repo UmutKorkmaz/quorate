@@ -150,6 +150,7 @@ html {
 
 body {
   @apply bg-quorate-bg font-sans text-white antialiased;
+  overflow-x: clip;
   background-image:
     radial-gradient(ellipse 80% 50% at 50% -20%, rgba(110, 151, 255, 0.15), transparent),
     radial-gradient(ellipse 60% 40% at 100% 0%, rgba(251, 191, 36, 0.06), transparent);
@@ -1146,7 +1147,7 @@ body {
 }
 
 .code-block-wrap {
-  @apply my-4 overflow-hidden rounded-xl border border-quorate-border bg-quorate-bg;
+  @apply my-4 min-w-0 max-w-full overflow-hidden rounded-xl border border-quorate-border bg-quorate-bg;
 }
 
 .code-block-header {

@@ -24,6 +24,7 @@ export * from "./review.js";
 export * from "./reviewgraph.js";
 export * from "./solana.js";
 export * from "./suppression.js";
+export * from "./supply-chain.js";
 export * from "./theme.js";
 export * from "./types.js";
 export * from "./web3-dd.js";

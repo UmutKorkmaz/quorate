@@ -45,11 +45,11 @@ const PHASE_MS: Record<EmulatorPhase, number> = {
 };
 
 const ROLES = [
-  { id: "solana-security", glyph: "⬡", color: "text-quorate-security" },
-  { id: "anchor-accounts", glyph: "△", color: "text-quorate-architect" },
-  { id: "transaction-safety", glyph: "◇", color: "text-quorate-qa" },
-  { id: "token-safety", glyph: "↯", color: "text-quorate-performance" },
-  { id: "maintainer", glyph: "⌥", color: "text-quorate-maintainer" }
+  { id: "security", glyph: "SEC", color: "text-quorate-security" },
+  { id: "architect", glyph: "ARC", color: "text-quorate-architect" },
+  { id: "qa", glyph: "QA", color: "text-quorate-qa" },
+  { id: "performance", glyph: "PERF", color: "text-quorate-performance" },
+  { id: "maintainer", glyph: "MAIN", color: "text-quorate-maintainer" }
 ] as const;
 
 const PALETTE = [
@@ -92,17 +92,17 @@ interface FixtureData {
 
 export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
   pass: {
-    label: "Clean Anchor refactor",
+    label: "Typed error refactor",
     files: [
-      { path: "programs/escrow/src/state.rs", add: 22, del: 19 },
-      { path: "tests/escrow-state.ts", add: 31, del: 4 }
+      { path: "src/errors/api-error.ts", add: 22, del: 19 },
+      { path: "test/errors/api-error.test.ts", add: 31, del: 4 }
     ],
     added: 53,
     removed: 23,
     running: [
-      { id: "heuristic", role: "solana-security", state: "done", note: "0 findings" },
-      { id: "reviewer-a", role: "anchor-accounts", state: "running", note: "" },
-      { id: "reviewer-b", role: "transaction-safety", state: "queued", note: "" }
+      { id: "heuristic", role: "security", state: "done", note: "0 findings" },
+      { id: "claude", role: "architect", state: "running", note: "" },
+      { id: "codex", role: "qa", state: "queued", note: "" }
     ],
     verdict: "pass",
     findingCount: 0,
@@ -112,25 +112,25 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         verdict: "pass",
         severity: "OK",
         severityColor: "text-quorate-pass",
-        location: "programs/escrow/src/state.rs",
-        body: "Pure account-state refactor with full coverage - every reviewer agrees the change is safe to merge.",
+        location: "src/errors/api-error.ts",
+        body: "The error refactor preserves response contracts and remains fully covered - every reviewer agrees it is safe to merge.",
         meta: "agreed by 3 reviewers · confidence 0.94"
       }
     ]
   },
   warn: {
-    label: "Wallet client update",
+    label: "Session cache update",
     files: [
-      { path: "app/actions/createEscrow.ts", add: 47, del: 6 },
-      { path: "app/lib/solana.ts", add: 19, del: 2 },
-      { path: "tests/create-escrow.test.ts", add: 12, del: 0 }
+      { path: "src/auth/session-cache.ts", add: 47, del: 6 },
+      { path: "src/cache/redis-client.ts", add: 19, del: 2 },
+      { path: "test/auth/session-cache.test.ts", add: 12, del: 0 }
     ],
     added: 78,
     removed: 8,
     running: [
-      { id: "heuristic", role: "solana-security", state: "done", note: "1 finding" },
-      { id: "reviewer-a", role: "anchor-accounts", state: "running", note: "" },
-      { id: "reviewer-b", role: "transaction-safety", state: "queued", note: "" }
+      { id: "heuristic", role: "security", state: "done", note: "1 finding" },
+      { id: "claude", role: "architect", state: "running", note: "" },
+      { id: "codex", role: "qa", state: "queued", note: "" }
     ],
     verdict: "warn",
     findingCount: 1,
@@ -140,26 +140,26 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         verdict: "warn",
         severity: "MED",
         severityColor: "text-quorate-medium",
-        location: "app/actions/createEscrow.ts:61",
-        body: "Transaction send path does not wait for confirmation before updating app state.",
-        meta: "agreed by reviewer-a · confidence 0.71"
+        location: "src/auth/session-cache.ts:61",
+        body: "The invalidation path can serve a stale session for one cache window after logout.",
+        meta: "agreed by architect and QA · confidence 0.71"
       }
     ]
   },
   fail: {
-    label: "Escrow close instruction",
+    label: "Session rotation handler",
     files: [
-      { path: "programs/escrow/src/lib.rs", add: 34, del: 12 },
-      { path: "programs/escrow/src/accounts.rs", add: 51, del: 8 },
-      { path: "tests/close-escrow.test.ts", add: 28, del: 14 },
-      { path: "app/actions/closeEscrow.ts", add: 15, del: 8 }
+      { path: "src/auth/session.ts", add: 34, del: 12 },
+      { path: "src/auth/token-store.ts", add: 51, del: 8 },
+      { path: "test/auth/session.test.ts", add: 28, del: 14 },
+      { path: "src/routes/session.ts", add: 15, del: 8 }
     ],
     added: 128,
     removed: 42,
     running: [
-      { id: "heuristic", role: "solana-security", state: "done", note: "2 findings" },
-      { id: "reviewer-a", role: "anchor-accounts", state: "running", note: "" },
-      { id: "reviewer-b", role: "transaction-safety", state: "queued", note: "" }
+      { id: "heuristic", role: "security", state: "done", note: "2 findings" },
+      { id: "claude", role: "architect", state: "running", note: "" },
+      { id: "codex", role: "qa", state: "queued", note: "" }
     ],
     verdict: "fail",
     findingCount: 3,
@@ -169,16 +169,16 @@ export const EMULATOR_FIXTURES: Record<EmulatorFixture, FixtureData> = {
         verdict: "fail",
         severity: "HIGH",
         severityColor: "text-quorate-high",
-        location: "programs/escrow/src/lib.rs:88",
-        body: "Anchor account constraint removed - close_escrow no longer proves the vault belongs to the escrow authority.",
+        location: "src/auth/session.ts:84",
+        body: "A rotated refresh token remains valid, allowing a captured token to create another active session.",
         meta: "agreed by 3 reviewers · confidence 0.86"
       },
       {
         verdict: "warn",
         severity: "MED",
         severityColor: "text-quorate-medium",
-        location: "app/actions/closeEscrow.ts:41",
-        body: "Client sends the transaction with skipPreflight enabled, so simulation failures are hidden from users."
+        location: "src/routes/session.ts:41",
+        body: "The route returns success before the previous token is revoked, creating a race window under concurrent requests."
       }
     ]
   }
@@ -302,7 +302,7 @@ export function TerminalEmulator({
   const [paused, setPaused] = useState(false);
   const [loopKey, setLoopKey] = useState(0);
 
-  const cwd = "~/Projects/solana-escrow";
+  const cwd = "~/Projects/acme-api";
 
   const goToPhase = useCallback((next: EmulatorPhase) => {
     setPhase(next);
@@ -333,14 +333,10 @@ export function TerminalEmulator({
   useEffect(() => {
     if (paused) return;
     const timer = window.setTimeout(() => {
-      setPhase((current) => {
-        const next = nextPhase(current);
-        onPhaseChange?.(next);
-        return next;
-      });
+      goToPhase(nextPhase(phase));
     }, PHASE_MS[phase]);
     return () => window.clearTimeout(timer);
-  }, [phase, paused, loopKey, onPhaseChange]);
+  }, [goToPhase, phase, paused, loopKey]);
 
   useEffect(() => {
     if (phase !== "palette") return;
@@ -430,15 +426,14 @@ export function TerminalEmulator({
                 <span className="terminal-meta">node 22 · {cwd}</span>
               </div>
               <p className="terminal-tagline">
-                <span className="text-quorate-amber">✦</span> Solana pack loaded. A panel of AI
-                reviewers, one binding verdict.
+                Repository council ready. Independent reviewers, one binding verdict.
               </p>
               <div className="terminal-getting-started">
                 <p className="terminal-getting-started-label">GETTING STARTED</p>
                 <ul>
                   <li>
                     <code>/git</code>
-                    <span>load the Solana app diff</span>
+                    <span>load the current repository diff</span>
                   </li>
                   <li>
                     <code>/use available</code>
@@ -446,7 +441,7 @@ export function TerminalEmulator({
                   </li>
                   <li>
                     <code>/review</code>
-                    <span>convene the Solana council</span>
+                    <span>convene the review council</span>
                   </li>
                 </ul>
               </div>

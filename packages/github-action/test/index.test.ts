@@ -2,9 +2,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createDefaultConfig, reportCommentMarker } from "@quorate/core";
+import { createDefaultConfig, fingerprintFinding, reportCommentMarker } from "@quorate/core";
 import {
   applyOverrides,
+  loadBaseRepositoryLockfiles,
   normalizeInput,
   parseBoolean,
   resolveBaseRef,
@@ -77,6 +78,9 @@ function makeDeps(overrides: Partial<ActionDeps> = {}): {
  */
 function makeOctokit() {
   const rest = {
+    git: {
+      getTree: async () => ({ data: { truncated: false, tree: [] } })
+    },
     repos: {
       // No base config in the repo -> 404 -> safe default config.
       getContent: async () => {
@@ -242,6 +246,37 @@ describe("resolveBaseRef", () => {
   });
 });
 
+describe("loadBaseRepositoryLockfiles", () => {
+  it("returns only package-manager lockfiles from the trusted base tree", async () => {
+    const client = makeOctokit();
+    client.rest.git.getTree = async () =>
+      ({
+        data: {
+          truncated: false,
+          tree: [
+            { type: "blob", path: "package-lock.json" },
+            { type: "blob", path: "packages/app/pnpm-lock.yaml" },
+            { type: "blob", path: "src/index.ts" },
+            { type: "tree", path: "packages" }
+          ]
+        }
+      }) as never;
+
+    await expect(
+      loadBaseRepositoryLockfiles(client as never, { owner: "o", repo: "r", ref: "base" })
+    ).resolves.toEqual(["package-lock.json", "packages/app/pnpm-lock.yaml"]);
+  });
+
+  it("fails closed when GitHub truncates the trusted base tree", async () => {
+    const client = makeOctokit();
+    client.rest.git.getTree = async () => ({ data: { truncated: true, tree: [] } }) as never;
+
+    await expect(
+      loadBaseRepositoryLockfiles(client as never, { owner: "o", repo: "r", ref: "base" })
+    ).rejects.toThrow(/truncated/i);
+  });
+});
+
 describe("runAction", () => {
   it("throws when the github token is missing", async () => {
     const { deps } = makeDeps({ getInput: () => undefined, env: {} });
@@ -252,6 +287,22 @@ describe("runAction", () => {
     const { deps } = makeDeps();
     deps.context = { repo: { owner: "o", repo: "r" }, payload: {} };
     await expect(runAction(deps)).rejects.toThrow(/pull_request/i);
+  });
+
+  it("rejects PR-controlled custom paths for trusted gate files", async () => {
+    for (const [name, value] of [
+      ["config-path", "weak.yml"],
+      ["baseline-path", "weak-baseline.json"],
+      ["suppress-path", "weak-suppressions.json"],
+      ["policy-path", "weak-policy.yml"]
+    ] as const) {
+      const { deps } = makeDeps({
+        getInput: (inputName) =>
+          inputName === "github-token" ? "token" : inputName === name ? value : undefined
+      });
+
+      await expect(runAction(deps)).rejects.toThrow(/trusted base-branch path/i);
+    }
   });
 
   it("sets the verdict/findings outputs, writes the summary and upserts the comment", async () => {
@@ -321,6 +372,84 @@ describe("runAction", () => {
     await runAction(deps);
     expect(outputs.verdict).toBeDefined();
   });
+
+  it("runs SupplyChainGate only when it is enabled by the trusted base config", async () => {
+    const config = "supplyChain:\n  enabled: true\n";
+    const { deps, summaryRaw, rest } = makeDeps();
+    rest.repos.getContent = async () => ({
+      data: {
+        type: "file",
+        encoding: "base64",
+        content: Buffer.from(config, "utf8").toString("base64")
+      }
+    }) as never;
+    deps.getOctokit = () =>
+      ({
+        rest,
+        paginate: async <T>(endpoint: unknown): Promise<T[]> => {
+          if (endpoint === rest.pulls.listFiles) {
+            return [
+              {
+                filename: "package.json",
+                status: "modified",
+                patch:
+                  '@@ -2,5 +2,6 @@\n   "dependencies": {\n+    "left-pad": "^1.3.0",\n     "yaml": "^2.8.1"'
+              }
+            ] as unknown as T[];
+          }
+          return [] as T[];
+        }
+      }) as never;
+
+    await runAction(deps);
+
+    expect(summaryRaw.join("\n")).toContain("Dependency added without lockfile update");
+  });
+
+  it("does not allow fail-on never to weaken the trusted base gate", async () => {
+    const config = "supplyChain:\n  enabled: true\n";
+    const { deps, failed, rest } = makeDeps();
+    rest.repos.getContent = async ({ path }: { path: string }) => {
+      if (path === ".quorate.yml") {
+        return {
+          data: {
+            type: "file",
+            encoding: "base64",
+            content: Buffer.from(config, "utf8").toString("base64")
+          }
+        } as never;
+      }
+      const error = new Error("Not Found") as Error & { status: number };
+      error.status = 404;
+      throw error;
+    };
+    deps.getInput = (name) =>
+      ({ "github-token": "token", "post-comment": "false", "fail-on": "never" } as Record<
+        string,
+        string
+      >)[name];
+    deps.getOctokit = () =>
+      ({
+        rest,
+        paginate: async <T>(endpoint: unknown): Promise<T[]> => {
+          if (endpoint === rest.pulls.listFiles) {
+            return [
+              {
+                filename: "package.json",
+                status: "modified",
+                patch:
+                  '@@ -2,5 +2,6 @@\n   "dependencies": {\n+    "left-pad": "^1.3.0",\n     "yaml": "^2.8.1"'
+              }
+            ] as unknown as T[];
+          }
+          return [] as T[];
+        }
+      }) as never;
+
+    await runAction(deps);
+
+    expect(failed.join(" ")).toMatch(/blocked by the merge policy/i);
+  });
 });
 
 describe("runAction baseline fail-secure", () => {
@@ -373,6 +502,76 @@ describe("runAction baseline fail-secure", () => {
     // A malformed baseline must never *crash* the gate; setFailed is only ever
     // about the verdict, never an unhandled baseline error.
     expect(failed.every((m) => /verdict/i.test(m))).toBe(true);
+  });
+
+  it("does not apply a stale canonical base baseline", async () => {
+    const warnings: string[] = [];
+    const rest = makeOctokit().rest;
+    const fingerprint = fingerprintFinding({
+      severity: "high",
+      title: "Dependency added without lockfile update",
+      body: "ignored",
+      file: "package.json"
+    });
+    const baseline = JSON.stringify({
+      version: 1,
+      generatedAt: "2020-01-01T00:00:00.000Z",
+      expiresAfterDays: 1,
+      findings: [
+        {
+          fingerprint,
+          severity: "high",
+          title: "Dependency added without lockfile update",
+          file: "package.json"
+        }
+      ]
+    });
+    rest.repos.getContent = async ({ path }: { path: string }) => {
+      if (path === ".quorate.yml") {
+        return {
+          data: {
+            type: "file",
+            encoding: "base64",
+            content: Buffer.from("supplyChain:\n  enabled: true\n").toString("base64")
+          }
+        } as never;
+      }
+      if (path === ".quorate.baseline.json") {
+        return {
+          data: { type: "file", encoding: "base64", content: Buffer.from(baseline).toString("base64") }
+        } as never;
+      }
+      const error = new Error("Not Found") as Error & { status: number };
+      error.status = 404;
+      throw error;
+    };
+    const client = {
+      rest,
+      paginate: async <T>(endpoint: unknown): Promise<T[]> => {
+        if (endpoint === rest.pulls.listFiles) {
+          return [
+            {
+              filename: "package.json",
+              status: "modified",
+              patch:
+                '@@ -2,5 +2,6 @@\n   "dependencies": {\n+    "left-pad": "^1.3.0",\n     "yaml": "^2.8.1"'
+            }
+          ] as unknown as T[];
+        }
+        return [] as T[];
+      }
+    };
+    const { deps, failed } = makeDeps({
+      getInput: (name) =>
+        ({ "github-token": "token", "post-comment": "false" } as Record<string, string>)[name],
+      getOctokit: () => client as never,
+      warning: (message) => warnings.push(message)
+    });
+
+    await runAction(deps);
+
+    expect(warnings.join(" ")).toMatch(/stale|past.*expiry|not applied/i);
+    expect(failed.join(" ")).toMatch(/blocked by the merge policy/i);
   });
 });
 

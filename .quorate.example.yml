@@ -14,6 +14,35 @@ councils:
 #   maxCostUsd: 0.50
 #   skipGenerated: true
 
+# Optional deterministic dependency/provenance lane. When enabled, normal
+# `quorate review` runs include SupplyChainGate alongside provider lanes. The
+# dedicated `quorate supply-chain scan` command can also run it directly over a
+# full diff, including lockfiles.
+# supplyChain:
+#   enabled: true
+#   mode: diff
+#   ecosystems:
+#     - npm
+#     - github-actions
+#     - docker
+#   lockfiles:
+#     requireFor:
+#       - npm
+#     onMissing: fail
+#   rules:
+#     dependencyWithoutLockfile:
+#       severity: high
+#     unpinnedActions:
+#       severity: medium
+#     mutableBaseImage:
+#       severity: medium
+#     npmPublishWithoutProvenance:
+#       severity: medium
+#   allowlist:
+#     actions: []
+#     images: []
+#     packages: []
+
 providers:
   - id: heuristic
     type: mock

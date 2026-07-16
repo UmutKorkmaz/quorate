@@ -1,11 +1,19 @@
-const FLOW_LINES = [
-  " diff / plan ─▶ council orchestrator ─▶ local providers, in parallel",
-  "                       │                         │ headless, isolated, capped",
-  "                       ▼                         ▼",
-  "                 dedupe + rank ◀──── findings (severity, file:line, evidence)",
-  "                       │",
-  "                       ▼",
-  "            one verdict  (pass · warn · fail, with degraded mode when limited)"
+const FLOW_STEPS = [
+  {
+    label: "Input",
+    title: "Load the change",
+    detail: "Review a diff or evaluate a plan with explicit repository context."
+  },
+  {
+    label: "Council",
+    title: "Run reviewers",
+    detail: "Fan out to available providers, then deduplicate and rank their findings."
+  },
+  {
+    label: "Verdict",
+    title: "Return evidence",
+    detail: "Produce one decision with severity, file and line, agreement, and artifacts."
+  }
 ] as const;
 
 const ROLES = [
@@ -45,7 +53,7 @@ export function WhatIsQuorate() {
         </div>
 
         <div className="mt-12 grid gap-8 lg:grid-cols-2 lg:gap-12">
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             <div className="rounded-2xl border border-quorate-border bg-quorate-surface/60 p-6 backdrop-blur">
               <h3 className="font-semibold text-white">Runs your tools</h3>
               <p className="mt-3 leading-relaxed text-quorate-muted">
@@ -75,23 +83,26 @@ export function WhatIsQuorate() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-quorate-border bg-quorate-surface/60 p-6 shadow-terminal backdrop-blur">
+          <div className="min-w-0 rounded-2xl border border-quorate-border bg-quorate-surface/60 p-6 shadow-terminal backdrop-blur">
             <p className="mb-4 font-mono text-xs tracking-wider text-quorate-dim uppercase">
               How it works
             </p>
-            <pre className="overflow-x-auto font-mono text-[12px] leading-relaxed text-quorate-muted md:text-[13px]">
-              {FLOW_LINES.map((line, i) => (
-                <span key={i} className="block">
-                  {line.includes("one verdict") ? (
-                    <span className="text-quorate-accent">{line}</span>
-                  ) : line.includes("dedupe") ? (
-                    <span className="text-quorate-amber">{line}</span>
-                  ) : (
-                    line
-                  )}
-                </span>
+            <ol className="grid gap-3 sm:grid-cols-3">
+              {FLOW_STEPS.map((step, index) => (
+                <li
+                  key={step.label}
+                  className="min-w-0 rounded-xl border border-quorate-border bg-quorate-bg/70 p-4"
+                >
+                  <p className="font-mono text-[10px] tracking-wider text-quorate-accent uppercase">
+                    {String(index + 1).padStart(2, "0")} · {step.label}
+                  </p>
+                  <h3 className="mt-3 text-sm font-semibold text-white">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-quorate-muted">
+                    {step.detail}
+                  </p>
+                </li>
               ))}
-            </pre>
+            </ol>
           </div>
         </div>
       </div>
