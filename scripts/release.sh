@@ -58,7 +58,7 @@ while (($# > 0)); do
   shift
 done
 
-for command in awk git mktemp node npm npx rg shasum; do
+for command in awk git mktemp node npm npx rg shasum sort; do
   command -v "$command" >/dev/null 2>&1 || fail "required command is missing: $command"
 done
 if [[ "$MODE" == "execute" ]]; then
@@ -172,6 +172,36 @@ git diff --check
 git diff --exit-code -- "$ACTION_BUNDLE" packages/website/src/generated/commands.md
 [[ -z "$(git status --porcelain)" ]] || fail "verification changed the working tree; commit generated artifacts first"
 
+PUBLIC_ACTION_REFS="$(
+  rg -n 'UmutKorkmaz/quorate@' \
+    README.md docs examples packages/website packages/github-action \
+    packages/cli/README.md packages/cli/src/setup-command.ts || true
+)"
+[[ -n "$PUBLIC_ACTION_REFS" ]] || fail "no public Quorate Action references were found"
+UNPINNED_ACTION_REFS="$(
+  printf '%s\n' "$PUBLIC_ACTION_REFS" |
+    rg -v 'UmutKorkmaz/quorate@[0-9a-fA-F]{40}' || true
+)"
+if [[ -n "$UNPINNED_ACTION_REFS" ]]; then
+  printf '%s\n' "$UNPINNED_ACTION_REFS" >&2
+  fail "replace every public Quorate Action reference with the reviewed bundle commit's full SHA before tagging"
+fi
+PINNED_ACTION_SHAS="$(
+  printf '%s\n' "$PUBLIC_ACTION_REFS" |
+    rg -o 'UmutKorkmaz/quorate@[0-9a-fA-F]{40}' |
+    awk -F@ '{print $2}' |
+    sort -u
+)"
+PINNED_ACTION_SHA_COUNT="$(printf '%s\n' "$PINNED_ACTION_SHAS" | awk 'NF { count += 1 } END { print count + 0 }')"
+[[ "$PINNED_ACTION_SHA_COUNT" == "1" ]] || fail "public Action references do not share exactly one reviewed commit SHA"
+PINNED_ACTION_SHA="$PINNED_ACTION_SHAS"
+git cat-file -e "$PINNED_ACTION_SHA^{commit}" 2>/dev/null || fail "pinned Action commit is unavailable: $PINNED_ACTION_SHA"
+git merge-base --is-ancestor "$PINNED_ACTION_SHA" HEAD || fail "pinned Action commit is not an ancestor of the release commit"
+PINNED_ACTION_HASH="$(git show "$PINNED_ACTION_SHA:$ACTION_BUNDLE" | shasum -a 256 | awk '{print $1}')"
+[[ "$PINNED_ACTION_HASH" == "$ACTION_HASH_TWO" ]] || fail "pinned Action bundle differs from the release bundle"
+printf 'Pinned Action commit: %s\n' "$PINNED_ACTION_SHA"
+printf 'Pinned Action bundle SHA-256: %s\n' "$PINNED_ACTION_HASH"
+
 if [[ "$MODE" == "verify" ]]; then
   printf '\nRelease candidate %s passed local verification. No tag, release, or package was published.\n' "$TAG"
   exit 0
@@ -179,21 +209,6 @@ fi
 
 [[ "${CONFIRM_RELEASE:-}" == "$TAG" ]] || fail "set CONFIRM_RELEASE=$TAG to publish"
 rg -q "^## \\[$VERSION\\] - Unreleased$" CHANGELOG.md && fail "replace Unreleased with the release date and commit it"
-
-PUBLIC_ACTION_REFS="$(
-  rg -n 'uses:[[:space:]]+UmutKorkmaz/quorate@' \
-    README.md docs examples packages/website packages/github-action || true
-)"
-if [[ -n "$PUBLIC_ACTION_REFS" ]]; then
-  UNPINNED_ACTION_REFS="$(
-    printf '%s\n' "$PUBLIC_ACTION_REFS" |
-      rg -v '@[0-9a-fA-F]{40}(['"'"']?)[[:space:]]*(#.*)?$' || true
-  )"
-  if [[ -n "$UNPINNED_ACTION_REFS" ]]; then
-    printf '%s\n' "$UNPINNED_ACTION_REFS" >&2
-    fail "replace every public Quorate Action reference with the reviewed bundle commit's full SHA before tagging"
-  fi
-fi
 
 run gh auth status
 if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
