@@ -55588,7 +55588,7 @@ var import_node_path5 = require("node:path");
 // package.json
 var package_default = {
   name: "@quorate/github-action",
-  version: "1.2.0",
+  version: "1.2.1",
   main: "./dist/index.js",
   private: true,
   files: [
@@ -55601,7 +55601,7 @@ var package_default = {
   dependencies: {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@quorate/core": "1.2.0"
+    "@quorate/core": "1.2.1"
   }
 };
 
