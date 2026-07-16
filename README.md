@@ -454,15 +454,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+      - uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-The Action is pinned to the reviewed v1.1.0 bundle commit. Keep the full
+The Action is pinned to the reviewed v1.2.0 bundle commit. Keep the full
 40-character SHA in production workflows so upstream changes cannot alter a run.
 The release verifier proves that this commit is on `main` and its bundled Action
-is byte-identical to the v1.1.0 release commit.
+is byte-identical to the v1.2.0 release commit.
 
 The Action posts a single PR summary comment (and optional inline review comments
 on changed lines) and can fail the check based on severity. Use a **self-hosted
@@ -474,7 +474,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+      - uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:

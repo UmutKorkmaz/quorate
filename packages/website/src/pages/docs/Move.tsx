@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+      - uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:

@@ -22,11 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+      - uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
       <p>
-        The Action is pinned to the reviewed v1.1.0 bundle commit. Keep the full 40-character SHA
+        The Action is pinned to the reviewed v1.2.0 bundle commit. Keep the full 40-character SHA
         in production workflows so upstream changes cannot alter a run.
       </p>
 
@@ -241,7 +241,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: quorate
-        uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+        uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -300,7 +300,7 @@ integrations:
       riskLevel: medium
 
 # workflow step
-- uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+- uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
   env:
     WEBACY_API_KEY: \${{ secrets.WEBACY_API_KEY }}
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
@@ -328,7 +328,7 @@ integrations:
 steps:
   - uses: actions/checkout@v4
   - id: quorate
-    uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+    uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
     with:
       github-token: \${{ secrets.GITHUB_TOKEN }}
       sarif-file: quorate.sarif
@@ -437,7 +437,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+- uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:
@@ -466,7 +466,7 @@ providers:
     apiKeyEnv: GLM_API_KEY
     roles: [architect, security, performance]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@2eb62eed7bff80d1697455ba9653fa872ddabf78
+- uses: UmutKorkmaz/quorate@34afb7c13faa405bdf833a096f401a42a71f6f1b
   env:
     GLM_API_KEY: \${{ secrets.GLM_API_KEY }}
   with:
