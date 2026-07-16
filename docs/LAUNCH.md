@@ -20,15 +20,14 @@ market hypotheses until validated with design partners.
 
 ## Current launch dependency
 
-Do not begin a new launch push until Phase 0 in [`ROADMAP.md`](./ROADMAP.md) is
-locally verified and the v1.1.0 candidate follows the sequence in
-[`RELEASE-CHECKLIST.md`](./RELEASE-CHECKLIST.md).
+Phase 0 in [`ROADMAP.md`](./ROADMAP.md) is locally verified, and v1.1.0 follows
+the reviewed sequence in [`RELEASE-CHECKLIST.md`](./RELEASE-CHECKLIST.md).
 
 ## Design-partner sprint
 
 ### Week 1 — Release and demo
 
-- [ ] Complete the reviewed v1.1.0 release path.
+- [x] Complete the reviewed v1.1.0 release path.
 - [ ] Publish one reproducible SupplyChainGate demo: unsafe dependency/workflow →
   deterministic finding → blocked gate → corrected change → passing gate.
 - [ ] Publish a short setup path for CLI and GitHub Action users.
