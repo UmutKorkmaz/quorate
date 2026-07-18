@@ -79,6 +79,7 @@ import { buildDoctorBundle } from "./doctor-bundle.js";
 import { printDoctor } from "./doctor.js";
 import { latestSession, loadSession, type PersistedSession } from "./sessions.js";
 import { runCouncilWithJsonStream } from "./json-stream.js";
+import { createLiveSpoolSink, teeJsonStreamSink } from "./live-spool.js";
 import { startShell } from "./shell.js";
 import { launchInkShell } from "./tui/index.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
@@ -1137,17 +1138,30 @@ export function buildProgram(): Command {
         return suppressed.report;
       };
 
-      const report = options.json
-        ? await runCouncilWithJsonStream(
-            request,
-            config,
-            {
-              writeStdout: (line) => process.stdout.write(`${line}\n`),
-              writeStderr: (line) => console.error(line)
-            },
-            transformReport
-          )
-        : transformReport(await runCouncil(request, config));
+      // Every run also feeds the live spool (~/.quorate/live) so `quorate
+      // monitor` surfaces can watch it from other terminals.
+      const liveSpool = createLiveSpoolSink({ cwd });
+      let report: CouncilReport;
+      try {
+        report = options.json
+          ? await runCouncilWithJsonStream(
+              request,
+              config,
+              teeJsonStreamSink(
+                {
+                  writeStdout: (line) => process.stdout.write(`${line}\n`),
+                  writeStderr: (line) => console.error(line)
+                },
+                liveSpool
+              ),
+              transformReport
+            )
+          : transformReport(await runCouncil(request, config, { onEvent: (event) => liveSpool.handleEvent(event) }));
+      } catch (error: unknown) {
+        liveSpool.finish("error");
+        throw error;
+      }
+      liveSpool.finish("done");
 
       if (options.writeJson) {
         writeFileSync(resolve(cwd, options.writeJson), `${JSON.stringify(report, null, 2)}\n`, "utf8");
@@ -1619,12 +1633,28 @@ export function buildProgram(): Command {
       const subject = promptParts.join(" ");
       const request = { mode: "plan" as const, subject, repoPath: cwd };
 
-      const report = options.json
-        ? await runCouncilWithJsonStream(request, config, {
-            writeStdout: (line) => process.stdout.write(`${line}\n`),
-            writeStderr: (line) => console.error(line)
-          })
-        : await runCouncil(request, config);
+      // Plan runs feed the live spool too, so monitors see them alongside reviews.
+      const liveSpool = createLiveSpoolSink({ cwd });
+      let report: CouncilReport;
+      try {
+        report = options.json
+          ? await runCouncilWithJsonStream(
+              request,
+              config,
+              teeJsonStreamSink(
+                {
+                  writeStdout: (line) => process.stdout.write(`${line}\n`),
+                  writeStderr: (line) => console.error(line)
+                },
+                liveSpool
+              )
+            )
+          : await runCouncil(request, config, { onEvent: (event) => liveSpool.handleEvent(event) });
+      } catch (error: unknown) {
+        liveSpool.finish("error");
+        throw error;
+      }
+      liveSpool.finish("done");
 
       const writeExport = (path: string | undefined, content: string): void => {
         if (!path) return;
