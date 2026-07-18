@@ -53,6 +53,7 @@ import { SlashPalette } from "./SlashPalette.js";
 import { Spinner, Elapsed, BusyLabel, Cursor } from "./Spinner.js";
 import { readVersion } from "../version.js";
 import { nextInterruptAction } from "../interactive-interrupt.js";
+import { createLiveSpoolSink } from "../live-spool.js";
 import {
   Welcome,
   DiffCard,
@@ -357,7 +358,24 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
       };
       const controller = new AbortController();
       abortRef.current = controller;
-      return runCouncil(request, current, { onEvent, signal: controller.signal });
+      // Tee every event into the live spool (~/.quorate/live) so `quorate
+      // monitor` in another terminal can watch this run; the spool swallows
+      // its own errors, so it can never break the run or this UI.
+      const liveSpool = createLiveSpoolSink({ cwd: stateRef.current.cwd });
+      try {
+        const report = await runCouncil(request, current, {
+          onEvent: (event) => {
+            liveSpool.handleEvent(event);
+            onEvent(event);
+          },
+          signal: controller.signal
+        });
+        liveSpool.finish("done");
+        return report;
+      } catch (error: unknown) {
+        liveSpool.finish("error");
+        throw error;
+      }
     },
     [emit, nextId]
   );
