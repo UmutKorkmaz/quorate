@@ -1,5 +1,5 @@
 import type { CouncilEvent } from "@quorate/core";
-import { listLiveRuns, listPendingApprovals, readRunEvents, reapExpiredApprovals, type ApprovalRequest, type LiveRunEntry } from "../live-spool.js";
+import { listLiveRuns, readRunEvents, reapAndListPendingApprovals, type ApprovalRequest, type LiveRunEntry } from "../live-spool.js";
 import type { ExternalAgent } from "../agent-scan.js";
 import type { RunRow } from "./views.js";
 
@@ -195,9 +195,9 @@ export function pollMonitorState(previous: MonitorState, options: PollOptions = 
   });
   const runs = buildRunTree(flat);
 
-  // Foreign approvals + detected processes: reap expired each tick, then list.
-  reapExpiredApprovals(undefined, options.dir);
-  const approvals = listPendingApprovals(options.dir);
+  // Foreign approvals + detected processes: reap+list in ONE readdir pass
+  // (the hot path — every monitor tick), reusing the survivors list.
+  const { survivors: approvals } = reapAndListPendingApprovals(new Date(), options.dir);
   const external = options.scan ? options.scan() : previous.external;
 
   const selectedRun = runs.some((run) => run.entry.runId === previous.selectedRun)
