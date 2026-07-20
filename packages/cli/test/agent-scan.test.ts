@@ -58,11 +58,11 @@ describe("parsePsOutput", () => {
 
 describe("scanExternalAgents with injected exec", () => {
   it("returns parsed agents on POSIX with a working exec", () => {
-    // Arrange
+    // Arrange — force the POSIX path so this runs identically on Windows CI.
     const exec = () => ({ stdout: "   4242   1000    0:01 /usr/local/bin/kimi" });
 
     // Act
-    const agents = scanExternalAgents({ exec, selfPid: 1 });
+    const agents = scanExternalAgents({ exec, selfPid: 1, platform: "darwin" });
 
     // Assert
     expect(agents.map((a) => a.name)).toEqual(["kimi"]);
@@ -70,6 +70,11 @@ describe("scanExternalAgents with injected exec", () => {
 
   it("returns empty when exec errors", () => {
     const exec = () => ({ error: "boom" });
-    expect(scanExternalAgents({ exec, selfPid: 1 })).toEqual([]);
+    expect(scanExternalAgents({ exec, selfPid: 1, platform: "darwin" })).toEqual([]);
+  });
+
+  it("returns empty on Windows regardless of exec (no ps)", () => {
+    const exec = () => ({ stdout: "4242 kimi" });
+    expect(scanExternalAgents({ exec, platform: "win32" })).toEqual([]);
   });
 });
