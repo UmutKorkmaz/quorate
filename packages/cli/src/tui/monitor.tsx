@@ -1,20 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { glyphs, PALETTE, roleColor, VERDICT_COLOR, type QuorateConfig } from "@quorate/core";
 import { providerSnapshots, type ShellState } from "../session.js";
 import { isGateLane, runControl } from "../monitor-controls.js";
+import { writeApprovalDecision } from "../live-spool.js";
+import { jumpToRun } from "../terminal-jump.js";
 import { LaneStream, ProvidersGrid, RunRowView, truncateLine } from "./views.js";
 import {
   type MonitorLane,
   blurLane,
   focusLaneAtCursor,
   initialMonitorState,
+  moveApprovalCursor,
   moveLaneCursor,
   moveRunSelection,
   pollMonitorState,
   type MonitorRun,
   type MonitorState
 } from "./monitor-state.js";
+import { scanExternalAgents } from "../agent-scan.js";
 
 /**
  * `quorate monitor` — a live dashboard over the spool (~/.quorate/live).
@@ -47,6 +51,9 @@ function RunHeader({ run, selected }: { run: MonitorRun; selected: boolean }): R
   const verdictText = run.verdict
     ? ` ${g.separator} ${run.verdict.toUpperCase()}${run.degraded ? " (degraded)" : ""}`
     : "";
+  const externalBadge = entry.kind === "external" && entry.source ? (
+    <Text color={PALETTE.dim}>{` ${g.separator} external · ${entry.source}`}</Text>
+  ) : null;
   return (
     <Text>
       <Text color={selected ? PALETTE.accent : PALETTE.dim}>{selected ? `${g.active} ` : "  "}</Text>
@@ -54,10 +61,55 @@ function RunHeader({ run, selected }: { run: MonitorRun; selected: boolean }): R
       <Text color={PALETTE.dim}>{` ${g.separator} ${entry.mode} ${g.separator} `}</Text>
       <Text color={statusColor(entry.status)}>{entry.status}</Text>
       <Text color={PALETTE.dim}>{` ${g.separator} ${doneCount}/${run.lanes.length} lanes`}</Text>
+      {externalBadge}
       {run.verdict ? (
         <Text color={(VERDICT_COLOR as Record<string, string>)[run.verdict] ?? PALETTE.dim}>{verdictText}</Text>
       ) : null}
     </Text>
+  );
+}
+
+/** Pending foreign-approval cards at the top — the most actionable surface. */
+function ApprovalCards({
+  approvals,
+  cursor,
+  maxWidth
+}: {
+  approvals: MonitorState["approvals"];
+  cursor: number;
+  maxWidth: number;
+}): React.ReactElement {
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      {approvals.map((approval, index) => (
+        <Box
+          key={approval.id}
+          flexDirection="column"
+          borderStyle={index === cursor ? "round" : "single"}
+          borderColor={index === cursor ? PALETTE.degraded : PALETTE.dim}
+          paddingX={1}
+        >
+          <Text>
+            <Text color={PALETTE.degraded} bold>⏳ {approval.toolName}</Text>
+            <Text color={PALETTE.dim}>{` ${approval.source} · ${approval.runId}`}</Text>
+          </Text>
+          <Text color={PALETTE.dim}>{truncateLine(approval.summary, maxWidth - 4)}</Text>
+          <Text color={PALETTE.dim}>{`expires ${approval.expiresAt} ${index === cursor ? "— y approve / n deny" : ""}`}</Text>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+/** Detected foreign AI CLIs — a one-line strip, scan-only. */
+function ExternalStrip({ agents }: { agents: MonitorState["external"] }): React.ReactElement | null {
+  if (agents.length === 0) return null;
+  const g = glyphs();
+  const names = agents.map((agent) => `${agent.name}(${agent.pid})`).join(", ");
+  return (
+    <Box>
+      <Text color={PALETTE.dim}>{`${g.separator} detected: ${truncateLine(names, 80)}`}</Text>
+    </Box>
   );
 }
 
@@ -148,8 +200,18 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
   // Two-keystroke confirmation for destructive actions: "abort:<runId>" / "rerun:<runId>".
   const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
 
+  // Throttle the process scanner to every ~10 polls (it spawns `ps`); on the
+  // other 9, pollMonitorState reuses previous.external.
+  const pollTick = useRef(0);
   const poll = useCallback(() => {
-    setState((previous) => pollMonitorState(previous, { dir: props.dir }));
+    pollTick.current += 1;
+    const refreshExternal = pollTick.current % 10 === 1;
+    setState((previous) =>
+      pollMonitorState(
+        previous,
+        refreshExternal ? { dir: props.dir, scan: () => scanExternalAgents({ selfPid: process.pid }) } : { dir: props.dir }
+      )
+    );
   }, [props.dir]);
 
   useEffect(() => {
@@ -174,6 +236,37 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
     }
     if (input === "a") {
       setShowAgents((previous) => !previous);
+      return;
+    }
+    // Approve/deny the focused approval card (y/n).
+    if (input === "y" || input === "n") {
+      const approval = state.approvals[state.approvalCursor];
+      if (approval) {
+        try {
+          writeApprovalDecision(
+            { id: approval.id, decision: input === "y" ? "allow" : "deny", decidedAt: new Date().toISOString() },
+            props.dir
+          );
+          setNotice(`${input === "y" ? "Approved" : "Denied"} ${approval.toolName}.`);
+        } catch (error: unknown) {
+          setNotice(error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
+    }
+    // Jump to the selected run's terminal (j) — macOS only, honest fallback.
+    if (input === "j" && state.selectedRun) {
+      const result = jumpToRun(state.selectedRun, { dir: props.dir });
+      setNotice(result.message);
+      return;
+    }
+    // Approval-card cursor (only when approvals exist).
+    if (input === "<" || input === ",") {
+      setState((previous) => moveApprovalCursor(previous, -1));
+      return;
+    }
+    if (input === ">" || input === ".") {
+      setState((previous) => moveApprovalCursor(previous, 1));
       return;
     }
     // Focused-lane sub-mode captures everything except quit/agents above —
@@ -220,6 +313,10 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
 
       {showAgents ? <ProvidersGrid rows={agents} /> : null}
 
+      {state.approvals.length > 0 ? (
+        <ApprovalCards approvals={state.approvals} cursor={state.approvalCursor} maxWidth={maxWidth} />
+      ) : null}
+
       {state.runs.length === 0 ? (
         <Box flexDirection="column">
           <Text color={PALETTE.dim}>No live runs yet.</Text>
@@ -259,11 +356,13 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
         </Box>
       ) : null}
 
+      <ExternalStrip agents={state.external} />
+
       <Box marginTop={1}>
         <Text color={PALETTE.dim}>
           {focused
             ? `esc back ${g.separator} q quit`
-            : `↑↓ lanes ${g.separator} →/enter watch ${g.separator} [ ] runs ${g.separator} x abort ${g.separator} r rerun ${g.separator} a agents ${g.separator} q quit`}
+            : `${state.approvals.length > 0 ? `y/n approve/deny ${g.separator} < > approvals ${g.separator}` : ""}↑↓ lanes ${g.separator} →/enter watch ${g.separator} [ ] runs ${g.separator} x abort ${g.separator} r rerun ${g.separator} j jump ${g.separator} a agents ${g.separator} q quit`}
         </Text>
       </Box>
     </Box>

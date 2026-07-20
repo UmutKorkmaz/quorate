@@ -1708,7 +1708,8 @@ export function buildProgram(): Command {
     .description("Watch live council runs on this machine — agents, lanes, and per-lane output.")
     .option("--json", "Print the live run registry as JSON and exit (no TUI)")
     .option("--web", "Serve a browser dashboard on 127.0.0.1 instead of the TUI")
-    .option("--port <port>", "Fixed port for --web (default: random)")
+    .option("--serve", "Headless server: print one {url,token,pid} JSON line, serve until Ctrl+C (for QuorateIsland)")
+    .option("--port <port>", "Fixed port for --web/--serve (default: random)")
     .option("--no-open", "With --web, do not auto-open the browser")
     .action(async (options) => {
       const cwd = cwdFrom(program);
@@ -1716,16 +1717,21 @@ export function buildProgram(): Command {
         process.stdout.write(`${JSON.stringify(listLiveRuns(), null, 2)}\n`);
         return;
       }
-      if (options.web) {
+      if (options.serve || options.web) {
         const handle = createMonitorServer();
         const port = options.port ? Number(options.port) : 0;
         if (!Number.isInteger(port) || port < 0 || port > 65_535) {
           throw new Error("--port must be an integer between 0 and 65535");
         }
         const url = await listenMonitorServer(handle, port);
-        console.error(`Quorate monitor: ${url}`);
-        console.error("Loopback-only; the token in the URL is this session's key. Ctrl+C stops.");
-        if (options.open !== false) openInBrowser(url);
+        if (options.serve) {
+          // Headless: one JSON line for the native app to parse, then block.
+          process.stdout.write(`${JSON.stringify({ url, token: handle.token, pid: process.pid })}\n`);
+        } else {
+          console.error(`Quorate monitor: ${url}`);
+          console.error("Loopback-only; the token in the URL is this session's key. Ctrl+C stops.");
+          if (options.open !== false) openInBrowser(url);
+        }
         await new Promise<void>((resolvePromise) => {
           // close() is idempotent, so overlapping SIGINT/SIGTERM are safe.
           const stop = (): void => {
@@ -1737,7 +1743,7 @@ export function buildProgram(): Command {
         return;
       }
       if (!stdin.isTTY || !stdout.isTTY) {
-        throw new Error("quorate monitor needs a TTY (use --json or --web for headless use).");
+        throw new Error("quorate monitor needs a TTY (use --json, --web, or --serve for headless use).");
       }
       const config = configFrom(program);
       await launchMonitor({ cwd, config });
