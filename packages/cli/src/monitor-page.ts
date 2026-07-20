@@ -83,6 +83,27 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   #toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--surface-2);
     padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; display: none; }
   .subrun { color: var(--dim); font-size: 0.8rem; margin: 0.1rem 0 0.3rem 2.5rem; }
+  #approvals { margin-bottom: 1.5rem; }
+  .approval {
+    background: oklch(28% 0.06 85 / 0.4); border: 1px solid var(--warn);
+    border-radius: var(--radius); padding: 0.9rem 1.1rem; margin-bottom: 0.75rem;
+  }
+  .approval .head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+  .approval .head .tool { font-weight: 700; color: var(--warn); }
+  .approval .head .src { color: var(--dim); font-size: 0.85rem; }
+  .approval .summary { color: var(--text); margin: 0.3rem 0; }
+  .approval .expiry { color: var(--dim); font-size: 0.8rem; }
+  .approval .row { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+  .approval button {
+    font: 0.8rem var(--mono); padding: 0.25rem 0.9rem; border-radius: 6px; cursor: pointer;
+    border: 1px solid; background: var(--surface-2);
+  }
+  .approval button.allow { color: var(--pass); border-color: var(--pass); }
+  .approval button.deny { color: var(--fail); border-color: var(--fail); }
+  .external { color: var(--dim); font-size: 0.8rem; margin: 0.75rem 0; }
+  .external-badge { font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 999px;
+    border: 1px solid var(--dim); color: var(--dim); margin-left: 0.4rem; }
+  .stats { color: var(--dim); font-size: 0.8rem; margin-top: 0.5rem; }
 </style>
 </head>
 <body>
@@ -91,7 +112,10 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   <span class="sub">live runs on this machine</span>
   <span id="status">connecting…</span>
 </header>
+<main id="approvals"></main>
 <main id="runs"><div class="empty">Waiting for data…</div></main>
+<div id="external" class="external"></div>
+<div id="stats" class="stats"></div>
 <div id="toast"></div>
 <script>
   "use strict";
@@ -122,6 +146,9 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   }
 
   function render(data) {
+    renderApprovals(data.approvals || []);
+    renderExternal(data.external || []);
+    renderStats(data.stats);
     const root = document.getElementById("runs");
     root.replaceChildren();
     if (!data.runs.length) {
@@ -132,12 +159,18 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
       const card = el("section", "run" + (openRuns.has(run.runId) ? " open" : ""));
       const head = el("div", "run-head");
       head.append(el("span", "repo", run.repo));
+      if (run.kind === "external" && run.source) {
+        head.append(el("span", "external-badge", "external · " + run.source));
+      }
       head.append(el("span", "badge " + run.status, run.status));
       head.append(el("span", "meta", run.mode + " · " + run.lanes.length + " lanes · " + run.subject));
       if (run.verdict) {
         head.append(el("span", "verdict " + run.verdict, run.verdict.toUpperCase() + (run.degraded ? " (degraded)" : "")));
       }
       const actions = el("span", "actions");
+      const jump = el("button", "", "jump");
+      jump.addEventListener("click", (event) => { event.stopPropagation(); control("jump", run.runId); });
+      actions.append(jump);
       if (run.status === "running") {
         const abort = el("button", "", "abort");
         abort.addEventListener("click", (event) => { event.stopPropagation(); control("abort", run.runId); });
@@ -186,6 +219,45 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
     }
   }
 
+  function renderApprovals(approvals) {
+    const root = document.getElementById("approvals");
+    root.replaceChildren();
+    for (const approval of approvals) {
+      const card = el("div", "approval");
+      const head = el("div", "head");
+      head.append(el("span", "tool", "⏳ " + approval.toolName));
+      head.append(el("span", "src", approval.source + " · " + approval.runId));
+      card.append(head);
+      card.append(el("div", "summary", approval.summary));
+      card.append(el("div", "expiry", "expires " + approval.expiresAt));
+      const row = el("div", "row");
+      const allow = el("button", "allow", "Approve");
+      allow.addEventListener("click", () => controlApproval(approval.id, "approve"));
+      const deny = el("button", "deny", "Deny");
+      deny.addEventListener("click", () => controlApproval(approval.id, "deny"));
+      row.append(allow, deny);
+      card.append(row);
+      root.append(card);
+    }
+  }
+
+  function renderExternal(agents) {
+    const node = document.getElementById("external");
+    if (!agents || !agents.length) { node.replaceChildren(); return; }
+    const names = agents.map((a) => a.name + "(" + a.pid + ")").join(", ");
+    node.replaceChildren(el("span", "", "detected foreign CLIs: " + names));
+  }
+
+  function renderStats(stats) {
+    const node = document.getElementById("stats");
+    if (!stats || !stats.today) { node.replaceChildren(); return; }
+    const parts = ["today: " + stats.today.runs + " run(s)"];
+    for (const [source, count] of Object.entries(stats.today.bySource || {})) {
+      parts.push(source + ": " + count);
+    }
+    node.replaceChildren(el("span", "", parts.join(" · ")));
+  }
+
   function toast(message) {
     const node = document.getElementById("toast");
     node.textContent = message;
@@ -195,7 +267,7 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   }
 
   async function control(action, runId) {
-    if (!window.confirm(action + " this run?")) return;
+    if ((action === "abort" || action === "rerun") && !window.confirm(action + " this run?")) return;
     try {
       const response = await fetch("/control?" + new URLSearchParams({ token: sessionKey || "" }), {
         method: "POST",
@@ -206,6 +278,20 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
       toast(result.message || (result.ok ? action + " ok" : action + " failed"));
     } catch {
       toast(action + " request failed");
+    }
+  }
+
+  async function controlApproval(id, decision) {
+    try {
+      const response = await fetch("/control?" + new URLSearchParams({ token: sessionKey || "" }), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: decision, id })
+      });
+      const result = await response.json();
+      toast(result.message || (result.ok ? decision + " ok" : decision + " failed"));
+    } catch {
+      toast(decision + " request failed");
     }
   }
 
