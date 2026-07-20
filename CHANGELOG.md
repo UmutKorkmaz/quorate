@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-20
+
+### Added
+
+- **Live run spool** — every council run (review or plan, `--json` or not, CLI
+  or interactive shell) now streams its events to `~/.quorate/live/<runId>.ndjson`
+  with a per-run registry entry, so runs are observable across terminals without
+  a daemon. Partial-line-tolerant tailing, pid-liveness reaping, atomic per-run
+  meta files (no shared index to race on), and a `QUORATE_LIVE=0` opt-out.
+- **`quorate monitor`** — a full-screen live dashboard over the spool: every
+  run on the machine, its agents, and their `provider:role` lanes, with a
+  per-lane output drill-in, an installed-agents grid, multi-run selection, and
+  `--json` for machine output. Also available as `/monitor` inside the shell.
+- **`quorate monitor --web`** — a loopback-only browser dashboard: 127.0.0.1
+  binding, per-launch bearer token (constant-time compared), strict CSP,
+  bounded SSE streaming, and an embedded single-page UI with zero static-file
+  surface. `--port` and `--no-open` flags included.
+- **Run controls** — abort a live run (SIGINT to its recorded owner pid, with
+  stale- and pid-identity guards) or re-run a settled one (respawns its
+  recorded argv, entrypoint-pinned; argv is withheld from disk entirely when
+  it looks secret-bearing) from both the TUI (`x`/`r`) and the web dashboard.
+  Deterministic SupplyChainGate and web3-dd lanes render as first-class gate
+  cards in both surfaces.
+- **Subagent nesting schema** — `council/started` events and `runCouncil`
+  options accept an optional `parentRunId`/`parentLane`, letting a nested
+  subagent council attribute itself to the parent lane that spawned it. The
+  monitor folds child runs under their parent (one level; orphans stay
+  visible). Fully backward compatible — absent fields mean top-level.
+
 ## [1.2.1] - 2026-07-16
 
 ### Fixed
