@@ -28,6 +28,15 @@ final class ServerConnection: ObservableObject {
     }
     private var discoveryURL: URL { liveDir.appendingPathComponent("monitor.json") }
 
+    /// ISO8601 formatters. The Node side writes `new Date().toISOString()`
+    /// (always fractional seconds); we try fractional first, then basic.
+    private let iso8601Fractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private let iso8601Basic: ISO8601DateFormatter = ISO8601DateFormatter()
+
     func start() {
         task?.cancel()
         task = Task { [weak self] in
@@ -66,7 +75,13 @@ final class ServerConnection: ObservableObject {
         try await spawnServer()
         // Read again after giving it a moment.
         try await Task.sleep(nanoseconds: 1_500_000_000)
+        // If we spawned a process but it never produced a discovery file, don't
+        // leak it — terminate before the caller retries/respawns.
         guard let discovery = readDiscovery(), isFresh(discovery) else {
+            if let proc = serverProcess, proc.isRunning {
+                proc.terminate()
+                serverProcess = nil
+            }
             throw ServerError.noDiscovery
         }
         return (URL(string: discovery.url) ?? URL(string: "http://127.0.0.1/")!, discovery.token)
@@ -87,10 +102,20 @@ final class ServerConnection: ObservableObject {
 
     /// Fresh = heartbeat within the last 6s AND the pid is alive.
     private func isFresh(_ d: Discovery) -> Bool {
-        guard let hb = ISO8601DateFormatter().date(from: d.heartbeatAt) else { return false }
+        guard let hb = parseIso8601(d.heartbeatAt) else { return false }
         let age = Date().timeIntervalSince(hb)
         if age > 6 { return false }
         return kill(pid_t(d.pid), 0) == 0
+    }
+
+    /// Parse the ISO8601 string the Node side writes via `new Date().toISOString()`,
+    /// which ALWAYS includes fractional seconds (e.g. `2026-07-20T22:00:00.123Z`).
+    /// The default `ISO8601DateFormatter` (.withInternetDateTime) does NOT parse
+    /// fractional seconds, so we configure `.withFractionalSeconds` and fall back
+    /// to a non-fractional formatter for robustness.
+    private func parseIso8601(_ string: String) -> Date? {
+        if let date = iso8601Fractional.date(from: string) { return date }
+        return iso8601Basic.date(from: string)
     }
 
     /// Spawn `quorate monitor --serve`, but at most once per minute.
