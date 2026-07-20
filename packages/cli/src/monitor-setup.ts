@@ -168,12 +168,15 @@ export function computeSetupPlan(options: {
   const codexPath = options.codexPath ?? codexConfigPath();
   const claudeExists = existsSync(claudePath);
   const codexNotifyOccupied = options.codexNotifyOccupied ?? codexNotifySlotOccupied(codexPath);
+  // Count only events not already Quorate-tagged — the dry-run number must be honest.
+  const existing = claudeExists ? readClaudeSettings(claudePath) : {};
+  const installed = countInstalledClaudeEvents(existing);
   return {
     claude: {
       path: claudePath,
       exists: claudeExists,
       // One change per event not already installed.
-      changes: CLAUDE_EVENTS.length
+      changes: Math.max(0, CLAUDE_EVENTS.length - installed)
     },
     codex: {
       path: codexPath,
@@ -187,6 +190,20 @@ export function computeSetupPlan(options: {
 
 export function claudeSettingsPath(): string {
   return join(homedir(), ".claude", "settings.json");
+}
+
+/** Count how many of the 10 events already have a Quorate-tagged hook installed. */
+export function countInstalledClaudeEvents(settings: ClaudeSettings): number {
+  const hooks = settings.hooks ?? {};
+  let count = 0;
+  for (const event of CLAUDE_EVENTS) {
+    const groups = hooks[event] ?? [];
+    const installed = groups.some((group) =>
+      group.hooks.some((hook) => typeof hook.command === "string" && hook.command.includes(QUORATE_HOOK_MARKER) && hook.command.includes(`--event ${event}`))
+    );
+    if (installed) count += 1;
+  }
+  return count;
 }
 
 export function codexConfigPath(): string {
@@ -243,7 +260,14 @@ export function applySetup(plan: SetupPlan, quorateBinary?: string): { applied: 
     const temp = `${plan.claude.path}.${process.pid}.tmp`;
     writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
     renameSync(temp, plan.claude.path);
-    return { applied: true, backup, message: `Claude Code hooks installed at ${plan.claude.path}` };
+    // Be honest about Codex: a guarded notify shim is a planned follow-up
+    // (today the installer only writes Claude's rich hooks; Codex is skipped
+    // when occupied, and not yet written when empty). State this explicitly.
+    const codexNote =
+      plan.codex.action === "skip"
+        ? ` Codex notify slot occupied — skipped (not clobbered).`
+        : ` Codex notify shim is not yet implemented (planned follow-up); ${plan.codex.note}.`;
+    return { applied: true, backup, message: `Claude Code hooks installed at ${plan.claude.path}.${codexNote}` };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { applied: false, backup, message: `failed to install Claude hooks: ${message}` };

@@ -185,11 +185,20 @@ export async function installFromRelease(
     const shaResp = shaUrl ? await fetch(shaUrl) : undefined;
     if (!("ok" in zipResp) || !zipResp.ok) return { ok: false, message: `Failed to download ${asset.zip}.` };
     const zipBuffer = await zipResp.arrayBuffer();
-    let expectedHex = "";
-    if (shaResp && "ok" in shaResp && shaResp.ok) {
-      expectedHex = Buffer.from(await shaResp.arrayBuffer()).toString("utf8").trim();
+    // Fail CLOSED on checksum failure: if the sha256 file is missing or can't
+    // be fetched, refuse to install rather than silently skipping verification
+    // (a network MITM or compromised release could otherwise swap the binary).
+    if (!shaUrl) {
+      return { ok: false, message: `Release has no checksum for ${asset.zip} — refusing to install without verification.` };
     }
-    if (expectedHex && !verifySha256(zipBuffer, expectedHex)) {
+    if (!shaResp || !("ok" in shaResp) || !shaResp.ok) {
+      return { ok: false, message: `Could not download checksum for ${asset.zip} — refusing to install without verification.` };
+    }
+    const expectedHex = Buffer.from(await shaResp.arrayBuffer()).toString("utf8").trim();
+    if (!expectedHex) {
+      return { ok: false, message: `Checksum file for ${asset.zip} is empty — refusing to install.` };
+    }
+    if (!verifySha256(zipBuffer, expectedHex)) {
       return { ok: false, message: `sha256 mismatch for ${asset.zip} — refusing to install.` };
     }
     // Unzip into a temp dir.

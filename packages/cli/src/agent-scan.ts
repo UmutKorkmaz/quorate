@@ -42,10 +42,6 @@ const defaultExec: AgentExec = (cmd, args, opts) => {
   return { stdout: result.stdout ?? "" };
 };
 
-function isWindows(): boolean {
-  return process.platform === "win32";
-}
-
 /** Match a command line against a known agent token. */
 export function matchAgentName(command: string): string | undefined {
   // The matcher fires on the literal CLI invocation, not on incidental
@@ -99,9 +95,13 @@ export function parsePsOutput(raw: string, selfPid = process.pid): ExternalAgent
 /**
  * List foreign AI-agent processes currently running on this machine.
  * Returns `[]` on Windows (no `ps`) or if the listing is unreadable.
+ *
+ * `platform` is injectable so tests can exercise the POSIX path on a Windows
+ * runner (the real scan is a no-op there).
  */
-export function scanExternalAgents(options: { exec?: AgentExec; selfPid?: number } = {}): ExternalAgent[] {
-  if (isWindows()) return [];
+export function scanExternalAgents(options: { exec?: AgentExec; selfPid?: number; platform?: NodeJS.Platform } = {}): ExternalAgent[] {
+  const platform = options.platform ?? process.platform;
+  if (platform === "win32") return [];
   const exec = options.exec ?? defaultExec;
   const result = exec("ps", ["-axo", "pid=,ppid=,etime=,command="], { timeout: 3_000, encoding: "utf8" });
   if ("error" in result) return [];

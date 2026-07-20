@@ -7,11 +7,11 @@ import {
   listPendingApprovals,
   listLiveRuns,
   readMonitorDiscovery,
-  reapExpiredApprovals,
   removeMonitorDiscovery,
   writeApprovalDecision,
   writeMonitorDiscovery,
-  type ApprovalRequest
+  type ApprovalRequest,
+  type LiveRunEntry
 } from "./live-spool.js";
 import { scanExternalAgents, type ExternalAgent } from "./agent-scan.js";
 import { jumpToRun } from "./terminal-jump.js";
@@ -202,8 +202,10 @@ interface StatsPayload {
   today: { runs: number; bySource: Record<string, number> };
 }
 
-function buildStatsPayload(dir?: string): StatsPayload {
-  const runs = listLiveRuns({ dir });
+function buildStatsPayload(dir: string | undefined, entries?: LiveRunEntry[]): StatsPayload {
+  // Reuse the runs pollMonitorState already loaded when provided; only hit the
+  // filesystem when called standalone (tests/edge cases).
+  const runs = entries ?? listLiveRuns({ dir });
   const todayPrefix = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   let count = 0;
   const bySource: Record<string, number> = {};
@@ -241,11 +243,12 @@ function approvalToPayload(request: ApprovalRequest): ApprovalPayload {
 
 /** Strip volatile fields the browser does not need; bound the payload. */
 export function monitorSnapshotPayload(state: MonitorState, options: { dir?: string; scan?: () => ExternalAgent[] } = {}): string {
-  // Reap expired approvals each tick so the pending list stays honest.
-  reapExpiredApprovals(undefined, options.dir);
-  const approvals = listPendingApprovals(options.dir).map(approvalToPayload);
-  const external = options.scan ? options.scan() : scanExternalAgents();
-  const stats = buildStatsPayload(options.dir);
+  // Reap expired approvals each tick so the pending list stays honest. Reuse
+  // the approvals the state already computed (pollMonitorState reap+list) so
+  // we do not readdir twice per tick.
+  const approvals = (state.approvals ?? listPendingApprovals(options.dir)).map(approvalToPayload);
+  const external = state.external.length > 0 ? state.external : (options.scan ? options.scan() : []);
+  const stats = buildStatsPayload(options.dir, state.runs.map((run) => run.entry));
   return JSON.stringify({ runs: state.runs.map(runToPayload), approvals, external, stats });
 }
 

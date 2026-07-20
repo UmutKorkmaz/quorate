@@ -1,5 +1,6 @@
 import {
   closeSync,
+  existsSync,
   fstatSync,
   mkdirSync,
   openSync,
@@ -684,15 +685,9 @@ export function listPendingApprovals(dir: string = defaultLiveDir()): ApprovalRe
   for (const name of names) {
     if (!name.endsWith(".json") || name.endsWith(".decision.json")) continue;
     const id = name.slice(0, -".json".length);
-    // Skip if a decision already exists (resolved but not cleaned up).
-    let hasDecision = false;
-    try {
-      readFileSync(join(approvalsDir(dir), `${id}.decision.json`), "utf8");
-      hasDecision = true;
-    } catch {
-      hasDecision = false;
-    }
-    if (hasDecision) continue;
+    // Skip if a decision already exists (resolved but not cleaned up). Use a
+    // stat check, not a full read — cheaper under the per-tick poll pattern.
+    if (existsSync(join(approvalsDir(dir), `${id}.decision.json`))) continue;
     try {
       const parsed = JSON.parse(readFileSync(join(approvalsDir(dir), name), "utf8")) as Partial<ApprovalRequest>;
       if (

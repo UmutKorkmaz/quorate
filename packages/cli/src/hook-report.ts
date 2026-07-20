@@ -58,6 +58,18 @@ const POLL_INTERVAL_MS = 250;
 const MONITOR_RECHECK_INTERVAL_MS = 1_000;
 const APPROVAL_TTL_MS = 55_000;
 
+/**
+ * Synchronous sleep used by the default PermissionRequest poll loop. A real
+ * sleeper is mandatory in production — the no-op default would busy-spin at
+ * 100% CPU for up to 55s on every foreign permission prompt. Backed by
+ * Atomics.wait on a shared buffer (the only built-in sync sleep in Node).
+ */
+function sleepSync(ms: number): void {
+  if (ms <= 0) return;
+  const shared = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(shared, 0, 0, ms);
+}
+
 function nowIso(now: Date = new Date()): string {
   return now.toISOString();
 }
@@ -353,7 +365,7 @@ export function runPermissionRoundtrip(
   deps: HookReportDeps
 ): PermissionRoundtripResult {
   const isAttached = deps.isAttached ?? (() => isMonitorAttached({ dir: deps.dir }));
-  const sleep = deps.sleep ?? ((ms: number) => void 0);
+  const sleep = deps.sleep ?? ((ms: number) => sleepSync(ms));
   const now = deps.now ?? (() => new Date());
 
   if (!isAttached()) return {}; // Defer — nobody's watching.
