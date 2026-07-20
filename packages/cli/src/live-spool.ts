@@ -114,11 +114,16 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
+/** Spool contents (subjects, cwds, argv) are the user's own business —
+ *  owner-only permissions on multi-user machines. */
+const FILE_MODE = 0o600;
+const DIR_MODE = 0o700;
+
 /** Atomic single-file write: temp + rename, cleaning the temp on failure. */
 function writeFileAtomic(path: string, content: string): void {
   const temp = `${path}.${process.pid}.tmp`;
   try {
-    writeFileSync(temp, content, "utf8");
+    writeFileSync(temp, content, { encoding: "utf8", mode: FILE_MODE });
     renameSync(temp, path);
   } catch (error: unknown) {
     rmSync(temp, { force: true });
@@ -320,10 +325,10 @@ export function createLiveSpoolSink(options: LiveSpoolOptions = {}): LiveSpool {
     };
     const current = entry;
     guard(() => {
-      mkdirSync(dir, { recursive: true });
+      mkdirSync(dir, { recursive: true, mode: DIR_MODE });
       const path = liveRunFilePath(current.runId, dir);
-      writeFileSync(path, "", "utf8"); // truncate any stale file for this runId
-      fd = openSync(path, "a"); // O_APPEND: every write lands at EOF atomically
+      writeFileSync(path, "", { encoding: "utf8", mode: FILE_MODE }); // truncate any stale file
+      fd = openSync(path, "a", FILE_MODE); // O_APPEND: every write lands at EOF atomically
       writeMeta(dir, current);
       pruneLiveDir(dir);
     });

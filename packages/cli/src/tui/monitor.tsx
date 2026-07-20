@@ -145,6 +145,8 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
   const [state, setState] = useState<MonitorState>(initialMonitorState);
   const [showAgents, setShowAgents] = useState(false);
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // Two-keystroke confirmation for destructive actions: "abort:<runId>" / "rerun:<runId>".
+  const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
 
   const poll = useCallback(() => {
     setState((previous) => pollMonitorState(previous, { dir: props.dir }));
@@ -183,11 +185,21 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
     if (input === "x" || input === "r") {
       const run = state.runs.find((entry) => entry.entry.runId === state.selectedRun);
       if (run) {
-        const result = runControl(input === "x" ? "abort" : "rerun", run.entry.runId, props.dir);
+        const action = input === "x" ? "abort" : "rerun";
+        const key = `${action}:${run.entry.runId}`;
+        if (pendingAction !== key) {
+          // First press arms; the same key again executes. Any other input disarms.
+          setPendingAction(key);
+          setNotice(`Press ${input} again to ${action} ${run.entry.repo} ${run.entry.mode}.`);
+          return;
+        }
+        setPendingAction(undefined);
+        const result = runControl(action, run.entry.runId, props.dir);
         setNotice(result.message);
       }
       return;
     }
+    if (pendingAction) setPendingAction(undefined);
     if (key.upArrow) setState((previous) => moveLaneCursor(previous, -1));
     if (key.downArrow) setState((previous) => moveLaneCursor(previous, 1));
     if (key.pageUp || input === "[") setState((previous) => moveRunSelection(previous, -1));
