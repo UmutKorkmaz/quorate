@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
@@ -83,6 +84,7 @@ import { createLiveSpoolSink, listLiveRuns, teeJsonStreamSink } from "./live-spo
 import { startShell } from "./shell.js";
 import { launchInkShell } from "./tui/index.js";
 import { launchMonitor } from "./tui/monitor.js";
+import { createMonitorServer, listenMonitorServer } from "./monitor-server.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
@@ -97,6 +99,21 @@ import { readRepositoryFiles, runSupplyChainScan } from "./supply-chain-command.
 interface GlobalOptions {
   config?: string;
   cwd?: string;
+}
+
+/** Best-effort browser launch; the printed URL is the reliable path. */
+function openInBrowser(url: string): void {
+  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  try {
+    const child = spawn(command, args, { stdio: "ignore", detached: true, shell: false });
+    child.on("error", () => {
+      // The URL is already printed — failing to auto-open is not an error.
+    });
+    child.unref();
+  } catch {
+    // Same: auto-open is a convenience only.
+  }
 }
 
 const defaultCwd = process.env.INIT_CWD ?? process.cwd();
@@ -1688,14 +1705,37 @@ export function buildProgram(): Command {
     .helpGroup("Interactive:")
     .description("Watch live council runs on this machine — agents, lanes, and per-lane output.")
     .option("--json", "Print the live run registry as JSON and exit (no TUI)")
+    .option("--web", "Serve a browser dashboard on 127.0.0.1 instead of the TUI")
+    .option("--port <port>", "Fixed port for --web (default: random)")
+    .option("--no-open", "With --web, do not auto-open the browser")
     .action(async (options) => {
       const cwd = cwdFrom(program);
       if (options.json) {
         process.stdout.write(`${JSON.stringify(listLiveRuns(), null, 2)}\n`);
         return;
       }
+      if (options.web) {
+        const handle = createMonitorServer();
+        const port = options.port ? Number(options.port) : 0;
+        if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+          throw new Error("--port must be an integer between 0 and 65535");
+        }
+        const url = await listenMonitorServer(handle, port);
+        console.error(`Quorate monitor: ${url}`);
+        console.error("Loopback-only; the token in the URL is this session's key. Ctrl+C stops.");
+        if (options.open !== false) openInBrowser(url);
+        await new Promise<void>((resolvePromise) => {
+          // close() is idempotent, so overlapping SIGINT/SIGTERM are safe.
+          const stop = (): void => {
+            handle.close().catch(() => undefined).finally(() => resolvePromise());
+          };
+          process.once("SIGINT", stop);
+          process.once("SIGTERM", stop);
+        });
+        return;
+      }
       if (!stdin.isTTY || !stdout.isTTY) {
-        throw new Error("quorate monitor needs a TTY (use --json for machine output).");
+        throw new Error("quorate monitor needs a TTY (use --json or --web for headless use).");
       }
       const config = configFrom(program);
       await launchMonitor({ cwd, config });
