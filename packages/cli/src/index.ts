@@ -4,6 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
+import * as readline from "node:readline/promises";
 import { Command } from "commander";
 import {
   buildMultiPackConfig,
@@ -1756,7 +1757,7 @@ export function buildProgram(): Command {
     .option("--remove", "Strip Quorate hook entries (idempotent, marker-tagged)")
     .option("--dry-run", "Print the plan without writing anything")
     .option("--yes", "Skip the confirmation prompt")
-    .action((options) => {
+    .action(async (options) => {
       const executable = (name: string): boolean => {
         try {
           const result = spawnSync("which", [name], { encoding: "utf8", shell: false });
@@ -1792,10 +1793,24 @@ export function buildProgram(): Command {
         console.error("No changes made (--dry-run).");
         return;
       }
-      if (stdin.isTTY && !options.yes) {
-        // Non-TTY and --yes both bypass the prompt; we don't block headless runs.
-        console.error("Pass --yes to apply, or re-run with --dry-run to preview.");
-        return;
+      // Confirmation policy (this writes ~/.claude/settings.json, so be safe):
+      // - TTY without --yes → show a real y/N prompt;
+      // - non-TTY without --yes → REFUSE (never silently modify a settings file
+      //   from a pipe/script); require an explicit --yes.
+      if (!options.yes) {
+        if (!stdin.isTTY) {
+          console.error("Refusing to modify settings without a TTY and without --yes. Re-run with --yes to apply.");
+          process.exitCode = 1;
+          return;
+        }
+        const rl = readline.createInterface({ input: stdin, output: stdout });
+        const answer = await rl.question(`${options.remove ? "Remove" : "Install"} Quorate hooks in ${plan.claude.path}? [y/N] `);
+        rl.close();
+        const normalized = answer.trim().toLowerCase();
+        if (normalized !== "y" && normalized !== "yes") {
+          console.error("Aborted — no changes made.");
+          return;
+        }
       }
       const result = options.remove ? applyRemove(plan) : applySetup(plan);
       console.error(result.message);
