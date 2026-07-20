@@ -1,9 +1,11 @@
 import {
   closeSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
+  readSync,
   renameSync,
   rmSync,
   statSync,
@@ -400,6 +402,9 @@ export interface LiveRunEvents {
   report?: CouncilReport;
   /** Byte offset after the last complete line — pass back as `fromOffset` to tail. */
   offset: number;
+  /** True when the file shrank under the caller's offset: `events` is a full
+   *  replay from the start, so accumulated state must be rebuilt, not appended. */
+  reset?: boolean;
 }
 
 /**
@@ -410,19 +415,35 @@ export interface LiveRunEvents {
  */
 export function readRunEvents(runId: string, options: ReadRunEventsOptions = {}): LiveRunEvents {
   const dir = options.dir ?? defaultLiveDir();
-  let raw: Buffer;
-  try {
-    raw = readFileSync(liveRunFilePath(runId, dir));
-  } catch {
-    return { events: [], offset: options.fromOffset ?? 0 };
-  }
-  // Single read, no stat: the size check happens on the buffer we actually got.
-  // An offset beyond the file means it was truncated/recreated — restart from 0.
   const requested = options.fromOffset ?? 0;
-  const from = requested > raw.length ? 0 : requested;
-  const slice = raw.subarray(from);
+  // One fd for stat+read so size and content can't diverge (no TOCTOU), and
+  // only the unread suffix is read — polling stays O(new bytes), not O(file).
+  let slice: Buffer;
+  let from = requested;
+  try {
+    const fd = openSync(liveRunFilePath(runId, dir), "r");
+    try {
+      const size = fstatSync(fd).size;
+      // An offset beyond the file means it was truncated/recreated — restart at 0.
+      if (requested > size) from = 0;
+      const length = size - from;
+      slice = Buffer.alloc(length);
+      let filled = 0;
+      while (filled < length) {
+        const got = readSync(fd, slice, filled, length - filled, from + filled);
+        if (got === 0) break;
+        filled += got;
+      }
+      slice = slice.subarray(0, filled);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return { events: [], offset: requested };
+  }
+  const reset = from === 0 && requested > 0;
   const lastNewline = slice.lastIndexOf(0x0a);
-  if (lastNewline === -1) return { events: [], offset: from };
+  if (lastNewline === -1) return { events: [], offset: from, reset };
   const complete = slice.subarray(0, lastNewline).toString("utf8");
   const events: CouncilEvent[] = [];
   let report: CouncilReport | undefined;
@@ -441,5 +462,5 @@ export function readRunEvents(runId: string, options: ReadRunEventsOptions = {})
       report = parsed as CouncilReport;
     }
   }
-  return { events, report, offset: from + lastNewline + 1 };
+  return { events, report, offset: from + lastNewline + 1, reset };
 }
