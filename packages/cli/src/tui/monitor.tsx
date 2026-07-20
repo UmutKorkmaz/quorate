@@ -70,6 +70,7 @@ function SelectedRunLanes({
   cursor: number;
   maxWidth: number;
 }): React.ReactElement {
+  const g = glyphs();
   return (
     <Box flexDirection="column" paddingLeft={2} marginTop={1}>
       <Text color={PALETTE.dim}>{run.entry.subject}</Text>
@@ -77,15 +78,39 @@ function SelectedRunLanes({
         <Text color={PALETTE.dim}>waiting for lanes…</Text>
       ) : (
         run.lanes.map((lane, index) => (
-          <Box key={lane.laneKey}>
-            <Text color={index === cursor ? PALETTE.accent : PALETTE.dim}>{index === cursor ? "› " : "  "}</Text>
-            {isGateLane(lane.providerId) ? <Text color={PALETTE.degraded}>{"⛨ "}</Text> : null}
-            <RunRowView row={lane.row} maxWidth={Math.max(maxWidth - 4, 16)} />
+          <Box key={lane.laneKey} flexDirection="column">
+            <Box>
+              <Text color={index === cursor ? PALETTE.accent : PALETTE.dim}>{index === cursor ? "› " : "  "}</Text>
+              {isGateLane(lane.providerId) ? <Text color={PALETTE.degraded}>{"⛨ "}</Text> : null}
+              <RunRowView row={lane.row} maxWidth={Math.max(maxWidth - 4, 16)} />
+            </Box>
+            {(run.children ?? [])
+              .filter((child) => child.entry.parentLane === lane.laneKey)
+              .map((child) => (
+                <Box key={child.entry.runId} paddingLeft={4}>
+                  <Text color={PALETTE.dim}>{subagentSummary(child, g.separator)}</Text>
+                </Box>
+              ))}
           </Box>
         ))
       )}
+      {/* Children whose parentLane is missing or matches no rendered lane must
+          still be visible — never silently hidden. */}
+      {(run.children ?? [])
+        .filter((child) => !run.lanes.some((lane) => lane.laneKey === child.entry.parentLane))
+        .map((child) => (
+          <Box key={child.entry.runId} paddingLeft={2}>
+            <Text color={PALETTE.dim}>{subagentSummary(child, g.separator)}</Text>
+          </Box>
+        ))}
     </Box>
   );
+}
+
+function subagentSummary(child: MonitorRun, separator: string): string {
+  const done = child.lanes.filter((entry) => entry.row.state === "done").length;
+  const verdict = child.verdict ? ` ${separator} ${child.verdict.toUpperCase()}` : "";
+  return `└ subagent council ${separator} ${child.entry.status} ${separator} ${done}/${child.lanes.length} lanes${verdict}`;
 }
 
 /** Drill-in tail for a lane whose run has settled — no spinner, no elapsed. */

@@ -59,9 +59,22 @@ function applyHeaders(res: ServerResponse, extra: Record<string, string>): void 
   }
 }
 
-/** Strip volatile fields the browser does not need; bound the payload. */
-export function monitorSnapshotPayload(state: MonitorState): string {
-  const runs = state.runs.map((run) => ({
+interface RunPayload {
+  runId: string;
+  repo: string;
+  mode: string;
+  subject: string;
+  status: string;
+  startedAt: string;
+  verdict?: string;
+  degraded?: boolean;
+  parentLane?: string;
+  lanes: Array<Record<string, unknown>>;
+  children?: RunPayload[];
+}
+
+function runToPayload(run: MonitorState["runs"][number]): RunPayload {
+  return {
     runId: run.entry.runId,
     repo: run.entry.repo,
     mode: run.entry.mode,
@@ -70,6 +83,7 @@ export function monitorSnapshotPayload(state: MonitorState): string {
     startedAt: run.entry.startedAt,
     verdict: run.verdict,
     degraded: run.degraded,
+    parentLane: run.entry.parentLane,
     lanes: run.lanes.map((lane) => ({
       laneKey: lane.laneKey,
       providerId: lane.providerId,
@@ -81,9 +95,14 @@ export function monitorSnapshotPayload(state: MonitorState): string {
       preview: lane.row.preview,
       error: lane.row.error,
       tail: lane.tail.slice(-50)
-    }))
-  }));
-  return JSON.stringify({ runs });
+    })),
+    ...(run.children ? { children: run.children.map(runToPayload) } : {})
+  };
+}
+
+/** Strip volatile fields the browser does not need; bound the payload. */
+export function monitorSnapshotPayload(state: MonitorState): string {
+  return JSON.stringify({ runs: state.runs.map(runToPayload) });
 }
 
 /**

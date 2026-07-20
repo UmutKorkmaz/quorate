@@ -32,6 +32,8 @@ export interface MonitorRun {
   degraded?: boolean;
   /** Spool file read offset — passed back to readRunEvents to tail. */
   offset: number;
+  /** Nested subagent councils spawned by this run's lanes (one level deep). */
+  children?: MonitorRun[];
 }
 
 export interface MonitorState {
@@ -168,7 +170,7 @@ export function pollMonitorState(previous: MonitorState, options: PollOptions = 
   const entries = listLiveRuns({ dir: options.dir }).slice(0, maxRuns);
   const previousById = new Map(previous.runs.map((run) => [run.entry.runId, run]));
 
-  const runs = entries.map((entry) => {
+  const flat = entries.map((entry) => {
     const existing = previousById.get(entry.runId);
     const { events, report, offset, reset } = readRunEvents(entry.runId, {
       dir: options.dir,
@@ -182,6 +184,7 @@ export function pollMonitorState(previous: MonitorState, options: PollOptions = 
     const degraded = reset ? report?.metadata?.degraded : report?.metadata?.degraded ?? existing?.degraded;
     return { entry, lanes, verdict, degraded, offset } satisfies MonitorRun;
   });
+  const runs = buildRunTree(flat);
 
   const selectedRun = runs.some((run) => run.entry.runId === previous.selectedRun)
     ? previous.selectedRun
@@ -193,6 +196,37 @@ export function pollMonitorState(previous: MonitorState, options: PollOptions = 
   const laneCursor = selected ? Math.min(previous.laneCursor, Math.max(selected.lanes.length - 1, 0)) : 0;
 
   return { runs, selectedRun, focusedLane, laneCursor };
+}
+
+/**
+ * Fold nested subagent councils under their parent run — strictly ONE level.
+ * A run is folded only when its parent is itself top-level; grandchildren
+ * (and children whose parent is missing from the registry window) stay
+ * top-level so nothing is ever silently hidden. Fully backward compatible:
+ * entries without parentRunId are untouched.
+ */
+export function buildRunTree(flat: MonitorRun[]): MonitorRun[] {
+  const byId = new Map(flat.map((run) => [run.entry.runId, run]));
+  const isTopLevel = (run: MonitorRun): boolean => {
+    const parentId = run.entry.parentRunId;
+    return !parentId || parentId === run.entry.runId || !byId.has(parentId);
+  };
+  const childrenOf = new Map<string, MonitorRun[]>();
+  const top: MonitorRun[] = [];
+  for (const run of flat) {
+    const parent = run.entry.parentRunId ? byId.get(run.entry.parentRunId) : undefined;
+    // Fold only under a run that will actually be rendered at top level.
+    if (parent && parent !== run && isTopLevel(parent)) {
+      const siblings = childrenOf.get(parent.entry.runId) ?? [];
+      childrenOf.set(parent.entry.runId, [...siblings, run]);
+    } else {
+      top.push(run);
+    }
+  }
+  return top.map((run) => {
+    const children = childrenOf.get(run.entry.runId);
+    return children ? { ...run, children } : run;
+  });
 }
 
 /** Cursor/selection transitions for the monitor's keyboard model. */

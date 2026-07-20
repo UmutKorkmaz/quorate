@@ -57,6 +57,9 @@ export interface LiveRunEntry {
   /** argv (after execPath) of the owning process — enables monitor rerun.
    *  Omitted entirely when any element looks secret-bearing. */
   argv?: string[];
+  /** Set when this run is a nested subagent council of a parent run's lane. */
+  parentRunId?: string;
+  parentLane?: string;
 }
 
 /** Flags whose values (or inline `=values`) may carry secrets — if any argv
@@ -306,7 +309,14 @@ export function createLiveSpoolSink(options: LiveSpoolOptions = {}): LiveSpool {
       planned: event.planned.map((lane) => `${lane.providerId}:${lane.role}`),
       status: "running",
       updatedAt: nowIso(),
-      argv: sanitizeArgvForMeta(process.argv.slice(1))
+      argv: sanitizeArgvForMeta(process.argv.slice(1)),
+      ...(event.parentRunId &&
+      SAFE_RUN_ID.test(event.parentRunId) &&
+      typeof event.parentLane === "string" &&
+      event.parentLane.length > 0 &&
+      event.parentLane.length <= 200
+        ? { parentRunId: event.parentRunId, parentLane: event.parentLane }
+        : {})
     };
     const current = entry;
     guard(() => {

@@ -8,6 +8,7 @@ import {
   appendTail,
   applyEventToLanes,
   blurLane,
+  buildRunTree,
   focusLaneAtCursor,
   initialMonitorState,
   laneKeyOf,
@@ -221,6 +222,100 @@ describe("pollMonitorState over a real spool", () => {
     // Assert
     expect(state.runs).toEqual([]);
     expect(state.selectedRun).toBeUndefined();
+  });
+});
+
+describe("subagent run tree", () => {
+  it("nests a child run under its parent and keeps orphans top-level", () => {
+    // Arrange — parent, its child, and a child whose parent is unknown.
+    const dir = tempDir();
+    const parent = createLiveSpoolSink({ dir, pid: process.pid });
+    parent.handleEvent(started("run-parent", "2026-07-20T03:00:00.000Z"));
+    const child = createLiveSpoolSink({ dir, pid: process.pid });
+    child.handleEvent({
+      ...started("run-child", "2026-07-20T03:01:00.000Z"),
+      parentRunId: "run-parent",
+      parentLane: "claude:security"
+    } as CouncilEvent);
+    const orphan = createLiveSpoolSink({ dir, pid: process.pid });
+    orphan.handleEvent({
+      ...started("run-orphan", "2026-07-20T03:02:00.000Z"),
+      parentRunId: "run-vanished",
+      parentLane: "codex:qa"
+    } as CouncilEvent);
+
+    // Act
+    const state = pollMonitorState(initialMonitorState(), { dir });
+
+    // Assert — child folded under parent; orphan stays visible at top level.
+    const topIds = state.runs.map((run) => run.entry.runId);
+    expect(topIds).toContain("run-parent");
+    expect(topIds).toContain("run-orphan");
+    expect(topIds).not.toContain("run-child");
+    const parentRun = state.runs.find((run) => run.entry.runId === "run-parent");
+    expect(parentRun?.children?.[0]?.entry.runId).toBe("run-child");
+    expect(parentRun?.children?.[0]?.entry.parentLane).toBe("claude:security");
+  });
+
+  it("keeps grandchildren visible at top level (single-hop nesting)", () => {
+    // Arrange — parent <- child <- grandchild.
+    const dir = tempDir();
+    const parent = createLiveSpoolSink({ dir, pid: process.pid });
+    parent.handleEvent(started("run-p", "2026-07-20T04:00:00.000Z"));
+    const child = createLiveSpoolSink({ dir, pid: process.pid });
+    child.handleEvent({
+      ...started("run-c", "2026-07-20T04:01:00.000Z"),
+      parentRunId: "run-p",
+      parentLane: "claude:security"
+    } as CouncilEvent);
+    const grandchild = createLiveSpoolSink({ dir, pid: process.pid });
+    grandchild.handleEvent({
+      ...started("run-g", "2026-07-20T04:02:00.000Z"),
+      parentRunId: "run-c",
+      parentLane: "codex:qa"
+    } as CouncilEvent);
+
+    // Act
+    const state = pollMonitorState(initialMonitorState(), { dir });
+
+    // Assert — the grandchild's parent is itself folded, so it stays top-level.
+    const topIds = state.runs.map((run) => run.entry.runId);
+    expect(topIds).toContain("run-p");
+    expect(topIds).toContain("run-g");
+    expect(topIds).not.toContain("run-c");
+  });
+
+  it("buildRunTree ignores self-referential parents", () => {
+    // Arrange
+    const dir = tempDir();
+    const sink = createLiveSpoolSink({ dir, pid: process.pid });
+    sink.handleEvent({
+      ...started("run-self"),
+      parentRunId: "run-self",
+      parentLane: "claude:security"
+    } as CouncilEvent);
+    const flat = pollMonitorState(initialMonitorState(), { dir }).runs;
+
+    // Act
+    const tree = buildRunTree(flat);
+
+    // Assert — no infinite nesting; the run stays top-level.
+    expect(tree.map((run) => run.entry.runId)).toContain("run-self");
+    expect(tree[0]?.children).toBeUndefined();
+  });
+
+  it("events without parent fields behave exactly as before", () => {
+    // Arrange
+    const dir = tempDir();
+    const sink = createLiveSpoolSink({ dir, pid: process.pid });
+    sink.handleEvent(started("run-plain"));
+
+    // Act
+    const state = pollMonitorState(initialMonitorState(), { dir });
+
+    // Assert
+    expect(state.runs[0]?.entry.parentRunId).toBeUndefined();
+    expect(state.runs[0]?.children).toBeUndefined();
   });
 });
 
