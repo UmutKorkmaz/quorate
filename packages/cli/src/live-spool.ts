@@ -728,6 +728,28 @@ export function reapExpiredApprovals(now: Date = new Date(), dir: string = defau
   return reaped;
 }
 
+/**
+ * Reap expired pending requests AND return the surviving pending list in one
+ * readdir pass — the monitor poll hot path. Equivalent to
+ * `reapExpiredApprovals()` followed by `listPendingApprovals()` but without
+ * the second directory scan.
+ */
+export function reapAndListPendingApprovals(now: Date = new Date(), dir: string = defaultLiveDir()): { reaped: string[]; survivors: ApprovalRequest[] } {
+  const nowMs = now.getTime();
+  const reaped: string[] = [];
+  const survivors: ApprovalRequest[] = [];
+  for (const request of listPendingApprovals(dir)) {
+    const expiry = Date.parse(request.expiresAt);
+    if (Number.isFinite(expiry) && expiry < nowMs) {
+      deleteApproval(request.id, dir);
+      reaped.push(request.id);
+    } else {
+      survivors.push(request);
+    }
+  }
+  return { reaped, survivors };
+}
+
 /** Atomically write the monitor discovery file (loopback URL + heartbeat). */
 export function writeMonitorDiscovery(discovery: MonitorDiscovery, dir: string = defaultLiveDir()): void {
   writeFileAtomic(monitorDiscoveryPath(dir), `${JSON.stringify(discovery, null, 2)}\n`);
