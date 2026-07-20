@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import type { ExecOptions } from "node:child_process";
 
 /**
@@ -98,6 +98,11 @@ export function parsePsOutput(raw: string, selfPid = process.pid): ExternalAgent
  *
  * `platform` is injectable so tests can exercise the POSIX path on a Windows
  * runner (the real scan is a no-op there).
+ *
+ * NOTE: this uses `spawnSync`, which BLOCKS the event loop for up to 3s. Use
+ * it only from contexts that can tolerate a brief block (CLI one-shots). For
+ * the SSE broadcast tick, use {@link refreshExternalAgentsCache} which spawns
+ * `ps` asynchronously and exposes the last cached result.
  */
 export function scanExternalAgents(options: { exec?: AgentExec; selfPid?: number; platform?: NodeJS.Platform } = {}): ExternalAgent[] {
   const platform = options.platform ?? process.platform;
@@ -106,4 +111,56 @@ export function scanExternalAgents(options: { exec?: AgentExec; selfPid?: number
   const result = exec("ps", ["-axo", "pid=,ppid=,etime=,command="], { timeout: 3_000, encoding: "utf8" });
   if ("error" in result) return [];
   return parsePsOutput(result.stdout, options.selfPid);
+}
+
+/**
+ * Async refresh of the external-agents cache. Spawns `ps` WITHOUT blocking
+ * the event loop; resolves with the parsed result and also stashes it so a
+ * synchronous {@link cachedExternalAgents} can return it on the next tick.
+ *
+ * The SSE broadcaster calls this on its refresh cadence; the tick reads the
+ * cache synchronously — no `spawnSync` on the hot path.
+ */
+export function refreshExternalAgentsCache(selfPid: number = process.pid): Promise<ExternalAgent[]> {
+  if (process.platform === "win32") {
+    cachedExternal = [];
+    return Promise.resolve([]);
+  }
+  return new Promise((resolve) => {
+    const child = spawn("ps", ["-axo", "pid=,ppid=,etime=,command="], { shell: false });
+    let stdout = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGKILL");
+      cachedExternal = parsePsOutput(stdout, selfPid);
+      resolve(cachedExternal);
+    }, 3_000);
+    timer.unref?.();
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.on("error", () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cachedExternal = [];
+      resolve([]);
+    });
+    child.on("close", () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cachedExternal = parsePsOutput(stdout, selfPid);
+      resolve(cachedExternal);
+    });
+  });
+}
+
+let cachedExternal: ExternalAgent[] = [];
+
+/** Synchronously return the last cached scan result (refresh via {@link refreshExternalAgentsCache}). */
+export function cachedExternalAgents(): ExternalAgent[] {
+  return cachedExternal;
 }

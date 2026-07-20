@@ -102,16 +102,30 @@ final class ServerConnection: ObservableObject {
         let proc = Process()
         proc.executableURL = binary
         proc.arguments = ["monitor", "--serve"]
-        // Capture stdout to parse the one-line JSON.
-        let pipe = Pipe()
-        proc.standardOutput = pipe
-        proc.standardError = Pipe()
+        // Capture stdout to parse the one-line JSON; send stderr to /dev/null so
+        // it cannot fill the OS pipe buffer (≈64KB) and deadlock the server.
+        let stdoutPipe = Pipe()
+        proc.standardOutput = stdoutPipe
+        proc.standardError = FileHandle(forWritingAtPath: "/dev/null")
         do {
             try proc.run()
             serverProcess = proc
             serverOwnedByUs = true
         } catch {
             throw ServerError.spawnFailed(error.localizedDescription)
+        }
+        // Drain stdout asynchronously so the server can't block on a full pipe
+        // while we wait for its first line. Discovery comes from monitor.json,
+        // not this stdout — we just need to keep the buffer clear. The
+        // readabilityHandler fires on data/EOF and is cleared on EOF.
+        let handle = stdoutPipe.fileHandleForReading
+        handle.readabilityHandler = { fh in
+            let chunk = fh.availableData
+            if chunk.isEmpty {
+                // EOF — stop draining.
+                fh.readabilityHandler = nil
+            }
+            // Discard chunk; we only need to keep the pipe drained.
         }
     }
 
