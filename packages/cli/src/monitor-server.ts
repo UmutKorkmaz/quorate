@@ -257,13 +257,17 @@ function approvalToPayload(request: ApprovalRequest): ApprovalPayload {
   };
 }
 
-/** Strip volatile fields the browser does not need; bound the payload. */
+/** Strip volatile fields the browser does not need; bound the payload.
+ *
+ *  Callers MUST pass `scan` if they want the external-agents list reflected;
+ *  this function deliberately does NOT fall back to `scanExternalAgents()`
+ *  (which uses spawnSync and would block the event loop on the SSE tick). */
 export function monitorSnapshotPayload(state: MonitorState, options: { dir?: string; scan?: () => ExternalAgent[] } = {}): string {
-  // Reap expired approvals each tick so the pending list stays honest. Reuse
-  // the approvals the state already computed (pollMonitorState reap+list) so
-  // we do not readdir twice per tick.
-  const approvals = (state.approvals ?? listPendingApprovals(options.dir)).map(approvalToPayload);
-  const external = state.external.length > 0 ? state.external : (options.scan ? options.scan() : []);
+  // Reuse the approvals the state already computed (pollMonitorState reap+list)
+  // so we do not readdir twice per tick; fall back to listPendingApprovals only
+  // for callers (tests) that pass a state without approvals.
+  const approvals = (state.approvals.length > 0 ? state.approvals : listPendingApprovals(options.dir)).map(approvalToPayload);
+  const external = options.scan ? options.scan() : state.external;
   const stats = buildStatsPayload(options.dir, state.runs.map((run) => run.entry));
   return JSON.stringify({ runs: state.runs.map(runToPayload), approvals, external, stats });
 }
