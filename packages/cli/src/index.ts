@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
@@ -85,6 +85,8 @@ import { startShell } from "./shell.js";
 import { launchInkShell } from "./tui/index.js";
 import { launchMonitor } from "./tui/monitor.js";
 import { createMonitorServer, listenMonitorServer } from "./monitor-server.js";
+import { runHookReportCli } from "./hook-report.js";
+import { applyRemove, applySetup, claudeSettingsPath, codexConfigPath, codexNotifySlotOccupied, computeSetupPlan, detectCliCapabilities, renderCapabilityTable } from "./monitor-setup.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
@@ -1700,7 +1702,7 @@ export function buildProgram(): Command {
       }
     });
 
-  program
+  const monitorCmd = program
     .command("monitor")
     .helpGroup("Interactive:")
     .description("Watch live council runs on this machine — agents, lanes, and per-lane output.")
@@ -1739,6 +1741,68 @@ export function buildProgram(): Command {
       }
       const config = configFrom(program);
       await launchMonitor({ cwd, config });
+    });
+
+  monitorCmd
+    .command("setup")
+    .description("Install Quorate hook-report entries in foreign AI CLIs (Claude Code, Codex) so monitor can observe them.")
+    .option("--remove", "Strip Quorate hook entries (idempotent, marker-tagged)")
+    .option("--dry-run", "Print the plan without writing anything")
+    .option("--yes", "Skip the confirmation prompt")
+    .action((options) => {
+      const executable = (name: string): boolean => {
+        try {
+          const result = spawnSync("which", [name], { encoding: "utf8", shell: false });
+          return result.status === 0 && result.stdout.trim().length > 0;
+        } catch {
+          return false;
+        }
+      };
+      const capabilities = detectCliCapabilities({
+        claude: executable("claude"),
+        codex: executable("codex"),
+        gemini: executable("gemini"),
+        qwen: executable("qwen"),
+        kimi: executable("kimi"),
+        opencode: executable("opencode"),
+        crush: executable("crush"),
+        goose: executable("goose")
+      });
+      console.error(renderCapabilityTable(capabilities));
+      console.error("");
+      const plan = computeSetupPlan({
+        claudePath: claudeSettingsPath(),
+        codexPath: codexConfigPath(),
+        codexNotifyOccupied: codexNotifySlotOccupied(),
+        dryRun: Boolean(options.dryRun)
+      });
+      const verb = options.remove ? "remove" : "install";
+      console.error(`Plan (${options.dryRun ? "dry-run" : verb}):`);
+      console.error(`  Claude Code settings: ${plan.claude.path}`);
+      console.error(`    ${plan.claude.exists ? "exists" : "will be created"}; ${plan.claude.changes} hook group(s) ${options.remove ? "to strip" : "to add"}.`);
+      console.error(`  Codex notify: ${plan.codex.action} — ${plan.codex.note}`);
+      if (options.dryRun) {
+        console.error("No changes made (--dry-run).");
+        return;
+      }
+      if (stdin.isTTY && !options.yes) {
+        // Non-TTY and --yes both bypass the prompt; we don't block headless runs.
+        console.error("Pass --yes to apply, or re-run with --dry-run to preview.");
+        return;
+      }
+      const result = options.remove ? applyRemove(plan) : applySetup(plan);
+      console.error(result.message);
+      if (result.backup) console.error(`Backup: ${result.backup}`);
+      if (!result.applied) process.exitCode = 1;
+    });
+
+  program
+    .command("hook-report", { hidden: true })
+    .description("Bridge hook for foreign AI CLIs (invoked by their hook events; not for direct use).")
+    .requiredOption("--source <source>", "Foreign CLI source (claude, codex)")
+    .requiredOption("--event <event>", "Hook event name")
+    .action(async (options) => {
+      await runHookReportCli({ source: options.source, event: options.event });
     });
 
   program
