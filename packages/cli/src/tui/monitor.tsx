@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import { glyphs, PALETTE, roleColor, VERDICT_COLOR, type QuorateConfig } from "@quorate/core";
 import { providerSnapshots, type ShellState } from "../session.js";
+import { isGateLane, runControl } from "../monitor-controls.js";
 import { LaneStream, ProvidersGrid, RunRowView, truncateLine } from "./views.js";
 import {
   type MonitorLane,
@@ -78,6 +79,7 @@ function SelectedRunLanes({
         run.lanes.map((lane, index) => (
           <Box key={lane.laneKey}>
             <Text color={index === cursor ? PALETTE.accent : PALETTE.dim}>{index === cursor ? "› " : "  "}</Text>
+            {isGateLane(lane.providerId) ? <Text color={PALETTE.degraded}>{"⛨ "}</Text> : null}
             <RunRowView row={lane.row} maxWidth={Math.max(maxWidth - 4, 16)} />
           </Box>
         ))
@@ -117,6 +119,7 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
   // Filesystem reads happen only inside the effect below, never in render.
   const [state, setState] = useState<MonitorState>(initialMonitorState);
   const [showAgents, setShowAgents] = useState(false);
+  const [notice, setNotice] = useState<string | undefined>(undefined);
 
   const poll = useCallback(() => {
     setState((previous) => pollMonitorState(previous, { dir: props.dir }));
@@ -146,8 +149,18 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
       setShowAgents((previous) => !previous);
       return;
     }
+    // Focused-lane sub-mode captures everything except quit/agents above —
+    // destructive keys must not fire from inside the drill-in view.
     if (state.focusedLane) {
       if (key.escape || key.leftArrow) setState(blurLane);
+      return;
+    }
+    if (input === "x" || input === "r") {
+      const run = state.runs.find((entry) => entry.entry.runId === state.selectedRun);
+      if (run) {
+        const result = runControl(input === "x" ? "abort" : "rerun", run.entry.runId, props.dir);
+        setNotice(result.message);
+      }
       return;
     }
     if (key.upArrow) setState((previous) => moveLaneCursor(previous, -1));
@@ -203,11 +216,17 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
         </Box>
       )}
 
+      {notice ? (
+        <Box marginTop={1}>
+          <Text color={PALETTE.accent}>{truncateLine(notice, maxWidth)}</Text>
+        </Box>
+      ) : null}
+
       <Box marginTop={1}>
         <Text color={PALETTE.dim}>
           {focused
             ? `esc back ${g.separator} q quit`
-            : `↑↓ lanes ${g.separator} →/enter watch ${g.separator} [ ] runs ${g.separator} a agents ${g.separator} q quit`}
+            : `↑↓ lanes ${g.separator} →/enter watch ${g.separator} [ ] runs ${g.separator} x abort ${g.separator} r rerun ${g.separator} a agents ${g.separator} q quit`}
         </Text>
       </Box>
     </Box>

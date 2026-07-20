@@ -10,6 +10,7 @@ import {
   liveRunFilePath,
   liveRunMetaPath,
   readRunEvents,
+  sanitizeArgvForMeta,
   teeJsonStreamSink
 } from "../src/live-spool.js";
 import { createJsonStreamSink } from "../src/json-stream.js";
@@ -306,6 +307,19 @@ describe("safety hardening", () => {
 
     // Assert — the reader clamps to the real size and keeps working.
     expect(reread.events.map((event) => event.type)).toEqual(["verdict"]);
+  });
+});
+
+describe("sanitizeArgvForMeta", () => {
+  it("withholds argv entirely when any element looks secret-bearing", () => {
+    expect(sanitizeArgvForMeta(["dist/index.js", "review", "--api-key", "sk-123"])).toBeUndefined();
+    expect(sanitizeArgvForMeta(["dist/index.js", "review", "--token=abc"])).toBeUndefined();
+    expect(sanitizeArgvForMeta(["dist/index.js", "review", "--base", "main"])).toEqual([
+      "dist/index.js",
+      "review",
+      "--base",
+      "main"
+    ]);
   });
 });
 

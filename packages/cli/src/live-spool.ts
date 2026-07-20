@@ -54,6 +54,17 @@ export interface LiveRunEntry {
   planned: string[];
   status: LiveRunStatus;
   updatedAt: string;
+  /** argv (after execPath) of the owning process — enables monitor rerun.
+   *  Omitted entirely when any element looks secret-bearing. */
+  argv?: string[];
+}
+
+/** Flags whose values (or inline `=values`) may carry secrets — if any argv
+ *  element matches, the whole argv is withheld from the on-disk meta. */
+const SECRET_ARGV_PATTERN = /(key|token|secret|password|credential|bearer)/i;
+
+export function sanitizeArgvForMeta(argv: string[]): string[] | undefined {
+  return argv.some((part) => SECRET_ARGV_PATTERN.test(part)) ? undefined : argv;
 }
 
 /** Keep the registry bounded; oldest settled runs (and their spool files) are pruned. */
@@ -294,7 +305,8 @@ export function createLiveSpoolSink(options: LiveSpoolOptions = {}): LiveSpool {
       startedAt: event.at,
       planned: event.planned.map((lane) => `${lane.providerId}:${lane.role}`),
       status: "running",
-      updatedAt: nowIso()
+      updatedAt: nowIso(),
+      argv: sanitizeArgvForMeta(process.argv.slice(1))
     };
     const current = entry;
     guard(() => {

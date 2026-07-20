@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { initialMonitorState, pollMonitorState, type MonitorState } from "./tui/monitor-state.js";
+import { isGateLane, runControl, type ControlAction } from "./monitor-controls.js";
 import { MONITOR_PAGE_HTML } from "./monitor-page.js";
 
 /**
@@ -73,6 +74,7 @@ export function monitorSnapshotPayload(state: MonitorState): string {
       laneKey: lane.laneKey,
       providerId: lane.providerId,
       role: lane.role,
+      gate: isGateLane(lane.providerId),
       state: lane.row.state,
       note: lane.row.note,
       status: lane.row.status,
@@ -107,17 +109,22 @@ export function handleMonitorRequest(
   }
   const provided = url.searchParams.get("token");
 
-  if (req.method !== "GET") {
-    applyHeaders(res, { "content-type": "text/plain; charset=utf-8" });
-    res.statusCode = 405;
-    res.end("method not allowed");
-    return true;
-  }
-
   if (!tokenMatches(context.token, provided)) {
     applyHeaders(res, { "content-type": "text/plain; charset=utf-8" });
     res.statusCode = 401;
     res.end("unauthorized");
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/control") {
+    handleControlRequest(req, res, context.dir);
+    return true;
+  }
+
+  if (req.method !== "GET") {
+    applyHeaders(res, { "content-type": "text/plain; charset=utf-8" });
+    res.statusCode = 405;
+    res.end("method not allowed");
     return true;
   }
 
@@ -169,6 +176,69 @@ export function handleMonitorRequest(
   res.statusCode = 404;
   res.end("not found");
   return true;
+}
+
+const MAX_CONTROL_BODY_BYTES = 4_096;
+/** councilRunId charset — mirrors the spool's SAFE_RUN_ID gate. */
+const SAFE_RUN_ID = /^[A-Za-z0-9._-]+$/;
+
+/** POST /control — {action: "abort"|"rerun", runId}. Validated, token-gated. */
+function handleControlRequest(req: IncomingMessage, res: ServerResponse, dir?: string): void {
+  const reply = (statusCode: number, body: { ok: boolean; message: string }): void => {
+    applyHeaders(res, { "content-type": "application/json; charset=utf-8" });
+    res.statusCode = statusCode;
+    res.end(JSON.stringify(body));
+  };
+
+  let raw = "";
+  let settled = false;
+  const settle = (statusCode: number, body: { ok: boolean; message: string }): void => {
+    if (settled) return;
+    settled = true;
+    reply(statusCode, body);
+  };
+
+  // Slow-loris guard: the whole body must arrive within the window.
+  const deadline = setTimeout(() => {
+    settle(408, { ok: false, message: "body read timeout" });
+    req.destroy();
+  }, 10_000);
+  deadline.unref?.();
+
+  req.on("data", (chunk: Buffer) => {
+    raw += chunk.toString("utf8");
+    if (raw.length > MAX_CONTROL_BODY_BYTES) {
+      // Answer BEFORE dropping the connection — destroy() suppresses "end".
+      settle(413, { ok: false, message: "body too large" });
+      req.destroy();
+    }
+  });
+  req.on("error", () => {
+    clearTimeout(deadline);
+  });
+  req.on("end", () => {
+    clearTimeout(deadline);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return settle(400, { ok: false, message: "body must be JSON" });
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return settle(400, { ok: false, message: "body must be a JSON object" });
+    }
+    const body = parsed as { action?: unknown; runId?: unknown };
+    const action = body.action;
+    const runId = body.runId;
+    if (action !== "abort" && action !== "rerun") {
+      return settle(400, { ok: false, message: "action must be abort or rerun" });
+    }
+    if (typeof runId !== "string" || !SAFE_RUN_ID.test(runId)) {
+      return settle(400, { ok: false, message: "runId is missing or malformed" });
+    }
+    const result = runControl(action as ControlAction, runId, dir);
+    return settle(result.ok ? 200 : 409, result);
+  });
 }
 
 export function createMonitorServer(options: MonitorServerOptions = {}): MonitorServerHandle {
