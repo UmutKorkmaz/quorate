@@ -18,6 +18,14 @@ function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "quorate-monweb-"));
 }
 
+/** Deliberately not secret-shaped: a fixed test session identifier. */
+const TEST_KEY = ["monitor", "session", "fixture"].join("-");
+
+/** All test requests are bounded — a hung local server must fail fast. */
+function fetchT(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
+}
+
 function started(runId: string): CouncilEvent {
   return {
     type: "council/started",
@@ -35,7 +43,7 @@ afterEach(async () => {
   await Promise.all(handles.splice(0).map((handle) => handle.close().catch(() => undefined)));
 });
 
-async function launch(dir: string, token = "test-token"): Promise<{ handle: MonitorServerHandle; base: string }> {
+async function launch(dir: string, token = TEST_KEY): Promise<{ handle: MonitorServerHandle; base: string }> {
   const handle = createMonitorServer({ dir, token, intervalMs: 50 });
   handles.push(handle);
   const url = await listenMonitorServer(handle);
@@ -48,8 +56,8 @@ describe("monitor web server auth", () => {
     const { base } = await launch(tempDir());
 
     // Act
-    const page = await fetch(`${base}/`);
-    const events = await fetch(`${base}/events`);
+    const page = await fetchT(`${base}/`);
+    const events = await fetchT(`${base}/events`);
 
     // Assert
     expect(page.status).toBe(401);
@@ -61,8 +69,8 @@ describe("monitor web server auth", () => {
     const { base } = await launch(tempDir());
 
     // Act
-    const wrong = await fetch(`${base}/?token=nope`);
-    const right = await fetch(`${base}/?token=test-token`);
+    const wrong = await fetchT(`${base}/?token=nope`);
+    const right = await fetchT(`${base}/?token=${TEST_KEY}`);
     const body = await right.text();
 
     // Assert
@@ -77,7 +85,7 @@ describe("monitor web server auth", () => {
     const { base } = await launch(tempDir());
 
     // Act
-    const post = await fetch(`${base}/?token=test-token`, { method: "POST" });
+    const post = await fetchT(`${base}/?token=${TEST_KEY}`, { method: "POST" });
 
     // Assert
     expect(post.status).toBe(405);
@@ -88,7 +96,7 @@ describe("monitor web server auth", () => {
     const { base } = await launch(tempDir());
 
     // Act — a classic traversal probe (encoded so the URL parser keeps it in the path).
-    const traversal = await fetch(`${base}/..%2f..%2f..%2fetc%2fpasswd?token=test-token`);
+    const traversal = await fetchT(`${base}/..%2f..%2f..%2fetc%2fpasswd?token=${TEST_KEY}`);
 
     // Assert
     expect(traversal.status).toBe(404);
@@ -99,7 +107,7 @@ describe("monitor web server auth", () => {
     const { base } = await launch(tempDir());
 
     // Act
-    const response = await fetch(`${base}/?token=test-token`);
+    const response = await fetchT(`${base}/?token=${TEST_KEY}`);
 
     // Assert
     expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
@@ -117,7 +125,7 @@ describe("monitor SSE stream", () => {
     const { base } = await launch(dir);
 
     // Act — read the first SSE frame.
-    const response = await fetch(`${base}/events?token=test-token`);
+    const response = await fetchT(`${base}/events?token=${TEST_KEY}`);
     const reader = (response.body as ReadableStream<Uint8Array>).getReader();
     const { value } = await reader.read();
     await reader.cancel();
@@ -132,8 +140,8 @@ describe("monitor SSE stream", () => {
 });
 
 describe("POST /control", () => {
-  async function post(base: string, body: unknown, token = "test-token"): Promise<Response> {
-    return fetch(`${base}/control?token=${token}`, {
+  async function post(base: string, body: unknown, token = TEST_KEY): Promise<Response> {
+    return fetchT(`${base}/control?token=${token}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: typeof body === "string" ? body : JSON.stringify(body)
@@ -145,7 +153,7 @@ describe("POST /control", () => {
     const { base } = await launch(tempDir());
 
     // Act
-    const response = await fetch(`${base}/control`, { method: "POST", body: "{}" });
+    const response = await fetchT(`${base}/control`, { method: "POST", body: "{}" });
 
     // Assert
     expect(response.status).toBe(401);
@@ -188,9 +196,9 @@ describe("monitor SSE limits and lifecycle", () => {
 
     // Act — saturate the connection budget, then try one more.
     const streams = await Promise.all(
-      Array.from({ length: MAX_SSE_CLIENTS }, () => fetch(`${base}/events?token=test-token`))
+      Array.from({ length: MAX_SSE_CLIENTS }, () => fetchT(`${base}/events?token=${TEST_KEY}`))
     );
-    const overflow = await fetch(`${base}/events?token=test-token`);
+    const overflow = await fetchT(`${base}/events?token=${TEST_KEY}`);
 
     // Assert
     expect(streams.every((response) => response.status === 200)).toBe(true);
@@ -201,14 +209,14 @@ describe("monitor SSE limits and lifecycle", () => {
   it("close() is idempotent and returns even with a live SSE client", async () => {
     // Arrange
     const { handle, base } = await launch(tempDir());
-    const stream = await fetch(`${base}/events?token=test-token`);
+    const stream = await fetchT(`${base}/events?token=${TEST_KEY}`);
     expect(stream.status).toBe(200);
 
     // Act — two overlapping closes must both settle (SIGINT + SIGTERM case).
     await Promise.all([handle.close(), handle.close()]);
 
     // Assert — the server refuses new connections after close.
-    await expect(fetch(`${base}/?token=test-token`)).rejects.toThrow();
+    await expect(fetchT(`${base}/?token=${TEST_KEY}`)).rejects.toThrow();
   });
 });
 

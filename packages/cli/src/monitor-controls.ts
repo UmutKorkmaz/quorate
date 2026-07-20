@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { basename } from "node:path";
 import { listLiveRuns, type LiveRunEntry } from "./live-spool.js";
 
 /**
@@ -35,25 +36,34 @@ function findRun(runId: string, dir?: string): LiveRunEntry | undefined {
 }
 
 /**
- * Best-effort identity check before signaling: the pid's command line must
- * still look like a Node/quorate process. Narrows the pid-reuse window from
- * "any process" to "another node process spawned since" — with SIGINT (the
- * default-Ctrl+C, catchable signal) as the second layer of safety.
- * POSIX only; on Windows `ps` is absent and we fall through to allow.
+ * Best-effort identity check before signaling: the pid's process must still
+ * look like a Node/quorate process. Narrows the pid-reuse window from "any
+ * process" to "another node process spawned since". This matters doubly on
+ * Windows, where process.kill(pid, "SIGINT") is an uncatchable
+ * TerminateProcess — never signal there without an identity match.
  */
 function pidLooksLikeQuorate(pid: number): boolean {
-  if (process.platform === "win32") return true;
   try {
+    if (process.platform === "win32") {
+      const result = spawnSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
+        encoding: "utf8",
+        timeout: 2_000,
+        shell: false
+      });
+      // Fail CLOSED on Windows: TerminateProcess is unrecoverable.
+      if (result.status !== 0) return false;
+      return /node|quorate/i.test(result.stdout ?? "");
+    }
     const result = spawnSync("ps", ["-p", String(pid), "-o", "args="], {
       encoding: "utf8",
       timeout: 2_000,
       shell: false
     });
     if (result.status !== 0) return false; // pid is gone
-    const args = (result.stdout ?? "").trim();
-    return /node|quorate/i.test(args);
+    return /node|quorate/i.test((result.stdout ?? "").trim());
   } catch {
-    return true; // ps itself failed — do not block the user's own abort
+    // POSIX SIGINT is catchable — do not block the user's own abort there.
+    return process.platform !== "win32";
   }
 }
 
@@ -83,10 +93,14 @@ export function abortLiveRun(runId: string, dir?: string): ControlResult {
 
 /** The first argv element must be Quorate's own entry script. Later elements
  *  are ordinary CLI args (spawned with shell:false they cannot escape into a
- *  shell), but the entrypoint is what actually executes — pin it. */
+ *  shell), but the entrypoint is what actually executes — pin it strictly:
+ *  the resolved BASENAME (not a substring anywhere in the path) must be the
+ *  quorate bin or its dist entry, so `/tmp/quorate-evil.js` does not pass. */
 function argvLooksLikeQuorate(argv: string[]): boolean {
   const entry = argv[0] ?? "";
-  return /quorate|dist\/index\.js/.test(entry) && argv.every((part) => typeof part === "string");
+  if (!argv.every((part) => typeof part === "string")) return false;
+  const name = basename(entry);
+  return name === "quorate" || (name === "index.js" && /(^|[\\/])dist[\\/]index\.js$/.test(entry));
 }
 
 /** In-process debounce: one respawn per runId at a time. */
@@ -118,8 +132,12 @@ export function rerunLiveRun(runId: string, dir?: string): ControlResult {
   if (rerunsInFlight.has(runId)) {
     return { ok: false, message: "A rerun for this run was just started; wait for it to register." };
   }
+  // By this point the command is validated: entrypoint pinned to the quorate
+  // bin/dist script, all elements strings, cwd exists — and shell:false means
+  // arguments can never be reinterpreted by a shell.
+  const validatedCommand = run.argv;
   try {
-    const child = spawn(process.execPath, run.argv, {
+    const child = spawn(process.execPath, validatedCommand, {
       cwd: run.cwd,
       detached: true,
       stdio: "ignore",

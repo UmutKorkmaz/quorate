@@ -34,6 +34,75 @@ export interface MonitorServerHandle {
   close(): Promise<void>;
 }
 
+/**
+ * One shared poller for all SSE clients: a single interval polls the spool
+ * once per tick and fans the serialized snapshot out to every subscriber.
+ * N clients cost one filesystem sweep, not N. The interval only runs while
+ * at least one client is connected.
+ */
+export interface SseBroadcaster {
+  subscribe(res: ServerResponse): void;
+  size(): number;
+  closeAll(): void;
+}
+
+export function createSseBroadcaster(options: { dir?: string; intervalMs?: number }): SseBroadcaster {
+  const clients = new Set<ServerResponse>();
+  let state = initialMonitorState();
+  let interval: NodeJS.Timeout | undefined;
+
+  const stop = (): void => {
+    if (interval) clearInterval(interval);
+    interval = undefined;
+  };
+
+  const push = (): void => {
+    // A transient spool read error must not crash the process from a timer —
+    // keep the last good state and retry next tick.
+    let payload: string;
+    try {
+      state = pollMonitorState(state, { dir: options.dir });
+      payload = monitorSnapshotPayload(state);
+    } catch {
+      return;
+    }
+    for (const res of clients) {
+      // A stalled client must not buffer snapshots unboundedly: skip its
+      // frame under backpressure (frames are full snapshots — lossless skip).
+      try {
+        if (res.writableNeedDrain || res.writableEnded) continue;
+        res.write(`data: ${payload}\n\n`);
+      } catch {
+        clients.delete(res);
+        res.destroy();
+      }
+    }
+  };
+
+  return {
+    subscribe(res: ServerResponse) {
+      clients.add(res);
+      const cleanup = (): void => {
+        clients.delete(res);
+        if (clients.size === 0) stop();
+      };
+      res.on("close", cleanup);
+      res.on("error", cleanup);
+      // First frame immediately; shared interval only while clients exist.
+      push();
+      interval ??= setInterval(push, options.intervalMs ?? MONITOR_SSE_INTERVAL_MS);
+    },
+    size() {
+      return clients.size;
+    },
+    closeAll() {
+      stop();
+      for (const res of clients) res.destroy();
+      clients.clear();
+    }
+  };
+}
+
 const SECURITY_HEADERS: Record<string, string> = {
   "content-security-policy":
     "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'",
@@ -115,7 +184,7 @@ export const MAX_SSE_CLIENTS = 8;
 export function handleMonitorRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  context: { token: string; dir?: string; intervalMs?: number; sockets?: Set<ServerResponse> }
+  context: { token: string; dir?: string; broadcaster?: SseBroadcaster }
 ): boolean {
   let url: URL;
   try {
@@ -155,7 +224,7 @@ export function handleMonitorRequest(
   }
 
   if (url.pathname === "/events") {
-    if ((context.sockets?.size ?? 0) >= MAX_SSE_CLIENTS) {
+    if (!context.broadcaster || context.broadcaster.size() >= MAX_SSE_CLIENTS) {
       applyHeaders(res, { "content-type": "text/plain; charset=utf-8", "retry-after": "5" });
       res.statusCode = 503;
       res.end("too many monitor clients");
@@ -163,31 +232,7 @@ export function handleMonitorRequest(
     }
     applyHeaders(res, { "content-type": "text/event-stream", connection: "keep-alive" });
     res.statusCode = 200;
-
-    let state = initialMonitorState();
-    const push = (): void => {
-      // A transient spool read error must not crash the process from a timer,
-      // and a stalled client must not buffer snapshots unboundedly: skip the
-      // frame when the socket signals backpressure (SSE frames are snapshots,
-      // so dropping one loses nothing).
-      try {
-        if (res.writableNeedDrain || res.writableEnded) return;
-        state = pollMonitorState(state, { dir: context.dir });
-        res.write(`data: ${monitorSnapshotPayload(state)}\n\n`);
-      } catch {
-        cleanup();
-        res.destroy();
-      }
-    };
-    const interval = setInterval(push, context.intervalMs ?? MONITOR_SSE_INTERVAL_MS);
-    context.sockets?.add(res);
-    const cleanup = (): void => {
-      clearInterval(interval);
-      context.sockets?.delete(res);
-    };
-    res.on("close", cleanup);
-    res.on("error", cleanup);
-    push();
+    context.broadcaster.subscribe(res);
     return true;
   }
 
@@ -262,9 +307,9 @@ function handleControlRequest(req: IncomingMessage, res: ServerResponse, dir?: s
 
 export function createMonitorServer(options: MonitorServerOptions = {}): MonitorServerHandle {
   const token = options.token ?? newMonitorToken();
-  const sockets = new Set<ServerResponse>();
+  const broadcaster = createSseBroadcaster({ dir: options.dir, intervalMs: options.intervalMs });
   const server = createServer((req, res) => {
-    handleMonitorRequest(req, res, { token, dir: options.dir, intervalMs: options.intervalMs, sockets });
+    handleMonitorRequest(req, res, { token, dir: options.dir, broadcaster });
   });
 
   let closing: Promise<void> | undefined;
@@ -282,8 +327,7 @@ export function createMonitorServer(options: MonitorServerOptions = {}): Monitor
       // same close. destroy() (not end()) so a stalled client's socket cannot
       // keep server.close() waiting in FIN_WAIT forever.
       closing ??= (async () => {
-        for (const socket of sockets) socket.destroy();
-        sockets.clear();
+        broadcaster.closeAll();
         await new Promise<void>((resolvePromise, rejectPromise) => {
           server.close((error) => (error ? rejectPromise(error) : resolvePromise()));
         });

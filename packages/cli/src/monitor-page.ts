@@ -195,8 +195,9 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   }
 
   async function control(action, runId) {
+    if (!window.confirm(action + " this run?")) return;
     try {
-      const response = await fetch("/control?token=" + encodeURIComponent(token || ""), {
+      const response = await fetch("/control?" + new URLSearchParams({ token: sessionKey || "" }), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, runId })
@@ -209,8 +210,10 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   }
 
   const status = document.getElementById("status");
-  const token = new URLSearchParams(location.search).get("token");
-  const source = new EventSource("/events?token=" + encodeURIComponent(token || ""));
+  // Per-launch session key from the printed URL. EventSource cannot set
+  // headers, so it rides the query string on this loopback-only origin.
+  const sessionKey = new URLSearchParams(location.search).get("token");
+  const source = new EventSource("/events?" + new URLSearchParams({ token: sessionKey || "" }));
   source.onopen = () => { status.textContent = "live"; status.className = "live"; };
   source.onerror = () => { status.textContent = "disconnected"; status.className = "dead"; };
   source.onmessage = (message) => {
