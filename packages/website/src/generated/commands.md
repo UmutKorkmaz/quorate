@@ -7,6 +7,7 @@ Type `/` in the Quorate interactive shell to open the command palette.
 | Command | Description |
 | --- | --- |
 | `/providers` | List providers and local availability |
+| `/monitor` | Show live council runs on this machine (full dashboard: quorate monitor) |
 | `/doctor` | Council readiness verdict (environment + providers) |
 | `/inspect` | Config path, agents, roles, spawn status, and project memory |
 | `/setup` | Guided setup wizard (/git → /use → /review) |
