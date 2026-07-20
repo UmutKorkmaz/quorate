@@ -54070,7 +54070,9 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       ...includeSupplyChain ? [{ providerId: "supply-chain", role: "supply-chain", providerType: supplyChainProviderType }] : [],
       ...includeWeb3Dd ? [{ providerId: "web3-dd", role: "web3-due-diligence", providerType: web3DdProviderType }] : []
     ],
-    at: (/* @__PURE__ */ new Date()).toISOString()
+    at: (/* @__PURE__ */ new Date()).toISOString(),
+    // Optional nesting marker: consumers that predate it see no field at all.
+    ...options?.parent ? { parentRunId: options.parent.runId, parentLane: options.parent.lane } : {}
   });
   const reviewRequest = {
     ...request2,

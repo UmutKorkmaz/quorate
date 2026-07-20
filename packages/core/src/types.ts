@@ -311,6 +311,11 @@ export type CouncilEvent =
       subject: string;
       planned: Array<{ providerId: string; role: string; providerType: ProviderType }>;
       at: string;
+      /** Set when this council is a nested subagent run: the parent council's
+       *  runId and the `providerId:role` lane that spawned it. Absent for
+       *  top-level runs — consumers must treat missing as "no parent". */
+      parentRunId?: string;
+      parentLane?: string;
     }
   | {
       type: "provider/started";
@@ -349,4 +354,6 @@ export type CouncilEvent =
 export interface RunCouncilOptions {
   onEvent?: (event: CouncilEvent) => void;
   signal?: AbortSignal;
+  /** Marks this run as a nested subagent council of a parent run's lane. */
+  parent?: { runId: string; lane: string };
 }

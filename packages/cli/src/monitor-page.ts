@@ -82,6 +82,7 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   .actions button:hover { color: var(--text); border-color: var(--accent); }
   #toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--surface-2);
     padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; display: none; }
+  .subrun { color: var(--dim); font-size: 0.8rem; margin: 0.1rem 0 0.3rem 2.5rem; }
 </style>
 </head>
 <body>
@@ -112,6 +113,12 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   function laneStateText(lane) {
     if (lane.state === "done") return lane.note || lane.status || "done";
     return lane.state;
+  }
+
+  function subagentSummary(child) {
+    const done = child.lanes.filter((l) => l.state === "done").length;
+    return "└ subagent council · " + child.status + " · " + done + "/" + child.lanes.length + " lanes" +
+      (child.verdict ? " · " + child.verdict.toUpperCase() : "");
   }
 
   function render(data) {
@@ -165,6 +172,14 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
           tail.classList.toggle("open");
         });
         lanes.append(row, tail);
+        for (const child of (run.children || []).filter((c) => c.parentLane === lane.laneKey)) {
+          lanes.append(el("div", "subrun", subagentSummary(child)));
+        }
+      }
+      // Children with a missing/unmatched parentLane must still render.
+      const laneKeys = new Set(run.lanes.map((l) => l.laneKey));
+      for (const child of (run.children || []).filter((c) => !laneKeys.has(c.parentLane))) {
+        lanes.append(el("div", "subrun", subagentSummary(child)));
       }
       card.append(lanes);
       root.append(card);
