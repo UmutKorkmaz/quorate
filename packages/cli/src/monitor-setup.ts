@@ -47,19 +47,33 @@ const CLAUDE_EVENTS = [
  *  anything without it. */
 export const QUORATE_HOOK_MARKER = "hook-report --source claude";
 
-/** Absolute path to the quorate binary, resolved at setup time. */
+/** Absolute path to the quorate binary, resolved at setup time.
+ *  Tries `command -v` via /bin/sh (more portable than `which`, which is absent
+ *  on some distros/sandboxes), then the candidate paths the installer writes
+ *  into hooks, then process.argv[1]. */
 function resolveQuorateBinary(): string {
   try {
-    const result = spawnSync("which", ["quorate"], { encoding: "utf8", shell: false });
-    if (result.status === 0) return result.stdout.trim();
+    const result = spawnSync("/bin/sh", ["-c", "command -v quorate 2>/dev/null || true"], { encoding: "utf8", shell: false });
+    if (result.status === 0) {
+      const resolved = result.stdout.trim();
+      if (resolved && existsSync(resolved)) return resolved;
+    }
   } catch {
-    // Fall through.
+    // Fall through to candidate paths.
+  }
+  for (const candidate of [join(homedir(), ".local", "bin", "quorate"), "/usr/local/bin/quorate", "/opt/homebrew/bin/quorate"]) {
+    if (existsSync(candidate)) return candidate;
   }
   return process.argv[1] ?? "quorate";
 }
 
 /** Build the guarded Claude hook command for one event. */
 export function buildClaudeHookCommand(quorateBinary: string, event: string): string {
+  // Defense in depth: event is interpolated into a single-quoted shell command,
+  // so reject anything outside [A-Za-z] even though callers pass a constant.
+  if (!/^[A-Za-z]+$/.test(event)) {
+    throw new Error(`Unsafe hook event name: ${JSON.stringify(event)}`);
+  }
   const abs = quorateBinary.replace(/'/g, "'\"'\"'");
   return `/bin/sh -c 'Q="${abs}"; [ -x "$Q" ] || Q="$(command -v quorate||true)"; [ -n "$Q" ] && exec "$Q" hook-report --source claude --event ${event}; exit 0'`;
 }

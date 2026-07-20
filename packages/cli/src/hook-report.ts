@@ -62,12 +62,13 @@ const APPROVAL_TTL_MS = 55_000;
  * Synchronous sleep used by the default PermissionRequest poll loop. A real
  * sleeper is mandatory in production — the no-op default would busy-spin at
  * 100% CPU for up to 55s on every foreign permission prompt. Backed by
- * Atomics.wait on a shared buffer (the only built-in sync sleep in Node).
+ * Atomics.wait on a single reused shared buffer (the only built-in sync sleep
+ * in Node) so we don't allocate per poll iteration.
  */
+const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
 function sleepSync(ms: number): void {
   if (ms <= 0) return;
-  const shared = new Int32Array(new SharedArrayBuffer(4));
-  Atomics.wait(shared, 0, 0, ms);
+  Atomics.wait(sleepBuffer, 0, 0, ms);
 }
 
 function nowIso(now: Date = new Date()): string {
