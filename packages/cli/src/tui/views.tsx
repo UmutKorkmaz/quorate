@@ -365,7 +365,7 @@ export interface RunRow {
 /** One provider lane in the live running panel: `provider:role` on the left with
  *  the live state right-aligned, plus an optional second line — a dim activity
  *  preview while running, or a fail-red error line when a done row errored. */
-function RunRowView({ row, maxWidth }: { row: RunRow; maxWidth: number }): React.ReactElement {
+export function RunRowView({ row, maxWidth }: { row: RunRow; maxWidth: number }): React.ReactElement {
   const g = glyphs();
   const isErr = row.state === "done" && row.status !== undefined && row.status !== "ok";
   return (

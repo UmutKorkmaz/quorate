@@ -79,9 +79,10 @@ import { buildDoctorBundle } from "./doctor-bundle.js";
 import { printDoctor } from "./doctor.js";
 import { latestSession, loadSession, type PersistedSession } from "./sessions.js";
 import { runCouncilWithJsonStream } from "./json-stream.js";
-import { createLiveSpoolSink, teeJsonStreamSink } from "./live-spool.js";
+import { createLiveSpoolSink, listLiveRuns, teeJsonStreamSink } from "./live-spool.js";
 import { startShell } from "./shell.js";
 import { launchInkShell } from "./tui/index.js";
+import { launchMonitor } from "./tui/monitor.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
@@ -1680,6 +1681,24 @@ export function buildProgram(): Command {
         });
         if (shouldFailForPolicy(report, policy)) process.exitCode = 1;
       }
+    });
+
+  program
+    .command("monitor")
+    .helpGroup("Interactive:")
+    .description("Watch live council runs on this machine — agents, lanes, and per-lane output.")
+    .option("--json", "Print the live run registry as JSON and exit (no TUI)")
+    .action(async (options) => {
+      const cwd = cwdFrom(program);
+      if (options.json) {
+        process.stdout.write(`${JSON.stringify(listLiveRuns(), null, 2)}\n`);
+        return;
+      }
+      if (!stdin.isTTY || !stdout.isTTY) {
+        throw new Error("quorate monitor needs a TTY (use --json for machine output).");
+      }
+      const config = configFrom(program);
+      await launchMonitor({ cwd, config });
     });
 
   program
