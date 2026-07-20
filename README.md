@@ -516,6 +516,43 @@ sidecar files are enabled — use them to gate later steps.
 branch**, never from the PR head — a pull request cannot supply the config that
 governs its own review.
 
+## the monitor (native monitor + foreign agents)
+
+the monitor is a native macOS menu-bar/notch app that shows **every AI-agent
+run on this machine live** — Quorate's own council runs *and* foreign CLIs you
+launched yourself (Claude Code, …), their subagents, and live approve/deny for
+permission prompts. It is a thin renderer over the same SSE feed `quorate
+monitor --web` uses; all logic stays in the CLI.
+
+**Setup** (macOS 14+, one time):
+
+```sh
+# 1. Install the native app from a local build
+quorate monitor install-companion --from-local
+
+# 2. Install hooks so foreign CLIs are observable
+quorate monitor setup            # claude gets rich hooks; codex respected; others scan-only
+
+# 3. Run the monitor (the app can also spawn this itself)
+quorate monitor --serve          # headless: prints one {url,token,pid} line, serves until Ctrl+C
+# …or: quorate monitor --web     # browser dashboard
+# …or: open monitor.app    # native menu-bar/notch
+```
+
+| Foreign CLI | lanes | subagents | approve/deny | notes |
+|-------------|:-----:|:---------:|:------------:|-------|
+| claude      | ✅    | ✅        | ✅           | Only rich surface today. |
+| codex       | —     | —         | —            | Notify shim only if the slot is empty. |
+| gemini/qwen/kimi/opencode/crush/goose | — | — | — | Process-scan only. |
+
+See `docs/MONITOR-HOOKS.md` for the full capability matrix, the safe
+existence-guarded hook pattern, and the approve/deny contract (a
+`PermissionRequest` only blocks when a monitor is attached; 55s timeout then
+defer; `quorate monitor setup --remove` cleanly reverts).
+
+> Screenshot placeholder — run `quorate monitor --web` or open
+> monitor.app to see live runs, approval cards, and detected processes.
+
 ## How it works
 
 ```text
