@@ -454,7 +454,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@81deb42f04b3b21557b0a055001c48daa4d01baf
+      - uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -474,7 +474,7 @@ with a `type: api` provider pointing at a hosted gateway, pass the key from secr
 and set `runner-mode: api`:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@81deb42f04b3b21557b0a055001c48daa4d01baf
+      - uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
