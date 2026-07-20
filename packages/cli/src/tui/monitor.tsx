@@ -18,7 +18,7 @@ import {
   type MonitorRun,
   type MonitorState
 } from "./monitor-state.js";
-import { scanExternalAgents } from "../agent-scan.js";
+import { cachedExternalAgents, refreshExternalAgentsCache } from "../agent-scan.js";
 
 /**
  * `quorate monitor` — a live dashboard over the spool (~/.quorate/live).
@@ -200,17 +200,19 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
   // Two-keystroke confirmation for destructive actions: "abort:<runId>" / "rerun:<runId>".
   const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
 
-  // Throttle the process scanner to every ~10 polls (it spawns `ps`); on the
-  // other 9, pollMonitorState reuses previous.external.
+  // Throttle the process scanner to every ~10 polls. The refresh spawns `ps`
+  // asynchronously (never blocking the Ink event loop); the poll reads the
+  // cache synchronously.
   const pollTick = useRef(0);
   const poll = useCallback(() => {
     pollTick.current += 1;
     const refreshExternal = pollTick.current % 10 === 1;
+    if (refreshExternal) {
+      // Fire-and-forget async refresh; updates the cache when `ps` returns.
+      void refreshExternalAgentsCache(process.pid).catch(() => undefined);
+    }
     setState((previous) =>
-      pollMonitorState(
-        previous,
-        refreshExternal ? { dir: props.dir, scan: () => scanExternalAgents({ selfPid: process.pid }) } : { dir: props.dir }
-      )
+      pollMonitorState(previous, { dir: props.dir, scan: refreshExternal ? () => cachedExternalAgents() : undefined })
     );
   }, [props.dir]);
 
