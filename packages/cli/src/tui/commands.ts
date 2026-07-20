@@ -15,6 +15,7 @@ import {
   type CustomCommandDefinition
 } from "../custom-commands.js";
 import { formatDoctorReport } from "../doctor.js";
+import { listLiveRuns } from "../live-spool.js";
 import { readDiff } from "../diff.js";
 import { projectMemoryInspectLines } from "../project-memory.js";
 import { parseSupplyChainShellArgs, scanSupplyChain } from "../supply-chain-command.js";
@@ -182,6 +183,11 @@ export const baseCommandRegistry: SlashCommand[] = [
     name: "providers",
     summary: "List providers and local availability",
     run: runProviders
+  },
+  {
+    name: "monitor",
+    summary: "Show live council runs on this machine (full dashboard: quorate monitor)",
+    run: runMonitorSnapshot
   },
   {
     name: "doctor",
@@ -849,6 +855,20 @@ function providerSnapshotsFor(ctx: ShellContext) {
 
 function runProviders(ctx: ShellContext): void {
   ctx.emit({ id: cellId(), kind: "providerStatus", rows: providerSnapshotsFor(ctx) });
+}
+
+/** A one-shot registry snapshot; the live dashboard is `quorate monitor` (own screen). */
+function runMonitorSnapshot(ctx: ShellContext): void {
+  const runs = listLiveRuns();
+  if (runs.length === 0) {
+    text(ctx, "No live runs. Start one with /review here or `quorate review` in another terminal.");
+    return;
+  }
+  const lines = runs.slice(0, 10).map((run) => {
+    const started = run.startedAt.replace("T", " ").slice(0, 19);
+    return `  ${run.status.padEnd(8)} ${run.repo.padEnd(18)} ${run.mode.padEnd(7)} ${run.planned.length} lanes  ${started}  ${run.subject}`;
+  });
+  text(ctx, [`Live runs (${runs.length}):`, ...lines, "", "Full dashboard: quorate monitor"].join("\n"));
 }
 
 function runDoctor(ctx: ShellContext): void {

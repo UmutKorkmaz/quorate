@@ -54070,7 +54070,9 @@ async function runCouncil(request2, config2 = createDefaultConfig(), options) {
       ...includeSupplyChain ? [{ providerId: "supply-chain", role: "supply-chain", providerType: supplyChainProviderType }] : [],
       ...includeWeb3Dd ? [{ providerId: "web3-dd", role: "web3-due-diligence", providerType: web3DdProviderType }] : []
     ],
-    at: (/* @__PURE__ */ new Date()).toISOString()
+    at: (/* @__PURE__ */ new Date()).toISOString(),
+    // Optional nesting marker: consumers that predate it see no field at all.
+    ...options?.parent ? { parentRunId: options.parent.runId, parentLane: options.parent.lane } : {}
   });
   const reviewRequest = {
     ...request2,
@@ -55588,7 +55590,7 @@ var import_node_path5 = require("node:path");
 // package.json
 var package_default = {
   name: "@quorate/github-action",
-  version: "1.2.1",
+  version: "1.3.0",
   main: "./dist/index.js",
   private: true,
   files: [
@@ -55601,7 +55603,7 @@ var package_default = {
   dependencies: {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@quorate/core": "1.2.1"
+    "@quorate/core": "1.3.0"
   }
 };
 

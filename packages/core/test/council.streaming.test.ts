@@ -59,6 +59,30 @@ describe("runCouncil streaming events", () => {
     }
   });
 
+  it("omits parent fields for top-level runs and carries them for nested runs", async () => {
+    // Arrange & Act — one plain run, one marked as a subagent council.
+    const plainEvents: CouncilEvent[] = [];
+    await runCouncil({ mode: "review", subject: "fixture", diff: cleanDiff }, heuristicOnlyConfig(), {
+      onEvent: (event) => plainEvents.push(event)
+    });
+    const nestedEvents: CouncilEvent[] = [];
+    await runCouncil({ mode: "review", subject: "fixture", diff: cleanDiff }, heuristicOnlyConfig(), {
+      onEvent: (event) => nestedEvents.push(event),
+      parent: { runId: "parent-run-id", lane: "claude:security" }
+    });
+
+    // Assert — absence means "no parent"; presence carries both fields.
+    const plainStarted = plainEvents.find((event) => event.type === "council/started");
+    const nestedStarted = nestedEvents.find((event) => event.type === "council/started");
+    if (plainStarted?.type === "council/started") {
+      expect("parentRunId" in plainStarted).toBe(false);
+    }
+    if (nestedStarted?.type === "council/started") {
+      expect(nestedStarted.parentRunId).toBe("parent-run-id");
+      expect(nestedStarted.parentLane).toBe("claude:security");
+    }
+  });
+
   it("council/started planned lanes carry providerType", async () => {
     const events: CouncilEvent[] = [];
     await runCouncil(
