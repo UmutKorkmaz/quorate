@@ -72,7 +72,7 @@ describe("monitor web server auth", () => {
     expect(body).toContain("Quorate monitor");
   });
 
-  it("rejects non-GET methods", async () => {
+  it("rejects non-GET methods on non-control paths", async () => {
     // Arrange
     const { base } = await launch(tempDir());
 
@@ -128,6 +128,56 @@ describe("monitor SSE stream", () => {
     expect(frame.startsWith("data: ")).toBe(true);
     const payload = JSON.parse(frame.slice("data: ".length).trimEnd()) as { runs: Array<{ runId: string }> };
     expect(payload.runs[0]?.runId).toBe("run-sse");
+  });
+});
+
+describe("POST /control", () => {
+  async function post(base: string, body: unknown, token = "test-token"): Promise<Response> {
+    return fetch(`${base}/control?token=${token}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: typeof body === "string" ? body : JSON.stringify(body)
+    });
+  }
+
+  it("requires the token", async () => {
+    // Arrange
+    const { base } = await launch(tempDir());
+
+    // Act
+    const response = await fetch(`${base}/control`, { method: "POST", body: "{}" });
+
+    // Assert
+    expect(response.status).toBe(401);
+  });
+
+  it("validates the body shape", async () => {
+    // Arrange
+    const { base } = await launch(tempDir());
+
+    // Act
+    const notJson = await post(base, "not json");
+    const badAction = await post(base, { action: "explode", runId: "x" });
+    const badRunId = await post(base, { action: "abort", runId: "../etc" });
+
+    // Assert
+    expect(notJson.status).toBe(400);
+    expect(badAction.status).toBe(400);
+    expect(badRunId.status).toBe(400);
+  });
+
+  it("returns 409 with the control message for a valid but impossible request", async () => {
+    // Arrange
+    const { base } = await launch(tempDir());
+
+    // Act
+    const response = await post(base, { action: "abort", runId: "missing-run" });
+    const body = (await response.json()) as { ok: boolean; message: string };
+
+    // Assert
+    expect(response.status).toBe(409);
+    expect(body.ok).toBe(false);
+    expect(body.message).toContain("Unknown run");
   });
 });
 

@@ -71,6 +71,17 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
     max-height: 18rem; overflow-y: auto;
   }
   .tail.open { display: block; }
+  .lane.gate { border-left: 3px solid var(--warn); background: oklch(23% 0.03 85 / 0.35); }
+  .lane.gate .key strong { color: var(--warn); }
+  .actions { margin-left: auto; display: flex; gap: 0.4rem; }
+  .actions button {
+    font: 0.75rem var(--mono); color: var(--dim);
+    background: var(--surface-2); border: 1px solid oklch(35% 0.02 260);
+    border-radius: 6px; padding: 0.15rem 0.6rem; cursor: pointer;
+  }
+  .actions button:hover { color: var(--text); border-color: var(--accent); }
+  #toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--surface-2);
+    padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; display: none; }
 </style>
 </head>
 <body>
@@ -80,6 +91,7 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
   <span id="status">connecting…</span>
 </header>
 <main id="runs"><div class="empty">Waiting for data…</div></main>
+<div id="toast"></div>
 <script>
   "use strict";
   const openRuns = new Set();
@@ -118,6 +130,17 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
       if (run.verdict) {
         head.append(el("span", "verdict " + run.verdict, run.verdict.toUpperCase() + (run.degraded ? " (degraded)" : "")));
       }
+      const actions = el("span", "actions");
+      if (run.status === "running") {
+        const abort = el("button", "", "abort");
+        abort.addEventListener("click", (event) => { event.stopPropagation(); control("abort", run.runId); });
+        actions.append(abort);
+      } else {
+        const rerun = el("button", "", "rerun");
+        rerun.addEventListener("click", (event) => { event.stopPropagation(); control("rerun", run.runId); });
+        actions.append(rerun);
+      }
+      head.append(actions);
       head.addEventListener("click", () => {
         openRuns.has(run.runId) ? openRuns.delete(run.runId) : openRuns.add(run.runId);
         card.classList.toggle("open");
@@ -127,7 +150,7 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
       const lanes = el("div", "lanes");
       for (const lane of run.lanes) {
         const tailId = run.runId + "/" + lane.laneKey;
-        const row = el("div", "lane");
+        const row = el("div", "lane" + (lane.gate ? " gate" : ""));
         const key = el("span", "key");
         key.append(el("strong", "", lane.providerId));
         key.append(el("span", "role", ":" + lane.role));
@@ -145,6 +168,28 @@ export const MONITOR_PAGE_HTML = `<!doctype html>
       }
       card.append(lanes);
       root.append(card);
+    }
+  }
+
+  function toast(message) {
+    const node = document.getElementById("toast");
+    node.textContent = message;
+    node.style.display = "block";
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => { node.style.display = "none"; }, 4000);
+  }
+
+  async function control(action, runId) {
+    try {
+      const response = await fetch("/control?token=" + encodeURIComponent(token || ""), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, runId })
+      });
+      const result = await response.json();
+      toast(result.message || (result.ok ? action + " ok" : action + " failed"));
+    } catch {
+      toast(action + " request failed");
     }
   }
 
