@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-20
+
+### Added
+
+- **Foreign-agent ingest + hook installer** — `quorate monitor setup`
+  installs Quorate hook-report entries in foreign AI CLIs so the monitor can
+  observe them. Claude Code gets the rich surface (lanes, subagents, and live
+  approve/deny for `PermissionRequest` prompts); Codex gets a guarded notify
+  shim only when its notify slot is empty (never clobbered). Other CLIs
+  (gemini, qwen, kimi, opencode, crush, goose) are observed by process scan.
+  See `docs/MONITOR-HOOKS.md` for the honest capability matrix.
+- **`quorate hook-report --source <s> --event <E>`** — the foreign-CLI hook
+  bridge. Writes external runs into the live spool as `kind: "external"` and,
+  for `PermissionRequest` only, blocks the agent until the monitor answers an
+  approve/deny card (defers silently when no monitor is attached — zero
+  overhead when nobody is watching).
+- **`quorate monitor --serve`** — a headless server mode that prints one
+  `{url, token, pid}` JSON line and serves the SSE feed for the native app.
+  Writes a `~/.quorate/live/monitor.json` discovery file with a 2s heartbeat
+  on listen and removes it on close; this is what makes foreign
+  `PermissionRequest` hooks block for an answer.
+- **Approvals + foreign agents + jump across surfaces** — the SSE payload now
+  carries top-level `approvals`, `external`, and `stats`; `POST /control`
+  accepts `approve`/`deny` (approval id) and `jump` (runId) alongside
+  abort/rerun. The TUI renders pending-approval cards at the top (`y`/`n`) and
+  a detected-processes strip; the web page gains an approvals section, an
+  external badge, per-run Jump, and a stats footer. `j` in the TUI (and the
+  web's Jump button) focuses the run's terminal via tmux → iTerm2 →
+  Terminal.app (macOS).
+- **QuorateIsland native macOS app** — a thin menu-bar/notch renderer over
+  the monitor server (Swift, macOS 14+, read-only over the SSE feed). Lives
+  under `native/QuorateIsland/`; `bash native/QuorateIsland/scripts/bundle.sh`
+  produces an ad-hoc-signed `dist/QuorateIsland.app` (bundle id
+  `app.quorate.island`, version 1.4.0, `LSUIElement`). It finds or spawns
+  `quorate monitor --serve`, renders approvals + runs + subagents + verdicts,
+  and never writes the spool directly.
+- **`quorate monitor install-companion`** — installs QuorateIsland. Default
+  path downloads `QuorateIsland-<arch>.zip` + `.sha256` from a GitHub Release
+  and verifies the checksum; `--from-local` builds from the in-tree SwiftPM
+  package (the working path today, no signed release assets yet). macOS only.
+
 ## [1.3.0] - 2026-07-20
 
 ### Added

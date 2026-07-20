@@ -242,6 +242,12 @@ run git tag -a "$TAG" -m "Quorate $TAG"
 run git push origin "$TAG"
 run gh release create "$TAG" --verify-tag --target "$(git rev-parse HEAD)" \
   --title "Quorate $TAG" --notes-file "$NOTES_FILE"
+# QuorateIsland native asset (v1.4.0+): build the .app, zip + sha256, and attach
+# so `quorate monitor install-companion` (non-local path) works. Run by hand:
+#   bash native/QuorateIsland/scripts/bundle.sh
+#   cd native/QuorateIsland && ditto -c -k --keepParent dist/QuorateIsland.app QuorateIsland-arm64.zip
+#   shasum -a 256 QuorateIsland-arm64.zip >QuorateIsland-arm64.zip.sha256
+#   gh release upload "$TAG" QuorateIsland-arm64.zip QuorateIsland-arm64.zip.sha256
 run npm publish --workspace quorate "${PUBLISH_ARGS[@]}"
 
 [[ "$(npm view "quorate@$VERSION" version)" == "$VERSION" ]] || fail "CLI package verification failed"

@@ -87,6 +87,7 @@ import { launchMonitor } from "./tui/monitor.js";
 import { createMonitorServer, listenMonitorServer } from "./monitor-server.js";
 import { runHookReportCli } from "./hook-report.js";
 import { applyRemove, applySetup, claudeSettingsPath, codexConfigPath, codexNotifySlotOccupied, computeSetupPlan, detectCliCapabilities, renderCapabilityTable } from "./monitor-setup.js";
+import { installCompanion } from "./companion-install.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
@@ -1809,6 +1810,25 @@ export function buildProgram(): Command {
     .requiredOption("--event <event>", "Hook event name")
     .action(async (options) => {
       await runHookReportCli({ source: options.source, event: options.event });
+    });
+
+  monitorCmd
+    .command("install-companion")
+    .description("Install the QuorateIsland native macOS app (from a GitHub Release, or --from-local).")
+    .option("--from-local", "Build from the in-tree SwiftPM package instead of downloading")
+    .option("--release <tag>", "Release tag to install from (default: latest)")
+    .option("--dir <path>", "Install directory (default: ~/Applications)")
+    .option("--force", "Overwrite an existing install")
+    .action(async (options) => {
+      const result = await installCompanion({
+        fromLocal: Boolean(options.fromLocal),
+        release: options.release,
+        dir: options.dir,
+        force: Boolean(options.force),
+        repoRoot: cwdFrom(program)
+      });
+      console.error(result.message);
+      if (!result.ok) process.exitCode = 1;
     });
 
   program
