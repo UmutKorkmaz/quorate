@@ -352,7 +352,9 @@ export async function runCouncil(
         ? [{ providerId: "web3-dd", role: "web3-due-diligence", providerType: web3DdProviderType }]
         : [])
     ],
-    at: new Date().toISOString()
+    at: new Date().toISOString(),
+    // Optional nesting marker: consumers that predate it see no field at all.
+    ...(options?.parent ? { parentRunId: options.parent.runId, parentLane: options.parent.lane } : {})
   });
 
   // Carry per-role guidance and trusted custom heuristics into every provider
