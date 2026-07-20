@@ -13,7 +13,7 @@ import {
   type ApprovalRequest,
   type LiveRunEntry
 } from "./live-spool.js";
-import { scanExternalAgents, type ExternalAgent } from "./agent-scan.js";
+import { cachedExternalAgents, refreshExternalAgentsCache, type ExternalAgent } from "./agent-scan.js";
 import { jumpToRun } from "./terminal-jump.js";
 
 /**
@@ -66,10 +66,25 @@ export function createSseBroadcaster(options: { dir?: string; intervalMs?: numbe
   const clients = new Set<ServerResponse>();
   let state = initialMonitorState();
   let interval: NodeJS.Timeout | undefined;
-  // External process scan is the most expensive call per tick — throttle it to
-  // every 5th tick and reuse the cached result between refreshes.
+  // External process scan throttling: the tick reads the cache synchronously
+  // (never blocking the event loop); an async refresh kicks off every 5th tick
+  // and updates the cache when `ps` returns.
   let tick = 0;
-  let cachedExternal: ExternalAgent[] = [];
+  let refreshInFlight = false;
+  const refresh = (): void => {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
+    if (options.scan) {
+      // Tests inject a synchronous scan; respect it.
+      cachedExternal = options.scan();
+      refreshInFlight = false;
+      return;
+    }
+    refreshExternalAgentsCache().finally(() => {
+      refreshInFlight = false;
+    });
+  };
+  let cachedExternal: ExternalAgent[] = cachedExternalAgents();
 
   const stop = (): void => {
     if (interval) clearInterval(interval);
@@ -84,7 +99,8 @@ export function createSseBroadcaster(options: { dir?: string; intervalMs?: numbe
       state = pollMonitorState(state, { dir: options.dir });
       tick += 1;
       if (tick % 5 === 0 || (cachedExternal.length === 0 && tick === 1)) {
-        cachedExternal = options.scan ? options.scan() : scanExternalAgents();
+        refresh();
+        cachedExternal = cachedExternalAgents();
       }
       payload = monitorSnapshotPayload(state, { dir: options.dir, scan: () => cachedExternal });
     } catch {
