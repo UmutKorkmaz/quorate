@@ -3,6 +3,18 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { initialMonitorState, pollMonitorState, type MonitorState } from "./tui/monitor-state.js";
 import { isGateLane, runControl, type ControlAction } from "./monitor-controls.js";
 import { MONITOR_PAGE_HTML } from "./monitor-page.js";
+import {
+  listPendingApprovals,
+  listLiveRuns,
+  readMonitorDiscovery,
+  removeMonitorDiscovery,
+  writeApprovalDecision,
+  writeMonitorDiscovery,
+  type ApprovalRequest,
+  type LiveRunEntry
+} from "./live-spool.js";
+import { cachedExternalAgents, refreshExternalAgentsCache, type ExternalAgent } from "./agent-scan.js";
+import { jumpToRun } from "./terminal-jump.js";
 
 /**
  * `quorate monitor --web` — a loopback-only HTTP + SSE server over the live
@@ -24,6 +36,8 @@ export interface MonitorServerOptions {
   token?: string;
   /** SSE push interval; tests can shrink it. */
   intervalMs?: number;
+  /** Injectable external-agent scan for tests. */
+  scan?: () => ExternalAgent[];
 }
 
 export interface MonitorServerHandle {
@@ -31,6 +45,8 @@ export interface MonitorServerHandle {
   token: string;
   /** Resolves the printable URL once listening. */
   url(): string;
+  /** Begin the discovery heartbeat (called automatically on listen). */
+  startDiscovery(): void;
   close(): Promise<void>;
 }
 
@@ -46,10 +62,29 @@ export interface SseBroadcaster {
   closeAll(): void;
 }
 
-export function createSseBroadcaster(options: { dir?: string; intervalMs?: number }): SseBroadcaster {
+export function createSseBroadcaster(options: { dir?: string; intervalMs?: number; scan?: () => ExternalAgent[] }): SseBroadcaster {
   const clients = new Set<ServerResponse>();
   let state = initialMonitorState();
   let interval: NodeJS.Timeout | undefined;
+  // External process scan throttling: the tick reads the cache synchronously
+  // (never blocking the event loop); an async refresh kicks off every 5th tick
+  // and updates the cache when `ps` returns.
+  let tick = 0;
+  let refreshInFlight = false;
+  const refresh = (): void => {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
+    if (options.scan) {
+      // Tests inject a synchronous scan; respect it.
+      cachedExternal = options.scan();
+      refreshInFlight = false;
+      return;
+    }
+    refreshExternalAgentsCache().finally(() => {
+      refreshInFlight = false;
+    });
+  };
+  let cachedExternal: ExternalAgent[] = cachedExternalAgents();
 
   const stop = (): void => {
     if (interval) clearInterval(interval);
@@ -62,7 +97,12 @@ export function createSseBroadcaster(options: { dir?: string; intervalMs?: numbe
     let payload: string;
     try {
       state = pollMonitorState(state, { dir: options.dir });
-      payload = monitorSnapshotPayload(state);
+      tick += 1;
+      if (tick % 5 === 0 || (cachedExternal.length === 0 && tick === 1)) {
+        refresh();
+        cachedExternal = cachedExternalAgents();
+      }
+      payload = monitorSnapshotPayload(state, { dir: options.dir, scan: () => cachedExternal });
     } catch {
       return;
     }
@@ -138,6 +178,8 @@ interface RunPayload {
   verdict?: string;
   degraded?: boolean;
   parentLane?: string;
+  source?: string;
+  kind?: string;
   lanes: Array<Record<string, unknown>>;
   children?: RunPayload[];
 }
@@ -153,6 +195,8 @@ function runToPayload(run: MonitorState["runs"][number]): RunPayload {
     verdict: run.verdict,
     degraded: run.degraded,
     parentLane: run.entry.parentLane,
+    ...(run.entry.source ? { source: run.entry.source } : {}),
+    ...(run.entry.kind ? { kind: run.entry.kind } : {}),
     lanes: run.lanes.map((lane) => ({
       laneKey: lane.laneKey,
       providerId: lane.providerId,
@@ -169,9 +213,63 @@ function runToPayload(run: MonitorState["runs"][number]): RunPayload {
   };
 }
 
-/** Strip volatile fields the browser does not need; bound the payload. */
-export function monitorSnapshotPayload(state: MonitorState): string {
-  return JSON.stringify({ runs: state.runs.map(runToPayload) });
+/** Today's run stats, grouped by source (absent source → "quorate"). */
+interface StatsPayload {
+  today: { runs: number; bySource: Record<string, number> };
+}
+
+function buildStatsPayload(dir: string | undefined, entries?: LiveRunEntry[]): StatsPayload {
+  // Reuse the runs pollMonitorState already loaded when provided; only hit the
+  // filesystem when called standalone (tests/edge cases).
+  const runs = entries ?? listLiveRuns({ dir });
+  const todayPrefix = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  let count = 0;
+  const bySource: Record<string, number> = {};
+  for (const run of runs) {
+    if (!run.startedAt.startsWith(todayPrefix)) continue;
+    count += 1;
+    const source = run.source ?? "quorate";
+    bySource[source] = (bySource[source] ?? 0) + 1;
+  }
+  return { today: { runs: count, bySource } };
+}
+
+/** Approvals payload row — a trimmed view of an ApprovalRequest for the wire. */
+interface ApprovalPayload {
+  id: string;
+  runId: string;
+  source: string;
+  toolName: string;
+  summary: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+function approvalToPayload(request: ApprovalRequest): ApprovalPayload {
+  return {
+    id: request.id,
+    runId: request.runId,
+    source: request.source,
+    toolName: request.toolName,
+    summary: request.summary,
+    createdAt: request.createdAt,
+    expiresAt: request.expiresAt
+  };
+}
+
+/** Strip volatile fields the browser does not need; bound the payload.
+ *
+ *  Callers MUST pass `scan` if they want the external-agents list reflected;
+ *  this function deliberately does NOT fall back to `scanExternalAgents()`
+ *  (which uses spawnSync and would block the event loop on the SSE tick). */
+export function monitorSnapshotPayload(state: MonitorState, options: { dir?: string; scan?: () => ExternalAgent[] } = {}): string {
+  // Reuse the approvals the state already computed (pollMonitorState reap+list)
+  // so we do not readdir twice per tick; fall back to listPendingApprovals only
+  // for callers (tests) that pass a state without approvals.
+  const approvals = (state.approvals.length > 0 ? state.approvals : listPendingApprovals(options.dir)).map(approvalToPayload);
+  const external = options.scan ? options.scan() : state.external;
+  const stats = buildStatsPayload(options.dir, state.runs.map((run) => run.entry));
+  return JSON.stringify({ runs: state.runs.map(runToPayload), approvals, external, stats });
 }
 
 /**
@@ -246,7 +344,9 @@ const MAX_CONTROL_BODY_BYTES = 4_096;
 /** councilRunId charset — mirrors the spool's SAFE_RUN_ID gate. */
 const SAFE_RUN_ID = /^[A-Za-z0-9._-]+$/;
 
-/** POST /control — {action: "abort"|"rerun", runId}. Validated, token-gated. */
+/** POST /control — {action, runId|id}. Validated, token-gated.
+ *  Actions: abort/rerun (native runs), approve/deny (foreign approvals),
+ *  jump (focus the run's terminal). */
 function handleControlRequest(req: IncomingMessage, res: ServerResponse, dir?: string): void {
   const reply = (statusCode: number, body: { ok: boolean; message: string }): void => {
     applyHeaders(res, { "content-type": "application/json; charset=utf-8" });
@@ -291,28 +391,73 @@ function handleControlRequest(req: IncomingMessage, res: ServerResponse, dir?: s
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return settle(400, { ok: false, message: "body must be a JSON object" });
     }
-    const body = parsed as { action?: unknown; runId?: unknown };
+    const body = parsed as { action?: unknown; runId?: unknown; id?: unknown; reason?: unknown };
     const action = body.action;
-    const runId = body.runId;
-    if (action !== "abort" && action !== "rerun") {
-      return settle(400, { ok: false, message: "action must be abort or rerun" });
+    if (action !== "abort" && action !== "rerun" && action !== "approve" && action !== "deny" && action !== "jump") {
+      return settle(400, { ok: false, message: "action must be abort, rerun, approve, deny, or jump" });
     }
+    // approve/deny take an approval `id`; abort/rerun/jump take a runId.
+    if (action === "approve" || action === "deny") {
+      const id = body.id;
+      if (typeof id !== "string" || !SAFE_RUN_ID.test(id)) {
+        return settle(400, { ok: false, message: "id is missing or malformed" });
+      }
+      const reason = typeof body.reason === "string" && body.reason.length <= 300 ? body.reason : undefined;
+      const result = runApprovalControl(action, id, reason, dir);
+      return settle(result.ok ? 200 : 409, result);
+    }
+    const runId = body.runId;
     if (typeof runId !== "string" || !SAFE_RUN_ID.test(runId)) {
       return settle(400, { ok: false, message: "runId is missing or malformed" });
+    }
+    if (action === "jump") {
+      const result = jumpToRun(runId, { dir });
+      return settle(result.ok ? 200 : 409, result);
     }
     const result = runControl(action as ControlAction, runId, dir);
     return settle(result.ok ? 200 : 409, result);
   });
 }
 
+/** Write an approval decision for a pending foreign request. */
+function runApprovalControl(action: "approve" | "deny", id: string, reason: string | undefined, dir?: string): { ok: boolean; message: string } {
+  const pending = listPendingApprovals(dir);
+  const match = pending.find((request) => request.id === id);
+  if (!match) return { ok: false, message: `No pending approval with id ${id}` };
+  try {
+    writeApprovalDecision(
+      { id, decision: action === "approve" ? "allow" : "deny", ...(reason ? { reason } : {}), decidedAt: new Date().toISOString() },
+      dir
+    );
+    return { ok: true, message: action === "approve" ? "Approved." : "Denied." };
+  } catch (error: unknown) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { ok: false, message: `Could not write decision: ${detail}` };
+  }
+}
+
 export function createMonitorServer(options: MonitorServerOptions = {}): MonitorServerHandle {
   const token = options.token ?? newMonitorToken();
-  const broadcaster = createSseBroadcaster({ dir: options.dir, intervalMs: options.intervalMs });
+  const broadcaster = createSseBroadcaster({ dir: options.dir, intervalMs: options.intervalMs, scan: options.scan });
   const server = createServer((req, res) => {
     handleMonitorRequest(req, res, { token, dir: options.dir, broadcaster });
   });
 
   let closing: Promise<void> | undefined;
+  let discoveryTimer: NodeJS.Timeout | undefined;
+  let discoveryStarted = false;
+
+  const writeHeartbeat = (): void => {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    if (port === 0) return; // not listening yet
+    const url = `http://127.0.0.1:${port}/?token=${token}`;
+    try {
+      writeMonitorDiscovery({ url, token, pid: process.pid, heartbeatAt: new Date().toISOString() }, options.dir);
+    } catch {
+      // Best-effort — the server still works; hooks just won't block.
+    }
+  };
 
   return {
     server,
@@ -322,11 +467,28 @@ export function createMonitorServer(options: MonitorServerOptions = {}): Monitor
       const port = typeof address === "object" && address ? address.port : 0;
       return `http://127.0.0.1:${port}/?token=${token}`;
     },
+    startDiscovery() {
+      if (discoveryStarted) return;
+      discoveryStarted = true;
+      writeHeartbeat();
+      // Heartbeat every 2s; unref so the timer never keeps the process alive.
+      discoveryTimer = setInterval(writeHeartbeat, 2_000);
+      discoveryTimer.unref?.();
+    },
     close() {
       // Idempotent: SIGINT and SIGTERM may both fire; every caller awaits the
       // same close. destroy() (not end()) so a stalled client's socket cannot
       // keep server.close() waiting in FIN_WAIT forever.
       closing ??= (async () => {
+        if (discoveryTimer) {
+          clearInterval(discoveryTimer);
+          discoveryTimer = undefined;
+        }
+        try {
+          removeMonitorDiscovery(options.dir);
+        } catch {
+          // Best-effort cleanup.
+        }
         broadcaster.closeAll();
         await new Promise<void>((resolvePromise, rejectPromise) => {
           server.close((error) => (error ? rejectPromise(error) : resolvePromise()));
@@ -343,6 +505,9 @@ export function listenMonitorServer(handle: MonitorServerHandle, port = 0): Prom
     handle.server.once("error", onError);
     handle.server.listen(port, "127.0.0.1", () => {
       handle.server.removeListener("error", onError);
+      // Writing the discovery file here is what makes `isMonitorAttached()` true,
+      // which is what makes foreign PermissionRequest hooks block for an answer.
+      handle.startDiscovery();
       resolvePromise(handle.url());
     });
   });

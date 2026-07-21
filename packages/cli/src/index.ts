@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
+import * as readline from "node:readline/promises";
 import { Command } from "commander";
 import {
   buildMultiPackConfig,
@@ -85,6 +86,9 @@ import { startShell } from "./shell.js";
 import { launchInkShell } from "./tui/index.js";
 import { launchMonitor } from "./tui/monitor.js";
 import { createMonitorServer, listenMonitorServer } from "./monitor-server.js";
+import { runHookReportCli } from "./hook-report.js";
+import { applyRemove, applySetup, claudeSettingsPath, codexConfigPath, codexNotifySlotOccupied, computeSetupPlan, detectCliCapabilities, renderCapabilityTable } from "./monitor-setup.js";
+import { installCompanion } from "./companion-install.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
@@ -1700,13 +1704,14 @@ export function buildProgram(): Command {
       }
     });
 
-  program
+  const monitorCmd = program
     .command("monitor")
     .helpGroup("Interactive:")
     .description("Watch live council runs on this machine — agents, lanes, and per-lane output.")
     .option("--json", "Print the live run registry as JSON and exit (no TUI)")
     .option("--web", "Serve a browser dashboard on 127.0.0.1 instead of the TUI")
-    .option("--port <port>", "Fixed port for --web (default: random)")
+    .option("--serve", "Headless server: print one {url,token,pid} JSON line, serve until Ctrl+C (for monitor)")
+    .option("--port <port>", "Fixed port for --web/--serve (default: random)")
     .option("--no-open", "With --web, do not auto-open the browser")
     .action(async (options) => {
       const cwd = cwdFrom(program);
@@ -1714,16 +1719,21 @@ export function buildProgram(): Command {
         process.stdout.write(`${JSON.stringify(listLiveRuns(), null, 2)}\n`);
         return;
       }
-      if (options.web) {
+      if (options.serve || options.web) {
         const handle = createMonitorServer();
         const port = options.port ? Number(options.port) : 0;
         if (!Number.isInteger(port) || port < 0 || port > 65_535) {
           throw new Error("--port must be an integer between 0 and 65535");
         }
         const url = await listenMonitorServer(handle, port);
-        console.error(`Quorate monitor: ${url}`);
-        console.error("Loopback-only; the token in the URL is this session's key. Ctrl+C stops.");
-        if (options.open !== false) openInBrowser(url);
+        if (options.serve) {
+          // Headless: one JSON line for the native app to parse, then block.
+          process.stdout.write(`${JSON.stringify({ url, token: handle.token, pid: process.pid })}\n`);
+        } else {
+          console.error(`Quorate monitor: ${url}`);
+          console.error("Loopback-only; the token in the URL is this session's key. Ctrl+C stops.");
+          if (options.open !== false) openInBrowser(url);
+        }
         await new Promise<void>((resolvePromise) => {
           // close() is idempotent, so overlapping SIGINT/SIGTERM are safe.
           const stop = (): void => {
@@ -1735,10 +1745,105 @@ export function buildProgram(): Command {
         return;
       }
       if (!stdin.isTTY || !stdout.isTTY) {
-        throw new Error("quorate monitor needs a TTY (use --json or --web for headless use).");
+        throw new Error("quorate monitor needs a TTY (use --json, --web, or --serve for headless use).");
       }
       const config = configFrom(program);
       await launchMonitor({ cwd, config });
+    });
+
+  monitorCmd
+    .command("setup")
+    .description("Install Quorate hook-report entries in foreign AI CLIs (Claude Code, Codex) so monitor can observe them.")
+    .option("--remove", "Strip Quorate hook entries (idempotent, marker-tagged)")
+    .option("--dry-run", "Print the plan without writing anything")
+    .option("--yes", "Skip the confirmation prompt")
+    .action(async (options) => {
+      const executable = (name: string): boolean => {
+        try {
+          const result = spawnSync("which", [name], { encoding: "utf8", shell: false });
+          return result.status === 0 && result.stdout.trim().length > 0;
+        } catch {
+          return false;
+        }
+      };
+      const capabilities = detectCliCapabilities({
+        claude: executable("claude"),
+        codex: executable("codex"),
+        gemini: executable("gemini"),
+        qwen: executable("qwen"),
+        kimi: executable("kimi"),
+        opencode: executable("opencode"),
+        crush: executable("crush"),
+        goose: executable("goose")
+      });
+      console.error(renderCapabilityTable(capabilities));
+      console.error("");
+      const plan = computeSetupPlan({
+        claudePath: claudeSettingsPath(),
+        codexPath: codexConfigPath(),
+        codexNotifyOccupied: codexNotifySlotOccupied(),
+        dryRun: Boolean(options.dryRun)
+      });
+      const verb = options.remove ? "remove" : "install";
+      console.error(`Plan (${options.dryRun ? "dry-run" : verb}):`);
+      console.error(`  Claude Code settings: ${plan.claude.path}`);
+      console.error(`    ${plan.claude.exists ? "exists" : "will be created"}; ${plan.claude.changes} hook group(s) ${options.remove ? "to strip" : "to add"}.`);
+      console.error(`  Codex notify: ${plan.codex.action} — ${plan.codex.note}`);
+      if (options.dryRun) {
+        console.error("No changes made (--dry-run).");
+        return;
+      }
+      // Confirmation policy (this writes ~/.claude/settings.json, so be safe):
+      // - TTY without --yes → show a real y/N prompt;
+      // - non-TTY without --yes → REFUSE (never silently modify a settings file
+      //   from a pipe/script); require an explicit --yes.
+      if (!options.yes) {
+        if (!stdin.isTTY) {
+          console.error("Refusing to modify settings without a TTY and without --yes. Re-run with --yes to apply.");
+          process.exitCode = 1;
+          return;
+        }
+        const rl = readline.createInterface({ input: stdin, output: stdout });
+        const answer = await rl.question(`${options.remove ? "Remove" : "Install"} Quorate hooks in ${plan.claude.path}? [y/N] `);
+        rl.close();
+        const normalized = answer.trim().toLowerCase();
+        if (normalized !== "y" && normalized !== "yes") {
+          console.error("Aborted — no changes made.");
+          return;
+        }
+      }
+      const result = options.remove ? applyRemove(plan) : applySetup(plan);
+      console.error(result.message);
+      if (result.backup) console.error(`Backup: ${result.backup}`);
+      if (!result.applied) process.exitCode = 1;
+    });
+
+  program
+    .command("hook-report", { hidden: true })
+    .description("Bridge hook for foreign AI CLIs (invoked by their hook events; not for direct use).")
+    .requiredOption("--source <source>", "Foreign CLI source (claude, codex)")
+    .requiredOption("--event <event>", "Hook event name")
+    .action(async (options) => {
+      await runHookReportCli({ source: options.source, event: options.event });
+    });
+
+  monitorCmd
+    .command("install-companion")
+    .description("Install the monitor native macOS app (from a GitHub Release, or --from-local).")
+    .option("--from-local", "Build from the in-tree SwiftPM package instead of downloading")
+    .option("--release <tag>", "Release tag to install from (default: latest)")
+    .option("--dir <path>", "Install directory (default: ~/Applications)")
+    .option("--force", "Overwrite an existing install")
+    .action(async (options) => {
+      const result = await installCompanion({
+        fromLocal: Boolean(options.fromLocal),
+        release: options.release,
+        dir: options.dir,
+        force: Boolean(options.force),
+        repoRoot: cwdFrom(program)
+      });
+      console.error(result.message);
+      if (!result.ok) process.exitCode = 1;
     });
 
   program

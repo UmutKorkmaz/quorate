@@ -1,5 +1,6 @@
 import type { CouncilEvent } from "@quorate/core";
-import { listLiveRuns, readRunEvents, type LiveRunEntry } from "../live-spool.js";
+import { listLiveRuns, readRunEvents, reapAndListPendingApprovals, type ApprovalRequest, type LiveRunEntry } from "../live-spool.js";
+import type { ExternalAgent } from "../agent-scan.js";
 import type { RunRow } from "./views.js";
 
 /**
@@ -38,15 +39,21 @@ export interface MonitorRun {
 
 export interface MonitorState {
   runs: MonitorRun[];
+  /** Pending foreign approvals (Claude Code PermissionRequest cards). */
+  approvals: ApprovalRequest[];
+  /** Foreign AI CLIs detected by the process scanner. */
+  external: ExternalAgent[];
   /** runId of the selected run. */
   selectedRun?: string;
   /** laneKey drill-in within the selected run. */
   focusedLane?: string;
   laneCursor: number;
+  /** Cursor within the approvals list (0 = top card). */
+  approvalCursor: number;
 }
 
 export function initialMonitorState(): MonitorState {
-  return { runs: [], laneCursor: 0 };
+  return { runs: [], approvals: [], external: [], laneCursor: 0, approvalCursor: 0 };
 }
 
 export function laneKeyOf(providerId: string, role: string): string {
@@ -158,6 +165,8 @@ export interface PollOptions {
   dir?: string;
   /** Cap on how many runs the dashboard tracks (newest first). */
   maxRuns?: number;
+  /** Injectable foreign-agent scan (tests pass a stub). */
+  scan?: () => ExternalAgent[];
 }
 
 /**
@@ -186,6 +195,11 @@ export function pollMonitorState(previous: MonitorState, options: PollOptions = 
   });
   const runs = buildRunTree(flat);
 
+  // Foreign approvals + detected processes: reap+list in ONE readdir pass
+  // (the hot path — every monitor tick), reusing the survivors list.
+  const { survivors: approvals } = reapAndListPendingApprovals(new Date(), options.dir);
+  const external = options.scan ? options.scan() : previous.external;
+
   const selectedRun = runs.some((run) => run.entry.runId === previous.selectedRun)
     ? previous.selectedRun
     : runs[0]?.entry.runId;
@@ -194,8 +208,9 @@ export function pollMonitorState(previous: MonitorState, options: PollOptions = 
     ? previous.focusedLane
     : undefined;
   const laneCursor = selected ? Math.min(previous.laneCursor, Math.max(selected.lanes.length - 1, 0)) : 0;
+  const approvalCursor = approvals.length === 0 ? 0 : Math.min(previous.approvalCursor, approvals.length - 1);
 
-  return { runs, selectedRun, focusedLane, laneCursor };
+  return { runs, approvals, external, selectedRun, focusedLane, laneCursor, approvalCursor };
 }
 
 /**
@@ -254,4 +269,11 @@ export function focusLaneAtCursor(state: MonitorState): MonitorState {
 
 export function blurLane(state: MonitorState): MonitorState {
   return state.focusedLane === undefined ? state : { ...state, focusedLane: undefined };
+}
+
+/** Move the approvals-list cursor. */
+export function moveApprovalCursor(state: MonitorState, delta: number): MonitorState {
+  if (state.approvals.length === 0) return state;
+  const next = Math.min(Math.max(state.approvalCursor + delta, 0), state.approvals.length - 1);
+  return next === state.approvalCursor ? state : { ...state, approvalCursor: next };
 }

@@ -39,3 +39,7 @@ findings.md
 .DS_Store
 *-session.jsonl
 *this-session-is-being-continued-from-a-previous-c.txt
+
+# monitor native app build artifacts
+native/monitor/.build/
+native/monitor/dist/
