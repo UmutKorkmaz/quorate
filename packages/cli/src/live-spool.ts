@@ -1,5 +1,6 @@
 import {
   closeSync,
+  existsSync,
   fstatSync,
   mkdirSync,
   openSync,
@@ -60,6 +61,11 @@ export interface LiveRunEntry {
   /** Set when this run is a nested subagent council of a parent run's lane. */
   parentRunId?: string;
   parentLane?: string;
+  /** Origin of this run. Absent = native Quorate council; `"claude"` = a
+   *  foreign Claude Code session ingested via the hook-report bridge. */
+  source?: string;
+  /** `external` marks a foreign-CLI run (no rerun, no direct control). */
+  kind?: "external";
 }
 
 /** Flags whose values (or inline `=values`) may carry secrets — if any argv
@@ -133,6 +139,40 @@ function writeFileAtomic(path: string, content: string): void {
 
 function writeMeta(dir: string, entry: LiveRunEntry): void {
   writeFileAtomic(liveRunMetaPath(entry.runId, dir), `${JSON.stringify(entry, null, 2)}\n`);
+}
+
+/**
+ * Atomic registry write for a foreign-agent run (Claude Code via the hook
+ * bridge). Public so {@link hook-report} can manage external runs without the
+ * native council sink. Enforces the same owner-only mode and charset gate.
+ */
+export function writeRunMeta(entry: LiveRunEntry, dir: string = defaultLiveDir()): void {
+  assertSafeRunId(entry.runId);
+  mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  writeFileAtomic(liveRunMetaPath(entry.runId, dir), `${JSON.stringify(entry, null, 2)}\n`);
+}
+
+/**
+ * Append one pre-serialized NDJSON line to a run's spool file (owner-only,
+ * opened O_APPEND so concurrent writers don't interleave). Used by
+ * {@link hook-report} for foreign runs whose events are not native CouncilEvents.
+ */
+export function appendRunEventLine(runId: string, line: string, dir: string = defaultLiveDir()): void {
+  assertSafeRunId(runId);
+  const path = liveRunFilePath(runId, dir);
+  mkdirSync(dir, { recursive: true, mode: DIR_MODE });
+  const fd = openSync(path, "a", FILE_MODE);
+  try {
+    writeSync(fd, `${line}\n`);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Read a run's registry entry; `undefined` if absent or corrupt. */
+export function readRunMeta(runId: string, dir: string = defaultLiveDir()): LiveRunEntry | undefined {
+  assertSafeRunId(runId);
+  return readMeta(liveRunMetaPath(runId, dir));
 }
 
 function readMeta(path: string): LiveRunEntry | undefined {
@@ -440,6 +480,23 @@ export interface LiveRunEvents {
  * so the next read retries it; malformed complete lines are skipped. A file
  * shorter than the caller's offset (truncated/recreated) resets the tail.
  */
+/**
+ * CouncilEvent `type` discriminants the spool reader accepts. Lines carrying
+ * any other `type` (e.g. the hook-report bridge's `approval/pending` /
+ * `approval/resolved` annotations) are dropped silently here so the lane
+ * reducer never sees them. This is the guard the build plan calls out: foreign
+ * runs enrich the same per-run NDJSON file, but only council/provider events
+ * drive lane state.
+ */
+const KNOWN_EVENT_TYPES = new Set([
+  "council/started",
+  "provider/started",
+  "provider/chunk",
+  "provider/done",
+  "council/done",
+  "verdict"
+]);
+
 export function readRunEvents(runId: string, options: ReadRunEventsOptions = {}): LiveRunEvents {
   const dir = options.dir ?? defaultLiveDir();
   const requested = options.fromOffset ?? 0;
@@ -483,11 +540,259 @@ export function readRunEvents(runId: string, options: ReadRunEventsOptions = {})
       continue; // Skip malformed complete lines rather than failing the tail.
     }
     const record = parsed as Record<string, unknown>;
-    if (typeof record.type === "string") {
+    if (typeof record.type === "string" && KNOWN_EVENT_TYPES.has(record.type)) {
       events.push(parsed as CouncilEvent);
     } else if (typeof record.verdict === "string" && Array.isArray(record.findings)) {
       report = parsed as CouncilReport;
     }
   }
   return { events, report, offset: from + lastNewline + 1, reset };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Foreign-agent approvals + monitor discovery (Quorate Island, v1.4.0)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Approvals bridge for foreign agents (Claude Code today). A `PermissionRequest`
+ * hook in the foreign CLI writes a pending request here, the monitor writes a
+ * decision, and the hook polls for it. Same charset/atomic-write/mode rules as
+ * the run registry: owner-only, single whole-line writes, no shared index.
+ *
+ * Layout: `~/.quorate/live/approvals/<id>.json` (request) and
+ * `<id>.decision.json` (decision). Pending requests are garbage-collected by
+ * {@link reapExpiredApprovals} once past their `expiresAt`.
+ */
+
+export interface ApprovalRequest {
+  id: string;
+  runId: string;
+  source: string;
+  toolName: string;
+  summary: string;
+  cwd: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export type ApprovalDecision = "allow" | "deny";
+
+export interface ApprovalDecisionRecord {
+  id: string;
+  decision: ApprovalDecision;
+  reason?: string;
+  decidedAt: string;
+}
+
+export interface MonitorDiscovery {
+  url: string;
+  token: string;
+  pid: number;
+  heartbeatAt: string;
+}
+
+const APPROVAL_SUMMARY_MAX = 300;
+/** Default monitor heartbeat freshness window for `isMonitorAttached`. */
+const DEFAULT_MONITOR_MAX_AGE_MS = 6_000;
+
+function approvalsDir(dir: string = defaultLiveDir()): string {
+  return join(dir, "approvals");
+}
+
+function approvalRequestPath(id: string, dir: string = defaultLiveDir()): string {
+  assertApprovalId(id);
+  return join(approvalsDir(dir), `${id}.json`);
+}
+
+function approvalDecisionPath(id: string, dir: string = defaultLiveDir()): string {
+  assertApprovalId(id);
+  return join(approvalsDir(dir), `${id}.decision.json`);
+}
+
+export function monitorDiscoveryPath(dir: string = defaultLiveDir()): string {
+  return join(dir, "monitor.json");
+}
+
+function assertApprovalId(id: string): void {
+  if (!SAFE_RUN_ID.test(id) || id.includes("..")) {
+    throw new Error(`Unsafe approval id: ${JSON.stringify(id)}`);
+  }
+}
+
+function truncateSummary(summary: string): string {
+  const trimmed = summary.trim();
+  return trimmed.length <= APPROVAL_SUMMARY_MAX ? trimmed : `${trimmed.slice(0, APPROVAL_SUMMARY_MAX)}…`;
+}
+
+function ensureApprovalsDir(dir: string): void {
+  mkdirSync(approvalsDir(dir), { recursive: true, mode: DIR_MODE });
+}
+
+/** Write a pending approval request atomically (owner-only). */
+export function writeApprovalRequest(request: ApprovalRequest, dir: string = defaultLiveDir()): void {
+  assertApprovalId(request.id);
+  ensureApprovalsDir(dir);
+  const record: ApprovalRequest = { ...request, summary: truncateSummary(request.summary) };
+  writeFileAtomic(approvalRequestPath(request.id, dir), `${JSON.stringify(record, null, 2)}\n`);
+}
+
+/** Write the monitor's decision for a request, removing the pending request file. */
+export function writeApprovalDecision(
+  decision: ApprovalDecisionRecord,
+  dir: string = defaultLiveDir()
+): void {
+  assertApprovalId(decision.id);
+  ensureApprovalsDir(dir);
+  writeFileAtomic(approvalDecisionPath(decision.id, dir), `${JSON.stringify(decision, null, 2)}\n`);
+}
+
+/** Read a decision if one has been written; `undefined` while still pending. */
+export function readApprovalDecision(id: string, dir: string = defaultLiveDir()): ApprovalDecisionRecord | undefined {
+  assertApprovalId(id);
+  try {
+    const parsed = JSON.parse(readFileSync(approvalDecisionPath(id, dir), "utf8")) as Partial<ApprovalDecisionRecord>;
+    if (
+      typeof parsed?.id === "string" &&
+      (parsed.decision === "allow" || parsed.decision === "deny") &&
+      typeof parsed.decidedAt === "string"
+    ) {
+      return parsed as ApprovalDecisionRecord;
+    }
+  } catch {
+    // No decision yet, or unreadable — still pending.
+  }
+  return undefined;
+}
+
+/** Remove a resolved/deferred request and its decision (idempotent). */
+export function deleteApproval(id: string, dir: string = defaultLiveDir()): void {
+  assertApprovalId(id);
+  rmSync(approvalRequestPath(id, dir), { force: true });
+  rmSync(approvalDecisionPath(id, dir), { force: true });
+}
+
+/** Pending requests, oldest first. A request that already has a decision
+ *  file is excluded (the hook deletes both on resolve, but a killed hook can
+ *  orphan a decision file — don't show those as still-pending). */
+export function listPendingApprovals(dir: string = defaultLiveDir()): ApprovalRequest[] {
+  let names: string[];
+  try {
+    names = readdirSync(approvalsDir(dir));
+  } catch {
+    return [];
+  }
+  const pending: ApprovalRequest[] = [];
+  for (const name of names) {
+    if (!name.endsWith(".json") || name.endsWith(".decision.json")) continue;
+    const id = name.slice(0, -".json".length);
+    // Skip if a decision already exists (resolved but not cleaned up). Use a
+    // stat check, not a full read — cheaper under the per-tick poll pattern.
+    if (existsSync(join(approvalsDir(dir), `${id}.decision.json`))) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(join(approvalsDir(dir), name), "utf8")) as Partial<ApprovalRequest>;
+      if (
+        typeof parsed?.id === "string" &&
+        typeof parsed.runId === "string" &&
+        typeof parsed.source === "string" &&
+        typeof parsed.toolName === "string" &&
+        typeof parsed.summary === "string" &&
+        typeof parsed.createdAt === "string" &&
+        typeof parsed.expiresAt === "string"
+      ) {
+        pending.push(parsed as ApprovalRequest);
+      }
+    } catch {
+      // Half-written or corrupt — skip; the writer will retry/replace.
+    }
+  }
+  return pending.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/**
+ * Delete expired PENDING requests (no decision yet). Returns the ids reaped.
+ * A monitor with a slow human lets requests expire so the blocked hook defers
+ * (exit 0) instead of hanging. Decided-but-undeleted orphans are excluded from
+ * {@link listPendingApprovals} separately (by decision-file presence), and
+ * their request files are left as audit context for the next resolve cycle.
+ */
+export function reapExpiredApprovals(now: Date = new Date(), dir: string = defaultLiveDir()): string[] {
+  const nowMs = now.getTime();
+  const reaped: string[] = [];
+  for (const request of listPendingApprovals(dir)) {
+    const expiry = Date.parse(request.expiresAt);
+    if (Number.isFinite(expiry) && expiry < nowMs) {
+      deleteApproval(request.id, dir);
+      reaped.push(request.id);
+    }
+  }
+  return reaped;
+}
+
+/**
+ * Reap expired pending requests AND return the surviving pending list in one
+ * readdir pass — the monitor poll hot path. Equivalent to
+ * `reapExpiredApprovals()` followed by `listPendingApprovals()` but without
+ * the second directory scan.
+ */
+export function reapAndListPendingApprovals(now: Date = new Date(), dir: string = defaultLiveDir()): { reaped: string[]; survivors: ApprovalRequest[] } {
+  const nowMs = now.getTime();
+  const reaped: string[] = [];
+  const survivors: ApprovalRequest[] = [];
+  for (const request of listPendingApprovals(dir)) {
+    const expiry = Date.parse(request.expiresAt);
+    if (Number.isFinite(expiry) && expiry < nowMs) {
+      deleteApproval(request.id, dir);
+      reaped.push(request.id);
+    } else {
+      survivors.push(request);
+    }
+  }
+  return { reaped, survivors };
+}
+
+/** Atomically write the monitor discovery file (loopback URL + heartbeat). */
+export function writeMonitorDiscovery(discovery: MonitorDiscovery, dir: string = defaultLiveDir()): void {
+  writeFileAtomic(monitorDiscoveryPath(dir), `${JSON.stringify(discovery, null, 2)}\n`);
+}
+
+/** Read the discovery file if present and well-formed. */
+export function readMonitorDiscovery(dir: string = defaultLiveDir()): MonitorDiscovery | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(monitorDiscoveryPath(dir), "utf8")) as Partial<MonitorDiscovery>;
+    if (
+      typeof parsed?.url === "string" &&
+      typeof parsed.token === "string" &&
+      typeof parsed.pid === "number" &&
+      typeof parsed.heartbeatAt === "string"
+    ) {
+      return parsed as MonitorDiscovery;
+    }
+  } catch {
+    // Absent or corrupt — no monitor attached.
+  }
+  return undefined;
+}
+
+/** Remove the discovery file (idempotent) — called by the monitor on close. */
+export function removeMonitorDiscovery(dir: string = defaultLiveDir()): void {
+  rmSync(monitorDiscoveryPath(dir), { force: true });
+}
+
+/**
+ * Is a monitor currently attached to this spool? True iff a discovery file
+ * exists, its owner pid is alive, and its heartbeat is fresh. Foreign-agent
+ * `PermissionRequest` hooks use this to decide whether to defer (exit 0, zero
+ * overhead) or block waiting for a human's approve/deny.
+ */
+export function isMonitorAttached(
+  options: { dir?: string; maxAgeMs?: number; now?: Date; pidAlive?: (pid: number) => boolean } = {}
+): boolean {
+  const discovery = readMonitorDiscovery(options.dir);
+  if (!discovery) return false;
+  const pidAlive = options.pidAlive ?? ((pid: number) => isPidAlive(pid));
+  if (!pidAlive(discovery.pid)) return false;
+  const heartbeat = Date.parse(discovery.heartbeatAt);
+  if (!Number.isFinite(heartbeat)) return false;
+  const now = (options.now ?? new Date()).getTime();
+  return now - heartbeat <= (options.maxAgeMs ?? DEFAULT_MONITOR_MAX_AGE_MS);
 }
