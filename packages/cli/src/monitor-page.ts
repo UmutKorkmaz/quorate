@@ -6,12 +6,15 @@
  * self-contained. The page is plain DOM + EventSource — the server pushes
  * full snapshots, so client state is a straight render of the last message.
  * All dynamic values go through textContent (never innerHTML) to keep agent
- * output from becoming markup.
+ * output from becoming markup. A strict CSP backs that up: everything is
+ * denied by default except the inline <style>/<script> and same-origin
+ * EventSource/fetch calls the page itself makes.
  */
 export const MONITOR_PAGE_HTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Quorate monitor</title>
 <style>
