@@ -1,9 +1,10 @@
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { CouncilEvent, CouncilReport } from "@quorate/core";
 import {
+  appendRunEventLine,
   createLiveSpoolSink,
   listLiveRuns,
   liveChunksEnabled,
@@ -292,6 +293,38 @@ describe("safety hardening", () => {
     expect(sink.lastError?.message).toContain("Unsafe live run id");
     expect(listLiveRuns({ dir })).toHaveLength(0);
     expect(() => liveRunFilePath("../escape", dir)).toThrow(/Unsafe live run id/);
+  });
+
+  it("refuses to spool a run whose ndjson path is a pre-planted symlink", () => {
+    // Arrange — a symlink where the run's spool file would be created.
+    const dir = tempDir();
+    const victim = join(dir, "victim.txt");
+    writeFileSync(victim, "keep", { mode: 0o600 });
+    symlinkSync(victim, liveRunFilePath("run-evil", dir));
+    const sink = createLiveSpoolSink({ dir });
+
+    // Act — O_NOFOLLOW must fail the open (ELOOP) instead of appending
+    // agent output through the link.
+    sink.handleEvent(startedEvent("run-evil"));
+    sink.handleEvent(chunkEvent("run-evil", "agent output must not leak"));
+
+    // Assert — the failure is swallowed into lastError, the victim is intact,
+    // and no registry entry was published for the broken run.
+    expect(sink.lastError).toBeDefined();
+    expect(readFileSync(victim, "utf8")).toBe("keep");
+    expect(listLiveRuns({ dir })).toHaveLength(0);
+  });
+
+  it("rejects appendRunEventLine through a symlinked spool path", () => {
+    // Arrange
+    const dir = tempDir();
+    const victim = join(dir, "victim-append.log");
+    writeFileSync(victim, "keep", { mode: 0o600 });
+    symlinkSync(victim, liveRunFilePath("run-append", dir));
+
+    // Act & Assert — the append open fails (ELOOP) rather than redirecting.
+    expect(() => appendRunEventLine("run-append", '{"type":"verdict"}', dir)).toThrow();
+    expect(readFileSync(victim, "utf8")).toBe("keep");
   });
 
   it("resets the tail offset when the spool file shrank under the reader", () => {

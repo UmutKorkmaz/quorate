@@ -145,11 +145,20 @@ export function createSseBroadcaster(options: { dir?: string; intervalMs?: numbe
 
 const SECURITY_HEADERS: Record<string, string> = {
   "content-security-policy":
-    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'",
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
   "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
   "referrer-policy": "no-referrer",
   "cache-control": "no-store"
 };
+
+/** Loopback-only server: reject requests whose Host header points anywhere
+ *  else (DNS-rebinding defense in depth on top of the bearer token). */
+function hostAllowed(host: string | undefined): boolean {
+  if (!host) return false;
+  const name = host.replace(/:\d+$/, "").toLowerCase();
+  return name === "127.0.0.1" || name === "localhost" || name === "[::1]";
+}
 
 export function newMonitorToken(): string {
   return randomBytes(16).toString("hex");
@@ -293,6 +302,14 @@ export function handleMonitorRequest(
     res.end("bad request");
     return true;
   }
+
+  if (!hostAllowed(req.headers.host)) {
+    applyHeaders(res, { "content-type": "text/plain; charset=utf-8" });
+    res.statusCode = 403;
+    res.end("forbidden host");
+    return true;
+  }
+
   const provided = url.searchParams.get("token");
 
   if (!tokenMatches(context.token, provided)) {
@@ -303,6 +320,15 @@ export function handleMonitorRequest(
   }
 
   if (req.method === "POST" && url.pathname === "/control") {
+    // Require a JSON content type: cross-origin JSON POSTs trigger a CORS
+    // preflight (which we never answer), closing the form-encoded CSRF path.
+    const contentType = req.headers["content-type"] ?? "";
+    if (!contentType.toLowerCase().startsWith("application/json")) {
+      applyHeaders(res, { "content-type": "application/json; charset=utf-8" });
+      res.statusCode = 415;
+      res.end(JSON.stringify({ ok: false, message: "content-type must be application/json" }));
+      return true;
+    }
     handleControlRequest(req, res, context.dir);
     return true;
   }
@@ -426,7 +452,13 @@ function runApprovalControl(action: "approve" | "deny", id: string, reason: stri
   if (!match) return { ok: false, message: `No pending approval with id ${id}` };
   try {
     writeApprovalDecision(
-      { id, decision: action === "approve" ? "allow" : "deny", ...(reason ? { reason } : {}), decidedAt: new Date().toISOString() },
+      {
+        id,
+        decision: action === "approve" ? "allow" : "deny",
+        ...(action === "deny" ? { reasonCode: "user-denied" as const } : {}),
+        decisionSurface: "monitor-web",
+        decidedAt: new Date().toISOString()
+      },
       dir
     );
     return { ok: true, message: action === "approve" ? "Approved." : "Denied." };

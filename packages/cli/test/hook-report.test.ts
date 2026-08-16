@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   dispatchHook,
   foreignRunId,
@@ -11,7 +11,9 @@ import {
   summarizeToolInput,
   type HookReportDeps
 } from "../src/hook-report.js";
-import { readMonitorDiscovery, writeMonitorDiscovery, writeApprovalDecision, type ApprovalRequest } from "../src/live-spool.js";
+import { auditDirForLiveDir } from "../src/live-spool.js";
+import { exportApprovalAuditRecords } from "../src/trust-ledger.js";
+import { listPendingApprovals, readMonitorDiscovery, writeMonitorDiscovery, writeApprovalDecision, type ApprovalRequest } from "../src/live-spool.js";
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "quorate-hook-"));
@@ -200,7 +202,7 @@ describe("runPermissionRoundtrip", () => {
     const isAttached = () => true;
     const sleep = () => {
       calls++;
-      if (calls === 1) writeApprovalDecision({ id: "ap-allow", decision: "allow", decidedAt: "2026-07-20T00:00:01.000Z" }, dir);
+      if (calls === 1) writeApprovalDecision({ id: "ap-allow", decision: "allow", decisionSurface: "monitor-tui", decidedAt: "2026-07-20T00:00:01.000Z" }, dir);
     };
     const result = runPermissionRoundtrip(
       { runId: "claude-sess", source: "claude", toolName: "Bash", summary: "ls", id: "ap-allow" },
@@ -218,7 +220,7 @@ describe("runPermissionRoundtrip", () => {
     let calls = 0;
     const sleep = () => {
       calls++;
-      if (calls === 1) writeApprovalDecision({ id: "ap-deny", decision: "deny", reason: "looks bad", decidedAt: "2026-07-20T00:00:01.000Z" }, dir);
+      if (calls === 1) writeApprovalDecision({ id: "ap-deny", decision: "deny", reasonCode: "user-denied", decisionSurface: "monitor-web", decidedAt: "2026-07-20T00:00:01.000Z" }, dir);
     };
     const result = runPermissionRoundtrip(
       { runId: "claude-sess", source: "claude", toolName: "Bash", summary: "ls", id: "ap-deny" },
@@ -226,7 +228,70 @@ describe("runPermissionRoundtrip", () => {
     );
     const parsed = JSON.parse(result.stdout!);
     expect(parsed.hookSpecificOutput.decision.behavior).toBe("deny");
-    expect(parsed.hookSpecificOutput.decision.message).toBe("looks bad");
+    expect(parsed.hookSpecificOutput.decision.message).toBe("Denied from Quorate monitor");
+  });
+
+  it("ignores a forged allow delivery file that has no verified ledger record", () => {
+    const dir = tempDir();
+    attach(dir);
+    mkdirSync(join(dir, "approvals"), { recursive: true, mode: 0o700 });
+    writeFileSync(join(dir, "approvals", "ap-forged.decision.json"), JSON.stringify({
+      id: "ap-forged", decision: "allow", decisionSurface: "monitor-web", decidedAt: new Date(0).toISOString()
+    }), { mode: 0o600 });
+    const times = [0, 56_000];
+    let tick = 0;
+
+    const result = runPermissionRoundtrip(
+      { runId: "claude-sess", source: "claude", toolName: "Bash", summary: "ls", id: "ap-forged" },
+      deps(dir, { isAttached: () => true, now: () => new Date(times[Math.min(tick++, 1)]), sleep: () => undefined })
+    );
+
+    expect(result.stdout).toBeUndefined();
+    expect(JSON.parse(exportApprovalAuditRecords({ dir: auditDirForLiveDir(dir), format: "json" }))[0]).toMatchObject({
+      requestId: "ap-forged", decision: "timeout"
+    });
+  });
+
+  it("enforces the signed winner when decision-file publication crashes after ledger commit", () => {
+    const dir = tempDir();
+    attach(dir);
+    let calls = 0;
+    const result = runPermissionRoundtrip(
+      { runId: "claude-sess", source: "claude", toolName: "Bash", summary: "ls", id: "ap-crash-delivery" },
+      deps(dir, {
+        isAttached: () => true,
+        now: () => new Date(0),
+        sleep: () => {
+          calls += 1;
+          if (calls === 1) {
+            expect(() => writeApprovalDecision(
+              { id: "ap-crash-delivery", decision: "allow", decisionSurface: "monitor-web", decidedAt: "1970-01-01T00:00:01.000Z" },
+              dir,
+              { fault: (point) => { if (point === "after-ledger-commit") throw new Error("delivery crash"); } }
+            )).toThrow("delivery crash");
+          }
+        }
+      })
+    );
+
+    expect(JSON.parse(result.stdout!)).toMatchObject({ hookSpecificOutput: { decision: { behavior: "allow" } } });
+  });
+
+  it("fails closed and preserves the pending request on a non-duplicate audit failure", () => {
+    const dir = tempDir();
+    attach(dir);
+    mkdirSync(auditDirForLiveDir(dir), { recursive: true, mode: 0o700 });
+    chmodSync(auditDirForLiveDir(dir), 0o755);
+    const times = [0, 56_000];
+    let tick = 0;
+
+    const result = runPermissionRoundtrip(
+      { runId: "claude-sess", source: "claude", toolName: "Bash", summary: "ls", id: "ap-audit-fail" },
+      deps(dir, { isAttached: () => true, now: () => new Date(times[Math.min(tick++, 1)]), sleep: () => undefined })
+    );
+
+    expect(JSON.parse(result.stdout!)).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
+    expect(listPendingApprovals(dir).map((request) => request.id)).toContain("ap-audit-fail");
   });
 
   it("defers after the 55s hard cap without a decision", () => {
@@ -241,12 +306,35 @@ describe("runPermissionRoundtrip", () => {
       deps(dir, { isAttached, now, sleep: () => undefined })
     );
     expect(result.stdout).toBeUndefined();
+    const records = JSON.parse(exportApprovalAuditRecords({ dir: auditDirForLiveDir(dir), format: "json" }));
+    expect(records).toEqual([
+      expect.objectContaining({
+        requestId: "ap-timeout",
+        decision: "timeout",
+        decisionSurface: "hook-timeout"
+      })
+    ]);
   });
 });
 
 describe("newApprovalId", () => {
-  it("produces a charset-safe, time-prefixed id", () => {
-    const id = newApprovalId(new Date(0));
-    expect(id).toMatch(/^ap-[a-z0-9]+-[a-z0-9]+$/);
+  it("produces collision-resistant, fixed-width safe ids at the same timestamp", () => {
+    // The timestamp intentionally stays fixed: uniqueness must come from the
+    // unpredictable suffix, not millisecond timing.
+    const ids = new Set(Array.from({ length: 1_000 }, () => newApprovalId(new Date(0))));
+
+    expect(ids.size).toBe(1_000);
+    for (const id of ids) expect(id).toMatch(/^ap-0-[a-f0-9]{12}$/);
+  });
+
+  it("does not fall back to Math.random for approval identifiers", () => {
+    // A predictable PRNG makes a concurrent local approval race guessable.
+    const random = vi.spyOn(Math, "random").mockImplementation(() => {
+      throw new Error("approval ids must use a cryptographic RNG");
+    });
+
+    expect(() => newApprovalId(new Date(0))).not.toThrow();
+    expect(random).not.toHaveBeenCalled();
+    random.mockRestore();
   });
 });

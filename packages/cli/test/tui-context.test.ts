@@ -96,4 +96,41 @@ describe("sessionReducer", () => {
     expect(cleared.mode).toBe("review");
     expect(cleared.activeRoles).toEqual(["architect"]);
   });
+
+  it("accumulates honest request-level token and priced-input estimates across the session", () => {
+    const state = baseState();
+    const first = {
+      verdict: "pass" as const,
+      summary: "ok",
+      findings: [],
+      providerResults: [],
+      metadata: {
+        generatedAt: "now",
+        mode: "review" as const,
+        subject: "s",
+        providers: [],
+        requestedProviders: [],
+        ranProviders: [],
+        degraded: false,
+        budget: {
+          changedFiles: 1, changedLines: 2, addedLines: 1, removedLines: 1,
+          skippedGeneratedFiles: [], promptBytes: 2_000, estimatedInputTokens: 500,
+          estimatedInputCostUsd: 0.12, providerEstimates: [], exceeded: []
+        }
+      }
+    };
+    const second = {
+      ...first,
+      metadata: {
+        ...first.metadata,
+        budget: { ...first.metadata.budget, estimatedInputTokens: 700, estimatedInputCostUsd: 0.2 }
+      }
+    };
+
+    const afterFirst = sessionReducer(state, { type: "setLastReport", report: first });
+    const afterSecond = sessionReducer(afterFirst, { type: "setLastReport", report: second });
+
+    expect(afterSecond.sessionEstimatedInputTokens).toBe(1_200);
+    expect(afterSecond.sessionEstimatedPricedInputCostUsd).toBeCloseTo(0.32);
+  });
 });

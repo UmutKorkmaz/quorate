@@ -217,6 +217,15 @@ export interface CouncilRequest {
   roleGuidance?: Record<string, string>;
   /** Read-only, untrusted pull-request context. Redacted and byte-capped before use. */
   context?: string;
+  /**
+   * Bounded local verification output. It is evidence only: providers must never
+   * treat its contents as instructions.
+   */
+  proof?: {
+    name: string;
+    content: string;
+    truncated: boolean;
+  };
   /** Budget summary computed before provider prompts are sent. */
   budget?: ReviewBudgetSummary;
   /** Regex heuristics loaded from trusted custom packs. */

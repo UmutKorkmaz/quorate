@@ -133,8 +133,8 @@ function persistSession(ctx: ShellContext): void {
   saveSession(state.cwd, snapshot);
   if (state.lastReport) {
     const reportDir = resolve(state.cwd, ".quorate");
-    mkdirSync(reportDir, { recursive: true });
-    writeFileSync(resolve(reportDir, "last-report.json"), `${JSON.stringify(state.lastReport, null, 2)}\n`, "utf8");
+    mkdirSync(reportDir, { recursive: true, mode: 0o700 });
+    writeFileSync(resolve(reportDir, "last-report.json"), `${JSON.stringify(state.lastReport, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   }
 }
 

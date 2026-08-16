@@ -223,6 +223,34 @@ describe("pollMonitorState over a real spool", () => {
     expect(state.runs).toEqual([]);
     expect(state.selectedRun).toBeUndefined();
   });
+
+  it("retains final review duration and budget for the monitor status line", () => {
+    const dir = tempDir();
+    const sink = createLiveSpoolSink({ dir, includeChunks: true, pid: process.pid });
+    sink.handleEvent(started("run-status", new Date(Date.now() - 5_000).toISOString()));
+    sink.writeStdout(JSON.stringify({
+      verdict: "pass",
+      summary: "ok",
+      findings: [],
+      providerResults: [
+        { providerId: "claude", role: "security", providerType: "cli", status: "ok", summary: "", findings: [], durationMs: 2_500 }
+      ],
+      metadata: {
+        generatedAt: "now", mode: "review", subject: "s", providers: [], requestedProviders: [], ranProviders: [], degraded: false,
+        budget: {
+          changedFiles: 1, changedLines: 2, addedLines: 1, removedLines: 1, skippedGeneratedFiles: [], promptBytes: 2_000,
+          estimatedInputTokens: 500, estimatedInputCostUsd: 0.1, providerEstimates: [], exceeded: []
+        }
+      }
+    }));
+
+    const state = pollMonitorState(initialMonitorState(), { dir });
+
+    expect(state.runs[0]?.verdict).toBe("pass");
+    expect(state.runs[0]?.reviewDurationMs).toBeGreaterThanOrEqual(4_000);
+    expect(state.runs[0]?.reviewDurationMs).toBeLessThan(7_000);
+    expect(state.runs[0]?.budget).toMatchObject({ estimatedInputTokens: 500, estimatedInputCostUsd: 0.1 });
+  });
 });
 
 describe("subagent run tree", () => {

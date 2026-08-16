@@ -1,7 +1,9 @@
 import {
   closeSync,
+  constants,
   existsSync,
   fstatSync,
+  fsyncSync,
   mkdirSync,
   openSync,
   readdirSync,
@@ -13,10 +15,20 @@ import {
   writeFileSync,
   writeSync
 } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import type { CouncilEvent, CouncilReport } from "@quorate/core";
 import { councilEventToNdjsonLine, isCouncilReportLine, type JsonStreamSink } from "./json-stream.js";
+import {
+  appendApprovalAuditRecord,
+  defaultAuditDir,
+  DuplicateApprovalDecisionError,
+  normalizeRfc3339,
+  readVerifiedApprovalAuditRecord,
+  type ApprovalAuditRecord,
+  type ApprovalReasonCode
+} from "./trust-ledger.js";
 
 /**
  * Live run spool — the shared data plane for `quorate monitor` surfaces.
@@ -125,15 +137,35 @@ function isPidAlive(pid: number): boolean {
 const FILE_MODE = 0o600;
 const DIR_MODE = 0o700;
 
+/** Refuse to traverse a pre-planted symlink at a spool path: every create or
+ *  append open carries O_NOFOLLOW, so a planted link fails with ELOOP instead
+ *  of redirecting agent output to an attacker-chosen file. */
+const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
+const APPEND_FLAGS = constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | NOFOLLOW;
+const TRUNCATE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW;
+
 /** Atomic single-file write: temp + rename, cleaning the temp on failure. */
 function writeFileAtomic(path: string, content: string): void {
-  const temp = `${path}.${process.pid}.tmp`;
+  const temp = `${path}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`;
+  let fd: number | undefined;
   try {
-    writeFileSync(temp, content, { encoding: "utf8", mode: FILE_MODE });
+    fd = openSync(
+      temp,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
+      FILE_MODE
+    );
+    const bytes = Buffer.from(content, "utf8");
+    let offset = 0;
+    while (offset < bytes.length) offset += writeSync(fd, bytes, offset, bytes.length - offset);
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
     renameSync(temp, path);
   } catch (error: unknown) {
-    rmSync(temp, { force: true });
     throw error;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    rmSync(temp, { force: true });
   }
 }
 
@@ -161,7 +193,7 @@ export function appendRunEventLine(runId: string, line: string, dir: string = de
   assertSafeRunId(runId);
   const path = liveRunFilePath(runId, dir);
   mkdirSync(dir, { recursive: true, mode: DIR_MODE });
-  const fd = openSync(path, "a", FILE_MODE);
+  const fd = openSync(path, APPEND_FLAGS, FILE_MODE);
   try {
     writeSync(fd, `${line}\n`);
   } finally {
@@ -367,8 +399,8 @@ export function createLiveSpoolSink(options: LiveSpoolOptions = {}): LiveSpool {
     guard(() => {
       mkdirSync(dir, { recursive: true, mode: DIR_MODE });
       const path = liveRunFilePath(current.runId, dir);
-      writeFileSync(path, "", { encoding: "utf8", mode: FILE_MODE }); // truncate any stale file
-      fd = openSync(path, "a", FILE_MODE); // O_APPEND: every write lands at EOF atomically
+      closeSync(openSync(path, TRUNCATE_FLAGS, FILE_MODE)); // truncate any stale file, never through a symlink
+      fd = openSync(path, APPEND_FLAGS, FILE_MODE); // O_APPEND: every write lands at EOF atomically
       writeMeta(dir, current);
       pruneLiveDir(dir);
     });
@@ -579,10 +611,25 @@ export type ApprovalDecision = "allow" | "deny";
 
 export interface ApprovalDecisionRecord {
   id: string;
+  runId: string;
+  source: string;
+  toolName: string;
   decision: ApprovalDecision;
-  reason?: string;
+  reasonCode?: ApprovalReasonCode;
+  decisionSurface: string;
+  decidedAt: string;
+  recordHash: string;
+}
+
+export interface ApprovalDecisionInput {
+  id: string;
+  decision: ApprovalDecision;
+  reasonCode?: ApprovalReasonCode;
+  decisionSurface: string;
   decidedAt: string;
 }
+
+export type ApprovalDeliveryFaultPoint = "after-ledger-commit";
 
 export interface MonitorDiscovery {
   url: string;
@@ -592,11 +639,22 @@ export interface MonitorDiscovery {
 }
 
 const APPROVAL_SUMMARY_MAX = 300;
+const APPROVAL_FILE_MAX = 16 * 1024;
+const APPROVAL_IDENTITY_MAX = 200;
+const APPROVAL_CWD_MAX = 1_024;
+const APPROVAL_KEYS = ["id", "runId", "source", "toolName", "summary", "cwd", "createdAt", "expiresAt"].sort();
+const DECISION_KEYS = ["id", "runId", "source", "toolName", "decision", "reasonCode", "decisionSurface", "decidedAt", "recordHash"];
 /** Default monitor heartbeat freshness window for `isMonitorAttached`. */
 const DEFAULT_MONITOR_MAX_AGE_MS = 6_000;
 
 function approvalsDir(dir: string = defaultLiveDir()): string {
   return join(dir, "approvals");
+}
+
+/** Custom live dirs (tests/embedded callers) keep their audit ledger isolated;
+ * the production live dir maps to the required ~/.quorate/audit path. */
+export function auditDirForLiveDir(dir: string = defaultLiveDir()): string {
+  return resolve(dir) === resolve(defaultLiveDir()) ? defaultAuditDir() : join(dir, "audit");
 }
 
 function approvalRequestPath(id: string, dir: string = defaultLiveDir()): string {
@@ -614,8 +672,42 @@ export function monitorDiscoveryPath(dir: string = defaultLiveDir()): string {
 }
 
 function assertApprovalId(id: string): void {
-  if (!SAFE_RUN_ID.test(id) || id.includes("..")) {
+  if (!SAFE_RUN_ID.test(id) || id.includes("..") || id.length > APPROVAL_IDENTITY_MAX) {
     throw new Error(`Unsafe approval id: ${JSON.stringify(id)}`);
+  }
+}
+
+function boundedApprovalText(value: string, field: string, max = APPROVAL_IDENTITY_MAX): string {
+  const text = value.trim();
+  if (!text || text.length > max || /[\u0000-\u001f\u007f]/.test(text)) {
+    throw new Error(`${field} must contain 1-${max} safe characters.`);
+  }
+  return text;
+}
+
+function exactObjectKeys(value: Record<string, unknown>, expected: string[]): boolean {
+  return Object.keys(value).sort().join("\0") === [...expected].sort().join("\0");
+}
+
+function readBoundedApprovalJson(path: string): Record<string, unknown> | undefined {
+  let fd: number | undefined;
+  try {
+    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.size <= 0 || stat.size > APPROVAL_FILE_MAX || (stat.mode & 0o777) !== FILE_MODE) return undefined;
+    const bytes = Buffer.alloc(stat.size);
+    let offset = 0;
+    while (offset < stat.size) {
+      const count = readSync(fd, bytes, offset, stat.size - offset, offset);
+      if (count === 0) return undefined;
+      offset += count;
+    }
+    const parsed = JSON.parse(bytes.toString("utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }
 
@@ -632,36 +724,159 @@ function ensureApprovalsDir(dir: string): void {
 export function writeApprovalRequest(request: ApprovalRequest, dir: string = defaultLiveDir()): void {
   assertApprovalId(request.id);
   ensureApprovalsDir(dir);
-  const record: ApprovalRequest = { ...request, summary: truncateSummary(request.summary) };
+  const createdAt = normalizeRfc3339(request.createdAt, "createdAt");
+  const expiresAt = normalizeRfc3339(request.expiresAt, "expiresAt");
+  if (Date.parse(createdAt) > Date.parse(expiresAt)) throw new Error("createdAt must not be after expiresAt.");
+  const record: ApprovalRequest = {
+    id: request.id,
+    runId: boundedApprovalText(request.runId, "runId"),
+    source: boundedApprovalText(request.source, "source"),
+    toolName: boundedApprovalText(request.toolName, "toolName"),
+    summary: truncateSummary(request.summary),
+    cwd: boundedApprovalText(request.cwd, "cwd", APPROVAL_CWD_MAX),
+    createdAt,
+    expiresAt
+  };
   writeFileAtomic(approvalRequestPath(request.id, dir), `${JSON.stringify(record, null, 2)}\n`);
 }
 
-/** Write the monitor's decision for a request, removing the pending request file. */
+function auditLookup(request: ApprovalRequest): { requestId: string; runId: string; source: string; tool: string } {
+  return { requestId: request.id, runId: request.runId, source: request.source, tool: request.toolName };
+}
+
+function decisionFromAudit(record: ApprovalAuditRecord): ApprovalDecisionRecord | undefined {
+  if (record.decision !== "allow" && record.decision !== "deny") return undefined;
+  return {
+    id: record.requestId,
+    runId: record.runId,
+    source: record.source,
+    toolName: record.tool,
+    decision: record.decision,
+    ...(record.reasonCode ? { reasonCode: record.reasonCode } : {}),
+    decisionSurface: record.decisionSurface,
+    decidedAt: record.timestamp,
+    recordHash: record.recordHash
+  };
+}
+
+function materializeDecision(record: ApprovalAuditRecord, dir: string): ApprovalDecisionRecord | undefined {
+  const delivery = decisionFromAudit(record);
+  if (!delivery) return undefined;
+  const path = approvalDecisionPath(delivery.id, dir);
+  const existing = readApprovalDecision(delivery.id, dir);
+  if (existing && JSON.stringify(existing) === JSON.stringify(delivery)) return existing;
+  if (existsSync(path)) {
+    const invalid = `${path}.invalid-${process.pid}-${Date.now()}`;
+    try { renameSync(path, invalid); } catch { rmSync(path, { force: true }); }
+  }
+  writeFileAtomic(path, `${JSON.stringify(delivery, null, 2)}\n`);
+  return delivery;
+}
+
+/** Commit a monitor decision to the signed ledger. Delivery is a reconstructible
+ * cache bound to the winning recordHash; the ledger remains authoritative. */
 export function writeApprovalDecision(
-  decision: ApprovalDecisionRecord,
-  dir: string = defaultLiveDir()
-): void {
+  decision: ApprovalDecisionInput,
+  dir: string = defaultLiveDir(),
+  options: { fault?: (point: ApprovalDeliveryFaultPoint) => void } = {}
+): ApprovalDecisionRecord {
   assertApprovalId(decision.id);
   ensureApprovalsDir(dir);
-  writeFileAtomic(approvalDecisionPath(decision.id, dir), `${JSON.stringify(decision, null, 2)}\n`);
+  const request = readApprovalRequest(decision.id, dir);
+  if (!request) throw new Error(`No pending approval with id ${decision.id}`);
+  let audit: ApprovalAuditRecord | undefined;
+  try {
+    audit = appendApprovalAuditRecord(
+      {
+        ...auditLookup(request),
+        tool: request.toolName,
+        decision: decision.decision,
+        reasonCode: decision.reasonCode,
+        decisionSurface: decision.decisionSurface,
+        timestamp: decision.decidedAt
+      },
+      { dir: auditDirForLiveDir(dir) }
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof DuplicateApprovalDecisionError)) throw error;
+    audit = readVerifiedApprovalAuditRecord(auditLookup(request), { dir: auditDirForLiveDir(dir) });
+    if (!audit) throw new Error(`Approval ${request.id} is already bound to different request metadata.`);
+  }
+  options.fault?.("after-ledger-commit");
+  const delivered = materializeDecision(audit, dir);
+  if (!delivered) throw new Error(`Approval ${request.id} was already resolved as ${audit.decision}.`);
+  rmSync(approvalRequestPath(request.id, dir), { force: true });
+  return delivered;
+}
+
+function readApprovalRequest(id: string, dir: string): ApprovalRequest | undefined {
+  const parsed = readBoundedApprovalJson(approvalRequestPath(id, dir));
+  if (!parsed || !exactObjectKeys(parsed, APPROVAL_KEYS) || parsed.id !== id ||
+      typeof parsed.runId !== "string" || typeof parsed.source !== "string" || typeof parsed.toolName !== "string" ||
+      typeof parsed.summary !== "string" || typeof parsed.cwd !== "string" || typeof parsed.createdAt !== "string" ||
+      typeof parsed.expiresAt !== "string") return undefined;
+  try {
+    assertApprovalId(id);
+    boundedApprovalText(parsed.runId, "runId"); boundedApprovalText(parsed.source, "source");
+    boundedApprovalText(parsed.toolName, "toolName"); boundedApprovalText(parsed.cwd, "cwd", APPROVAL_CWD_MAX);
+    if (parsed.summary.length > APPROVAL_SUMMARY_MAX + 1) return undefined;
+    const createdAt = normalizeRfc3339(parsed.createdAt, "createdAt");
+    const expiresAt = normalizeRfc3339(parsed.expiresAt, "expiresAt");
+    if (createdAt !== parsed.createdAt || expiresAt !== parsed.expiresAt || Date.parse(createdAt) > Date.parse(expiresAt)) return undefined;
+    return parsed as unknown as ApprovalRequest;
+  } catch { return undefined; }
+}
+
+/** Record a terminal timeout without creating a monitor decision file. */
+export function writeApprovalTimeout(
+  request: ApprovalRequest,
+  decisionSurface: string,
+  decidedAt: string,
+  dir: string = defaultLiveDir()
+): ApprovalAuditRecord {
+  try {
+    return appendApprovalAuditRecord(
+      {
+        ...auditLookup(request),
+        tool: request.toolName,
+        decision: "timeout",
+        reasonCode: decisionSurface === "approval-reaper" ? "approval-expired" : decisionSurface === "hook-monitor-disconnected" ? "monitor-disconnected" : "approval-timeout",
+        decisionSurface,
+        timestamp: decidedAt
+      },
+      { dir: auditDirForLiveDir(dir) }
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof DuplicateApprovalDecisionError)) throw error;
+    const winner = readVerifiedApprovalAuditRecord(auditLookup(request), { dir: auditDirForLiveDir(dir) });
+    if (!winner) throw new Error(`Approval ${request.id} is already bound to different request metadata.`);
+    return winner;
+  }
 }
 
 /** Read a decision if one has been written; `undefined` while still pending. */
 export function readApprovalDecision(id: string, dir: string = defaultLiveDir()): ApprovalDecisionRecord | undefined {
   assertApprovalId(id);
+  const parsed = readBoundedApprovalJson(approvalDecisionPath(id, dir));
+  if (!parsed) return undefined;
+  const expected = parsed.reasonCode === undefined ? DECISION_KEYS.filter((key) => key !== "reasonCode") : DECISION_KEYS;
+  if (!exactObjectKeys(parsed, expected) || parsed.id !== id || typeof parsed.runId !== "string" || typeof parsed.source !== "string" ||
+      typeof parsed.toolName !== "string" || (parsed.decision !== "allow" && parsed.decision !== "deny") ||
+      typeof parsed.decisionSurface !== "string" || typeof parsed.decidedAt !== "string" ||
+      typeof parsed.recordHash !== "string" || !/^[a-f0-9]{64}$/.test(parsed.recordHash)) return undefined;
+  try { normalizeRfc3339(parsed.decidedAt, "decidedAt"); } catch { return undefined; }
   try {
-    const parsed = JSON.parse(readFileSync(approvalDecisionPath(id, dir), "utf8")) as Partial<ApprovalDecisionRecord>;
-    if (
-      typeof parsed?.id === "string" &&
-      (parsed.decision === "allow" || parsed.decision === "deny") &&
-      typeof parsed.decidedAt === "string"
-    ) {
-      return parsed as ApprovalDecisionRecord;
-    }
+    const audit = readVerifiedApprovalAuditRecord(
+      { requestId: id, runId: parsed.runId, source: parsed.source, tool: parsed.toolName },
+      { dir: auditDirForLiveDir(dir) }
+    );
+    if (!audit || audit.recordHash !== parsed.recordHash || audit.decision !== parsed.decision ||
+        audit.decisionSurface !== parsed.decisionSurface || audit.timestamp !== parsed.decidedAt ||
+        audit.reasonCode !== parsed.reasonCode) return undefined;
   } catch {
-    // No decision yet, or unreadable — still pending.
+    return undefined;
   }
-  return undefined;
+  return parsed as unknown as ApprovalDecisionRecord;
 }
 
 /** Remove a resolved/deferred request and its decision (idempotent). */
@@ -669,6 +884,17 @@ export function deleteApproval(id: string, dir: string = defaultLiveDir()): void
   assertApprovalId(id);
   rmSync(approvalRequestPath(id, dir), { force: true });
   rmSync(approvalDecisionPath(id, dir), { force: true });
+}
+
+function settleExpiredApproval(request: ApprovalRequest, now: Date, dir: string): void {
+  const winner = writeApprovalTimeout(request, "approval-reaper", now.toISOString(), dir);
+  if (winner.decision === "allow" || winner.decision === "deny") {
+    // The hook enforces the ledger, but keep the winner-bound delivery cache
+    // reconstructible until hook acknowledgement; remove only stale pending.
+    rmSync(approvalRequestPath(request.id, dir), { force: true });
+  } else {
+    deleteApproval(request.id, dir);
+  }
 }
 
 /** Pending requests, oldest first. A request that already has a decision
@@ -685,24 +911,12 @@ export function listPendingApprovals(dir: string = defaultLiveDir()): ApprovalRe
   for (const name of names) {
     if (!name.endsWith(".json") || name.endsWith(".decision.json")) continue;
     const id = name.slice(0, -".json".length);
-    // Skip if a decision already exists (resolved but not cleaned up). Use a
-    // stat check, not a full read — cheaper under the per-tick poll pattern.
-    if (existsSync(join(approvalsDir(dir), `${id}.decision.json`))) continue;
     try {
-      const parsed = JSON.parse(readFileSync(join(approvalsDir(dir), name), "utf8")) as Partial<ApprovalRequest>;
-      if (
-        typeof parsed?.id === "string" &&
-        typeof parsed.runId === "string" &&
-        typeof parsed.source === "string" &&
-        typeof parsed.toolName === "string" &&
-        typeof parsed.summary === "string" &&
-        typeof parsed.createdAt === "string" &&
-        typeof parsed.expiresAt === "string"
-      ) {
-        pending.push(parsed as ApprovalRequest);
-      }
+      assertApprovalId(id);
+      const parsed = readApprovalRequest(id, dir);
+      if (parsed) pending.push(parsed);
     } catch {
-      // Half-written or corrupt — skip; the writer will retry/replace.
+      // Malformed/oversized/mismatched entry: isolate it from the monitor poll.
     }
   }
   return pending.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -721,8 +935,12 @@ export function reapExpiredApprovals(now: Date = new Date(), dir: string = defau
   for (const request of listPendingApprovals(dir)) {
     const expiry = Date.parse(request.expiresAt);
     if (Number.isFinite(expiry) && expiry < nowMs) {
-      deleteApproval(request.id, dir);
-      reaped.push(request.id);
+      try {
+        settleExpiredApproval(request, now, dir);
+        reaped.push(request.id);
+      } catch {
+        // Preserve the request when the audit record could not be secured.
+      }
     }
   }
   return reaped;
@@ -741,8 +959,12 @@ export function reapAndListPendingApprovals(now: Date = new Date(), dir: string 
   for (const request of listPendingApprovals(dir)) {
     const expiry = Date.parse(request.expiresAt);
     if (Number.isFinite(expiry) && expiry < nowMs) {
-      deleteApproval(request.id, dir);
-      reaped.push(request.id);
+      try {
+        settleExpiredApproval(request, now, dir);
+        reaped.push(request.id);
+      } catch {
+        survivors.push(request);
+      }
     } else {
       survivors.push(request);
     }
