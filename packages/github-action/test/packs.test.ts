@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultConfig } from "@quorate/core";
-import { applyPacks, changedFilesFromDiff } from "../src/index.js";
+import { applyCustomPackDefinitions, createDefaultConfig } from "@quorate/core";
+import { applyPacks, changedFilesFromDiff, loadBaseCustomPacks } from "../src/index.js";
 
 const base = () => ({ ...createDefaultConfig(), councils: ["maintainer"], roleGuidance: undefined as Record<string, string> | undefined });
 
@@ -55,5 +55,84 @@ describe("applyPacks", () => {
     const config = { ...base(), roleGuidance: { "solana-security": "MY OVERRIDE" } };
     const out = applyPacks(config, "solana", []);
     expect(out.roleGuidance?.["solana-security"]).toBe("MY OVERRIDE");
+  });
+});
+
+// Minimal Octokit stub: `.quorate/packs` lists files, each pack path serves a
+// base64 file, anything else 404s — mirroring loadBaseCustomPacks' API calls.
+function packsClient(packs: Record<string, string>): Parameters<typeof loadBaseCustomPacks>[0] {
+  return {
+    rest: {
+      repos: {
+        getContent: async ({ path }: { path: string }) => {
+          if (path === ".quorate/packs") {
+            return {
+              data: Object.keys(packs).map((packPath) => ({
+                type: "file",
+                path: packPath,
+                name: packPath.split("/").pop()
+              }))
+            };
+          }
+          if (path in packs) {
+            return {
+              data: {
+                type: "file",
+                encoding: "base64",
+                content: Buffer.from(packs[path], "utf8").toString("base64")
+              }
+            };
+          }
+          const error = new Error("Not Found") as Error & { status: number };
+          error.status = 404;
+          throw error;
+        }
+      }
+    }
+  } as unknown as Parameters<typeof loadBaseCustomPacks>[0];
+}
+
+const ORG_PACK = [
+  "version: 1",
+  "id: org-rules",
+  "description: Organization rules",
+  "councils:",
+  "  - org-reviewer",
+  "role_guidance:",
+  "  org-reviewer: Watch organization-specific risks.",
+  "heuristics: []"
+].join("\n");
+
+describe("loadBaseCustomPacks", () => {
+  it("applies base-ref packs regardless of the workspace trust gate", async () => {
+    // Base-ref packs are trusted by design (they come from the base branch,
+    // fetched via the API — never the PR head or a local checkout), so the
+    // QUORATE_TRUST_WORKSPACE opt-in for local workspace packs must not
+    // suppress them. Run with the env var explicitly unset to prove it.
+    const previous = process.env.QUORATE_TRUST_WORKSPACE;
+    delete process.env.QUORATE_TRUST_WORKSPACE;
+    try {
+      const definitions = await loadBaseCustomPacks(
+        packsClient({ ".quorate/packs/org-rules.yml": ORG_PACK }),
+        { owner: "o", repo: "r", ref: "base-sha" }
+      );
+      expect(definitions).toHaveLength(1);
+      expect(definitions[0]?.pack.id).toBe("org-rules");
+
+      const config = applyCustomPackDefinitions({ ...base() }, definitions);
+      expect(config.councils).toContain("org-reviewer");
+      expect(config.roleGuidance?.["org-reviewer"]).toMatch(/organization/i);
+    } finally {
+      if (previous !== undefined) process.env.QUORATE_TRUST_WORKSPACE = previous;
+    }
+  });
+
+  it("returns no definitions when the base has no packs directory", async () => {
+    const definitions = await loadBaseCustomPacks(packsClient({}), {
+      owner: "o",
+      repo: "r",
+      ref: "base-sha"
+    });
+    expect(definitions).toHaveLength(0);
   });
 });
