@@ -142,7 +142,7 @@ export async function runApiProvider(
         ? `Provider output truncated to ${maxOutputBytes} bytes.`
         : firstMeaningfulLine(text),
       findings,
-      rawOutput: text || undefined,
+      rawOutput: redactSecrets(text || undefined, [apiToken]),
       durationMs: Date.now() - startedAt
     };
   } catch (error) {

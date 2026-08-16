@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { deflateRawSync } from "node:zlib";
-import { serializeConfig, type QuorateConfig } from "@quorate/core";
+import { redactUrlCredentials, serializeConfig, type QuorateConfig } from "@quorate/core";
 import { formatDoctorReport } from "./doctor.js";
 import { providerSnapshots, type ShellState } from "./session.js";
 import { latestSession } from "./sessions.js";
@@ -17,6 +17,10 @@ export function redactConfig(config: QuorateConfig): QuorateConfig {
       }
       if (next.apiKeyEnv) {
         next.apiKeyEnv = "[REDACTED]";
+      }
+      // baseUrl can embed credentials (https://user:token@host); strip userinfo.
+      if (next.baseUrl) {
+        next.baseUrl = redactUrlCredentials(next.baseUrl);
       }
       return next;
     })

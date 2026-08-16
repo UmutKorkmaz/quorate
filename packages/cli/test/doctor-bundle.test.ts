@@ -21,6 +21,18 @@ describe("doctor bundle", () => {
     expect(JSON.stringify(redacted)).not.toContain("super-secret");
   });
 
+  it("strips embedded credentials from provider baseUrl", () => {
+    const config = createDefaultConfig([]);
+    const codex = config.providers.find((provider) => provider.id === "codex");
+    if (!codex) throw new Error("missing codex provider");
+    codex.baseUrl = "https://user:super-secret@proxy.internal/v1";
+
+    const redacted = redactConfig(config);
+    const next = redacted.providers.find((provider) => provider.id === "codex");
+    expect(next?.baseUrl).toBe("https://[redacted]@proxy.internal/v1");
+    expect(JSON.stringify(redacted)).not.toContain("super-secret");
+  });
+
   it("creates a zip archive with expected entries", () => {
     const buffer = createZipBuffer([
       { name: "manifest.json", data: "{}\n" },

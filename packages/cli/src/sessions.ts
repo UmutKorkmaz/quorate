@@ -88,8 +88,11 @@ export function sessionFromState(state: SessionState, options?: { id?: string; n
 
 export function saveSession(cwd: string, session: PersistedSession): void {
   const dir = sessionsDir(cwd);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(sessionPath(cwd, session.id), `${JSON.stringify(session, null, 2)}\n`, "utf8");
+  // transcriptTail can hold pasted secrets — keep sessions owner-only, like
+  // the audit ledger and live spool. Creation-time modes only (a write mode
+  // never re-chmods an existing file), matching how monitor.json is written.
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeFileSync(sessionPath(cwd, session.id), `${JSON.stringify(session, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
 export function loadSession(cwd: string, id: string): PersistedSession | undefined {

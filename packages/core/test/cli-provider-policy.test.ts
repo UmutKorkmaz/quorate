@@ -82,6 +82,39 @@ describe("validateCliProvider", () => {
     expect(error).toContain("dangerous argument");
   });
 
+  it("rejects --dangerously-skip-permissions (hyphen extension of --dangerously)", () => {
+    const error = validateCliProvider(baseProvider(), ["--dangerously-skip-permissions"], "prompt");
+    expect(error).toContain("dangerous argument");
+  });
+
+  it("rejects --dangerously-skip-permissions=true (=value form of the extension)", () => {
+    const error = validateCliProvider(baseProvider(), ["--dangerously-skip-permissions=true"], "prompt");
+    expect(error).toContain("dangerous argument");
+  });
+
+  it("rejects --session-id=abc (=value form of an exact listed flag)", () => {
+    const error = validateCliProvider(baseProvider(), ["--session-id=abc"], "prompt");
+    expect(error).toContain("dangerous argument");
+  });
+
+  it("rejects --resume-x via the --resume hyphen-extension prefix", () => {
+    const error = validateCliProvider(baseProvider(), ["--resume-x"], "prompt");
+    expect(error).toContain("dangerous argument");
+  });
+
+  const benignCases = [
+    "--verbose",
+    "--output-format",
+    "--dangerous",
+    "--resumable",
+    "--sessions"
+  ];
+  for (const flag of benignCases) {
+    it(`allows benign lookalike ${flag} (next char after a shared prefix is a letter, not - or =)`, () => {
+      expect(validateCliProvider(baseProvider(), [flag], "prompt")).toBeUndefined();
+    });
+  }
+
   it("rejects a {subject}-injected banned token", () => {
     const error = validateCliProvider(baseProvider(), ["--print", "--yolo"], "prompt");
     expect(error).toContain("dangerous argument");
@@ -105,6 +138,15 @@ describe("validateCliProvider", () => {
   it("permits only allowlisted flags when headlessAllowlist is declared", () => {
     const provider = baseProvider({ headlessAllowlist: ["--print", "--output-format"] });
     const ok = validateCliProvider(provider, ["--print", "--output-format", "text"], "prompt");
+    expect(ok).toBeUndefined();
+  });
+
+  it("allowlist branch is unaffected by hyphen-extension denylist matching", () => {
+    // The allowlist replaces the denylist backstop entirely: an explicitly
+    // allowlisted flag is still permitted even though `--resume` would
+    // hyphen-extend to it under the denylist.
+    const provider = baseProvider({ headlessAllowlist: ["--resume-session"] });
+    const ok = validateCliProvider(provider, ["--resume-session"], "prompt");
     expect(ok).toBeUndefined();
   });
 
