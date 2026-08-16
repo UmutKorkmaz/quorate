@@ -458,7 +458,13 @@ body {
 }
 
 .terminal-showcase-grid {
-  @apply grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start;
+  /* minmax(0,1fr) on the mobile column too: long unbroken terminal lines must
+     not stretch the track past the viewport (cards were clipped off-screen). */
+  @apply grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-start;
+}
+
+.terminal-showcase-grid > * {
+  @apply min-w-0;
 }
 
 .terminal-showcase-aside {

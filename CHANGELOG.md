@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`quorate contract check` (ContractCourt MVP)** — OpenAPI JSON/YAML drift
+  detection with PASS/WARN/BLOCK rules, git-ref or before/after inputs,
+  persisted `.quorate/contract/latest.{json,md}` artifacts, and a `--gate`
+  exit code.
+- **`quorate metrics`** — local-only aggregation over past runs: verdict counts,
+  durations, findings, agreement, approvals, proof pass rate, and contract
+  verdicts, with `--json` for machine output.
+- **ProofRunner attach** — reviews can attach explicit `--proof <path>` evidence,
+  and proof commands are discovered from package.json scripts.
+- **`examples/contract/`** — fixture corpus for contract drift checking.
+- Website docs page covering contract checks and metrics.
+
+### Security
+
+- Provider raw output, errors, summaries, and findings are redacted before they
+  are persisted or exported — broader secret patterns (AKIA/AIza/xox/JWT/PEM
+  blocks), provider-configured env values, and URL-credential masking in
+  diagnostics bundles.
+- The dangerous-flag denylist now matches by boundary-prefix, so compound flags
+  like `--dangerously-skip-permissions` are rejected, not just exact tokens.
+- Workspace packs under `.quorate/packs/` are gated behind
+  `QUORATE_TRUST_WORKSPACE`, matching the existing gate on `.quorate/commands/`.
+- Pack-supplied regex rules skip diff lines over 8,000 characters (ReDoS guard);
+  built-in audited rules still run on any line length.
+- Sessions, reports, and proof artifacts are written owner-only (0600 files,
+  0700 directories) with symlink-safe (O_NOFOLLOW) key creation.
+- The review workflow is pinned to the immutable v1.3.0 release commit with
+  SHA-pinned `actions/*` steps, and `ci.yml` runs with least-privilege
+  `contents: read` permissions.
+- Reviewer prompts frame the PR subject and diff as untrusted content to
+  analyze, never instructions to follow.
+- VS Code finding hovers restrict trusted markdown to a command allowlist, and
+  the webview nonce is generated from the CSPRNG.
+- monitor requires a second click to confirm approvals and auto-spawns the
+  monitor server only from verified binaries.
+
+### Fixed
+
+- Pre-existing typecheck error in the live-spool truncate path.
+- The monitor web page now serves a strict Content-Security-Policy
+  (`default-src 'none'`, same-origin connects only) on top of its existing
+  markup escaping.
+
 ## [1.4.0] - 2026-07-20
 
 ### Added

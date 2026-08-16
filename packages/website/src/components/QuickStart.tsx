@@ -3,7 +3,7 @@ const STEPS = [
     step: "01",
     title: "Install Quorate",
     command: "npm install -g quorate",
-    detail: "Requires Node 22 or newer. One package includes the CLI, shell, and council engine."
+    detail: "Requires Node 22.22.0 or newer. One package includes the CLI, shell, and council engine."
   },
   {
     step: "02",

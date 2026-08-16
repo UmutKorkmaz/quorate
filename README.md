@@ -27,7 +27,7 @@ npm install -g quorate
 quorate
 ```
 
-Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interactive shell.
+Requires **Node ≥ 22.22.0**. Running `quorate` with no arguments opens the interactive shell.
 
 ## Why Quorate
 
@@ -169,6 +169,16 @@ its added lines name the new package. It writes the latest report to
 verdict rules while intentionally ignoring council-only coverage constraints such as
 required roles and real-provider floors.
 
+### Contract checks
+
+Deterministic OpenAPI 3 breaking-change detection — blocks releases on removed operations, newly required fields, incompatible types, or removed enum values. Compare git refs or local files:
+
+```bash
+quorate contract check --spec openapi.yml --before v1.0.0.yml --after v1.1.0.yml --gate
+```
+
+Writes artifacts to `.quorate/contract/latest.json` and `latest.md` with deterministic hashes. The `quorate metrics` command aggregates local run evidence (verdict distribution, duration, finding counts, council agreement, proof pass rate, contract verdicts) — purely local, never transmitted.
+
 ### Specialized blockchain packs
 
 Blockchain-specific checks remain available as opt-in packs; they are not part of
@@ -266,8 +276,9 @@ Two optional, per-repo files let a project carry its own conventions:
   `argument-hint`, and `mode: review|plan`; `{{args}}` interpolates user input;
   nested folders namespace as `folder:command`. Built-in commands win on a name clash.
   Because these are repo-controlled and feed straight into a council prompt, they
-  are **only loaded when you opt in** with `QUORATE_TRUST_WORKSPACE=1` — opening
-  the shell in an untrusted clone never runs them.
+  are **only loaded when you opt in** with `QUORATE_TRUST_WORKSPACE=1`. Workspace
+  packs in `.quorate/packs/` are gated the same way — opening the shell in an
+  untrusted clone never loads them.
 
 ## Configure
 
@@ -550,8 +561,9 @@ existence-guarded hook pattern, and the approve/deny contract (a
 `PermissionRequest` only blocks when a monitor is attached; 55s timeout then
 defer; `quorate monitor setup --remove` cleanly reverts).
 
-> Screenshot placeholder — run `quorate monitor --web` or open
-> monitor.app to see live runs, approval cards, and detected processes.
+The monitor web page and monitor app show live runs with lane-level progress cards,
+approval cards with two-click approve/deny for permission prompts, and detected agent processes
+with jump-to-terminal links — all rendering a shared SSE feed.
 
 ## How it works
 
