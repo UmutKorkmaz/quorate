@@ -86,7 +86,6 @@ import { launchMonitor } from "./tui/monitor.js";
 import { createMonitorServer, listenMonitorServer } from "./monitor-server.js";
 import { runHookReportCli } from "./hook-report.js";
 import { applyRemove, applySetup, claudeSettingsPath, codexConfigPath, codexNotifySlotOccupied, computeSetupPlan, detectCliCapabilities, renderCapabilityTable } from "./monitor-setup.js";
-import { installCompanion } from "./companion-install.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
@@ -1843,7 +1842,7 @@ export function buildProgram(): Command {
     .description("Watch live council runs on this machine — agents, lanes, and per-lane output.")
     .option("--json", "Print the live run registry as JSON and exit (no TUI)")
     .option("--web", "Serve a browser dashboard on 127.0.0.1 instead of the TUI")
-    .option("--serve", "Headless server: print one {url,token,pid} JSON line, serve until Ctrl+C (for monitor)")
+    .option("--serve", "Headless server: print one {url,token,pid} JSON line, serve until Ctrl+C (for control clients)")
     .option("--port <port>", "Fixed port for --web/--serve (default: random)")
     .option("--no-open", "With --web, do not auto-open the browser")
     .action(async (options) => {
@@ -1860,7 +1859,7 @@ export function buildProgram(): Command {
         }
         const url = await listenMonitorServer(handle, port);
         if (options.serve) {
-          // Headless: one JSON line for the native app to parse, then block.
+          // Headless: one JSON line for a control client to parse, then block.
           process.stdout.write(`${JSON.stringify({ url, token: handle.token, pid: process.pid })}\n`);
         } else {
           console.error(`Quorate monitor: ${url}`);
@@ -1958,25 +1957,6 @@ export function buildProgram(): Command {
     .requiredOption("--event <event>", "Hook event name")
     .action(async (options) => {
       await runHookReportCli({ source: options.source, event: options.event });
-    });
-
-  monitorCmd
-    .command("install-companion")
-    .description("Install the monitor native macOS app (from a GitHub Release, or --from-local).")
-    .option("--from-local", "Build from the in-tree SwiftPM package instead of downloading")
-    .option("--release <tag>", "Release tag to install from (default: latest)")
-    .option("--dir <path>", "Install directory (default: ~/Applications)")
-    .option("--force", "Overwrite an existing install")
-    .action(async (options) => {
-      const result = await installCompanion({
-        fromLocal: Boolean(options.fromLocal),
-        release: options.release,
-        dir: options.dir,
-        force: Boolean(options.force),
-        repoRoot: cwdFrom(program)
-      });
-      console.error(result.message);
-      if (!result.ok) process.exitCode = 1;
     });
 
   program

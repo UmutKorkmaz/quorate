@@ -42,8 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   analyze, never instructions to follow.
 - VS Code finding hovers restrict trusted markdown to a command allowlist, and
   the webview nonce is generated from the CSPRNG.
-- monitor requires a second click to confirm approvals and auto-spawns the
-  monitor server only from verified binaries.
 
 ### Fixed
 
@@ -69,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   approve/deny card (defers silently when no monitor is attached — zero
   overhead when nobody is watching).
 - **`quorate monitor --serve`** — a headless server mode that prints one
-  `{url, token, pid}` JSON line and serves the SSE feed for the native app.
+  `{url, token, pid}` JSON line and serves the SSE feed.
   Writes a `~/.quorate/live/monitor.json` discovery file with a 2s heartbeat
   on listen and removes it on close; this is what makes foreign
   `PermissionRequest` hooks block for an answer.
@@ -81,17 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   external badge, per-run Jump, and a stats footer. `j` in the TUI (and the
   web's Jump button) focuses the run's terminal via tmux → iTerm2 →
   Terminal.app (macOS).
-- **monitor native macOS app** — a thin menu-bar/notch renderer over
-  the monitor server (Swift, macOS 14+, read-only over the SSE feed). Lives
-  under `native/monitor/`; `bash native/monitor/scripts/bundle.sh`
-  produces an ad-hoc-signed `dist/monitor.app` (bundle id
-  `app.quorate.monitor`, version 1.4.0, `LSUIElement`). It finds or spawns
-  `quorate monitor --serve`, renders approvals + runs + subagents + verdicts,
-  and never writes the spool directly.
-- **`quorate monitor install-companion`** — installs monitor. Default
-  path downloads `monitor-<arch>.zip` + `.sha256` from a GitHub Release
-  and verifies the checksum; `--from-local` builds from the in-tree SwiftPM
-  package (the working path today, no signed release assets yet). macOS only.
 
 ## [1.3.0] - 2026-07-20
 

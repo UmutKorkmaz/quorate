@@ -162,7 +162,7 @@ evidence to prioritize the next build without relying on feature-count ambition.
 | ReviewGraph surfaces | Done |
 | PlanCourt gate workflow | Done |
 | Custom pack format | Done |
-| the monitor monitor + approvals + trust ledger | Done (v1.4.0) |
+| Live monitor, approvals, trust ledger | Done (v1.4.0) |
 | ProofRunner Lite | Done (local candidate) |
 
 ## Release order

@@ -84,7 +84,7 @@ Hybrid usage is normal — many users run Claude Code AND Codex. Fit in:
 
 Done — security:
 - [x] Quorate: monitor hardening (CSPRNG approval ids, Content-Type gate, frame-ancestors,
-      Host validation, loopback pinning).
+      Host validation).
 - [x] Convoke: SSRF guard on `read` URLs, session id validation, 0600/0700 session files,
       user-prompt redaction at rest, docs CSP.
 

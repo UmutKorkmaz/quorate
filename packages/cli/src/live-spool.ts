@@ -582,7 +582,7 @@ export function readRunEvents(runId: string, options: ReadRunEventsOptions = {})
 }
 
 /* -------------------------------------------------------------------------- */
-/* Foreign-agent approvals + monitor discovery (the monitor, v1.4.0)       */
+/* Foreign-agent approvals + monitor discovery (companion clients, v1.4.0)    */
 /* -------------------------------------------------------------------------- */
 
 /**
