@@ -27,7 +27,7 @@ npm install -g quorate
 quorate
 ```
 
-Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interactive shell.
+Requires **Node ≥ 22.22.0**. Running `quorate` with no arguments opens the interactive shell.
 
 ## Why Quorate
 
@@ -169,6 +169,16 @@ its added lines name the new package. It writes the latest report to
 verdict rules while intentionally ignoring council-only coverage constraints such as
 required roles and real-provider floors.
 
+### Contract checks
+
+Deterministic OpenAPI 3 breaking-change detection — blocks releases on removed operations, newly required fields, incompatible types, or removed enum values. Compare git refs or local files:
+
+```bash
+quorate contract check --spec openapi.yml --before v1.0.0.yml --after v1.1.0.yml --gate
+```
+
+Writes artifacts to `.quorate/contract/latest.json` and `latest.md` with deterministic hashes. The `quorate metrics` command aggregates local run evidence (verdict distribution, duration, finding counts, council agreement, proof pass rate, contract verdicts) — purely local, never transmitted.
+
 ### Specialized blockchain packs
 
 Blockchain-specific checks remain available as opt-in packs; they are not part of
@@ -266,8 +276,9 @@ Two optional, per-repo files let a project carry its own conventions:
   `argument-hint`, and `mode: review|plan`; `{{args}}` interpolates user input;
   nested folders namespace as `folder:command`. Built-in commands win on a name clash.
   Because these are repo-controlled and feed straight into a council prompt, they
-  are **only loaded when you opt in** with `QUORATE_TRUST_WORKSPACE=1` — opening
-  the shell in an untrusted clone never runs them.
+  are **only loaded when you opt in** with `QUORATE_TRUST_WORKSPACE=1`. Workspace
+  packs in `.quorate/packs/` are gated the same way — opening the shell in an
+  untrusted clone never loads them.
 
 ## Configure
 
@@ -516,27 +527,22 @@ sidecar files are enabled — use them to gate later steps.
 branch**, never from the PR head — a pull request cannot supply the config that
 governs its own review.
 
-## the monitor (native monitor + foreign agents)
+## Live monitor (foreign agents + approvals)
 
-the monitor is a native macOS menu-bar/notch app that shows **every AI-agent
-run on this machine live** — Quorate's own council runs *and* foreign CLIs you
-launched yourself (Claude Code, …), their subagents, and live approve/deny for
-permission prompts. It is a thin renderer over the same SSE feed `quorate
-monitor --web` uses; all logic stays in the CLI.
+`quorate monitor` shows **every AI-agent run on this machine live** — Quorate's
+own council runs *and* foreign CLIs you launched yourself (Claude Code, …),
+their subagents, and live approve/deny for permission prompts. Every surface
+renders the same SSE feed; all logic stays in the CLI.
 
-**Setup** (macOS 14+, one time):
+**Setup** (one time):
 
 ```sh
-# 1. Install the native app from a local build
-quorate monitor install-companion --from-local
-
-# 2. Install hooks so foreign CLIs are observable
+# 1. Install hooks so foreign CLIs are observable
 quorate monitor setup            # claude gets rich hooks; codex respected; others scan-only
 
-# 3. Run the monitor (the app can also spawn this itself)
+# 2. Run the monitor
 quorate monitor --serve          # headless: prints one {url,token,pid} line, serves until Ctrl+C
 # …or: quorate monitor --web     # browser dashboard
-# …or: open monitor.app    # native menu-bar/notch
 ```
 
 | Foreign CLI | lanes | subagents | approve/deny | notes |
@@ -550,8 +556,9 @@ existence-guarded hook pattern, and the approve/deny contract (a
 `PermissionRequest` only blocks when a monitor is attached; 55s timeout then
 defer; `quorate monitor setup --remove` cleanly reverts).
 
-> Screenshot placeholder — run `quorate monitor --web` or open
-> monitor.app to see live runs, approval cards, and detected processes.
+The monitor web page shows live runs with lane-level progress cards,
+approval cards with approve/deny for permission prompts, and detected agent processes
+with jump-to-terminal links — all rendering a shared SSE feed.
 
 ## How it works
 

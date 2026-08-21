@@ -1,7 +1,7 @@
 # Quorate Engineering Roadmap
 
 **Canonical status source**
-**As of:** v1.1.0 release · 2026-07-16
+**As of:** v1.4.0 working tree · 2026-08-14
 
 This file is the active engineering sequence. Product concepts in
 [`AI-PRODUCT-SUITE-PLAN.md`](./AI-PRODUCT-SUITE-PLAN.md) are horizon/backlog material, and
@@ -13,14 +13,16 @@ and VS Code surfaces.
 
 ## Active sequence
 
-1. **Phase 0 — SupplyChainGate v1.1 stabilization**
-2. **Phase 1 — ProofRunner Lite**
-3. **Phase 2 — ContractCourt MVP**
-4. **Phase 3 — CI adoption hardening**
-5. **Phase 4 — Design-partner validation**
+1. **Phase 0 — SupplyChainGate v1.1 stabilization** — done (v1.1.0)
+2. **Phase 1 — ProofRunner Lite** — MVP implemented locally, uncommitted
+3. **Phase 2 — ContractCourt MVP** — in progress (local candidate)
+4. **Phase 3 — CI adoption hardening** — not started
+5. **Phase 4 — Design-partner validation** — not started
 
-Phase 0 satisfies its local implementation and verification exit gate. Phase 1
-is next but has not started; later phases still begin only after the previous
+Phase 0 satisfied its exit gate with the v1.1.0 release. Phase 1's MVP is
+implemented in the local working tree, uncommitted, pending its formal review
+gate. Phase 2 is in progress as a local candidate. Phases 3 and 4 are
+unchanged and not started; later phases still begin only after the previous
 phase satisfies its exit gate.
 
 ## Phase 0 — SupplyChainGate v1.1 stabilization
@@ -74,13 +76,29 @@ MVP:
 - Detect or configure test, typecheck, lint, and build commands.
 - Run proof steps with bounded output and duration.
 - Record command, exit code, duration, and changed artifacts in
-  `.quorate/proof/latest.json`.
+  `.quorate/proofs/latest.{json,md}`.
 - Add `quorate review --proof <path>`.
 - Support an optional Playwright smoke command when already configured.
 
-**Exit gate:** a fixture PR produces a portable proof artifact showing tests and
-build passed, and the council includes that evidence without trusting arbitrary
-artifact claims.
+Status: the MVP is implemented in the local working tree, uncommitted
+(`packages/cli/src/proof-runner.ts`): `quorate proof run/show/verify` writes
+`.quorate/proofs/latest.{json,md}`, and review evidence attaches by proof
+fingerprint rather than by trusting arbitrary artifact claims. Two spec gaps
+are closing now: the implemented artifact path is `.quorate/proofs/` rather
+than the `.quorate/proof/` named in the original spec, and explicit
+`--proof <path>` attachment plus command discovery are being added.
+
+**Exit gate:**
+
+- [ ] A fixture PR produces a portable proof artifact showing tests and build
+  passed.
+- [ ] The council includes that evidence without trusting arbitrary artifact
+  claims.
+
+Both boxes are plausibly met in the local working tree — the fixture proof
+artifact and the fingerprint-gated council evidence attachment exist — but they
+stay unchecked: the formal review gate has never run, and portability across
+machines is unverified.
 
 ## Phase 2 — ContractCourt MVP
 
@@ -92,6 +110,12 @@ MVP:
 - Classify additive, breaking, and ambiguous changes.
 - Emit stable findings and machine-readable evidence.
 - Start with one proven contract type; do not launch a broad compatibility suite.
+
+Status: in progress (local candidate). The core engine plus `quorate contract
+check` with `--spec/--base/--head/--before/--after/--gate`, the
+`.quorate/contract/latest.{json,md}` artifacts, and `quorate metrics` local
+aggregation are being implemented in the working tree now; none of it is
+committed or done.
 
 **Exit gate:** a vulnerable/clean corpus proves detection of breaking changes with
 bounded false positives.
@@ -138,6 +162,8 @@ evidence to prioritize the next build without relying on feature-count ambition.
 | ReviewGraph surfaces | Done |
 | PlanCourt gate workflow | Done |
 | Custom pack format | Done |
+| Live monitor, approvals, trust ledger | Done (v1.4.0) |
+| ProofRunner Lite | Done (local candidate) |
 
 ## Release order
 

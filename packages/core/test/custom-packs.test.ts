@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { applyCustomPackDefinitions, customPackScaffold, parseCustomPackYaml, runCouncil } from "../src/index.js";
-import type { QuorateConfig } from "../src/types.js";
+import { runHeuristicReview } from "../src/heuristics.js";
+import type { CustomHeuristicRule, QuorateConfig } from "../src/types.js";
 
 const source = `
 version: 1
@@ -53,5 +54,58 @@ describe("custom packs", () => {
       config
     );
     expect(report.findings.some((finding) => finding.title === "Debug endpoint exposed")).toBe(true);
+  });
+});
+
+// A classic catastrophic-backtracking pattern: both the pattern and the diff
+// line are repo-controlled, so without the per-line length cap this rule hangs
+// the synchronous heuristic pass (ReDoS). Vitest's default per-test timeout is
+// the hang guard.
+const redosRule: CustomHeuristicRule = {
+  packId: "redos-pack",
+  title: "Nested quantifier rule",
+  severity: "high",
+  body: "Only fires on short lines.",
+  fileRe: null,
+  textRe: /(a+)+$/
+};
+
+function diffWithLine(line: string): string {
+  return [
+    "diff --git a/src/app.ts b/src/app.ts",
+    "--- a/src/app.ts",
+    "+++ b/src/app.ts",
+    "@@ -1 +1 @@",
+    `+${line}`
+  ].join("\n");
+}
+
+describe("pack-supplied regex ReDoS guard", () => {
+  it("still runs pack heuristics against normal-length lines", () => {
+    const result = runHeuristicReview(
+      { mode: "review", subject: "t", diff: diffWithLine("aaa"), customHeuristics: [redosRule] }
+    );
+    expect(result.findings.some((finding) => finding.title === "Nested quantifier rule")).toBe(true);
+  });
+
+  it("skips pack regexes on very long lines instead of hanging", () => {
+    // /(a+)+$/ against 20k 'a's is exponential backtracking without the cap.
+    const result = runHeuristicReview(
+      { mode: "review", subject: "t", diff: diffWithLine("a".repeat(20000)), customHeuristics: [redosRule] }
+    );
+    expect(result.findings.some((finding) => finding.title === "Nested quantifier rule")).toBe(false);
+  });
+
+  it("keeps built-in heuristics working on very long lines", () => {
+    const result = runHeuristicReview(
+      {
+        mode: "review",
+        subject: "t",
+        diff: diffWithLine(`// TODO: flatten ${"a".repeat(20000)}`),
+        customHeuristics: [redosRule]
+      }
+    );
+    expect(result.findings.some((finding) => finding.title === "Follow-up marker added")).toBe(true);
+    expect(result.findings.some((finding) => finding.title === "Nested quantifier rule")).toBe(false);
   });
 });

@@ -8,7 +8,6 @@ import * as readline from "node:readline/promises";
 import { Command } from "commander";
 import {
   buildMultiPackConfig,
-  analyzeReviewBudget,
   buildSolanaReleaseGate,
   buildSolanaTestPlan,
   buildPullRequestContext,
@@ -17,7 +16,6 @@ import {
   detectPacks,
   fetchProviderModels,
   findConfigPath,
-  formatBudgetSummary,
   formatSolanaReleaseGate,
   formatSolanaTestPlan,
   isLocalBaseUrl,
@@ -88,7 +86,6 @@ import { launchMonitor } from "./tui/monitor.js";
 import { createMonitorServer, listenMonitorServer } from "./monitor-server.js";
 import { runHookReportCli } from "./hook-report.js";
 import { applyRemove, applySetup, claudeSettingsPath, codexConfigPath, codexNotifySlotOccupied, computeSetupPlan, detectCliCapabilities, renderCapabilityTable } from "./monitor-setup.js";
-import { installCompanion } from "./companion-install.js";
 import { suggestionSuffix, validateProviderSelection } from "./session.js";
 import { paint } from "./term.js";
 import { readVersion } from "./version.js";
@@ -99,6 +96,11 @@ import {
 } from "./custom-packs.js";
 import { formatProviderTestResult, testProvider } from "./provider-test.js";
 import { readRepositoryFiles, runSupplyChainScan } from "./supply-chain-command.js";
+import { runAuditExport, runAuditVerify } from "./audit-command.js";
+import { prepareReviewRequest } from "./review-preparation.js";
+import { attachLatestProofToReview, detectProofCommands, runDetectedProofs, runProof, showLatestProof, verifyLatestProof } from "./proof-runner.js";
+import { runContractCheck } from "./contract-command.js";
+import { runMetrics } from "./metrics-command.js";
 
 interface GlobalOptions {
   config?: string;
@@ -590,6 +592,7 @@ export function buildProgram(): Command {
       const target = writeCustomPackScaffold(cwd, id, Boolean(options.force));
       console.log(`Wrote ${relative(cwd, target)}.`);
       console.log("Commit it with: git add -f .quorate/packs");
+      console.log("Workspace packs load only in trusted repos: QUORATE_TRUST_WORKSPACE=1 quorate pack list");
     });
 
   program
@@ -1087,6 +1090,7 @@ export function buildProgram(): Command {
     .option("--baseline-path <path>", "Baseline file to gate against (default .quorate.baseline.json)")
     .option("--suppress-path <path>", "Suppression store to apply (default .quorate/suppressions.json)")
     .option("--fail-on <severity>", "Override the gate threshold (critical…info, or never)")
+    .option("--proof <path>", "Attach an explicit proof artifact (signed; a stale worktree attaches with a note)")
     .action(async (options) => {
       const cwd = cwdFrom(program);
       let config = applyProviderFilter(configFrom(program), options.providers);
@@ -1101,7 +1105,7 @@ export function buildProgram(): Command {
         options.pr && options.prContext !== false
           ? buildPullRequestContext(readPullRequestContext(options.pr, cwd) ?? { number: Number(options.pr) })
           : undefined;
-      const request: CouncilRequest = {
+      let request: CouncilRequest = {
         mode: "review" as const,
         subject: options.subject,
         diff,
@@ -1111,27 +1115,14 @@ export function buildProgram(): Command {
         context: prContext,
         pullRequest: options.pr ? { number: Number(options.pr) } : undefined
       };
-      const budget = analyzeReviewBudget({
-        diff,
-        config,
-        request: {
-          mode: request.mode,
-          subject: request.subject,
-          repoPath: request.repoPath,
-          pullRequest: request.pullRequest,
-          context: request.context
-        }
-      });
-      diff = budget.diff;
-      request.diff = diff;
-      request.budget = budget.summary;
-      if (isEmptyReviewDiff("review", diff)) {
-        console.error("No reviewable changes remain after budget/generated-file filtering.");
-        process.exitCode = 1;
-        return;
-      }
-      if (!budget.ok) {
-        console.error(formatBudgetSummary(budget.summary));
+      const proofAttachment = attachLatestProofToReview(request, options.proof);
+      request = proofAttachment.request;
+      if (proofAttachment.note) console.error(proofAttachment.note);
+      try {
+        request = prepareReviewRequest(request, config);
+        diff = request.diff ?? "";
+      } catch (error: unknown) {
+        console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
         return;
       }
@@ -1204,11 +1195,11 @@ export function buildProgram(): Command {
       // Persist the RAW report for `quorate fix` and `quorate baseline` (same
       // file the TUI writes) — never the baseline-filtered view, or a follow-up
       // `quorate baseline` would record a shrunken set.
-      mkdirSync(resolve(cwd, ".quorate"), { recursive: true });
+      mkdirSync(resolve(cwd, ".quorate"), { recursive: true, mode: 0o700 });
       writeFileSync(
         resolve(cwd, ".quorate", "last-report.json"),
         `${JSON.stringify(rawReport ?? report, null, 2)}\n`,
-        "utf8"
+        { encoding: "utf8", mode: 0o600 }
       );
       // Append to the per-repo history store (best-effort, never throws). The
       // gated report is what the team saw and the gate acted on; suppressed
@@ -1409,6 +1400,147 @@ export function buildProgram(): Command {
         return;
       }
       console.log(formatHistoryTable(entries, limit));
+    });
+
+  const auditCmd = program
+    .command("audit")
+    .helpGroup("Review:")
+    .description("Verify or export the local signed approval trust ledger.");
+
+  auditCmd
+    .command("verify")
+    .description("Verify approval record hashes, signatures, chain order, and the signed head anchor.")
+    .option("--json", "Print machine-readable verification JSON")
+    .option("--dir <path>", "Audit directory (default ~/.quorate/audit)")
+    .action((options) => {
+      const result = runAuditVerify({ dir: options.dir, json: Boolean(options.json) });
+      process.stdout.write(result.output);
+      if (result.exitCode !== 0) process.exitCode = result.exitCode;
+    });
+
+  const proofCmd = program
+    .command("proof")
+    .helpGroup("Review:")
+    .description("Run, inspect, and verify bounded local verification proof artifacts.");
+
+  proofCmd
+    .command("run")
+    .description("Run an explicit argv command and atomically save .quorate/proofs/latest.{json,md}.")
+    .option("--name <name>", "Short proof name")
+    .option("--detect", "Run proof commands detected from package.json scripts (test/typecheck/lint/build)")
+    .option("--only <names>", "With --detect: comma-separated subset of detected command names")
+    .option("--timeout-ms <ms>", "Timeout in milliseconds")
+    .option("--max-output-bytes <bytes>", "Maximum captured stdout or stderr bytes")
+    .argument("[command...]", "Command after --; executed directly without a shell")
+    .action(async (command: string[], options) => {
+      const cwd = cwdFrom(program);
+      if (options.detect) {
+        if (command.length > 0) {
+          console.error("--detect runs discovered commands; pass an explicit command without --detect.");
+          process.exitCode = 1;
+          return;
+        }
+        const only = options.only === undefined ? undefined : String(options.only).split(",").map((name) => name.trim()).filter(Boolean);
+        const result = await runDetectedProofs(cwd, only);
+        for (const step of result.steps) {
+          console.log(`Proof ${step.exitCode === 0 && !step.timedOut ? "passed" : "failed"}: ${step.name} (${step.durationMs} ms)`);
+        }
+        if (result.steps.length === 0) console.log("No proof commands detected in package.json scripts.");
+        else if (result.artifact) console.log("Saved .quorate/proofs/latest.json and .quorate/proofs/latest.md");
+        if (result.exitCode !== 0) process.exitCode = result.exitCode;
+        return;
+      }
+      if (!options.name || command.length === 0) {
+        console.error("Pass --name <name> and a command after --, or use --detect.");
+        process.exitCode = 1;
+        return;
+      }
+      const result = await runProof({
+        cwd,
+        name: options.name,
+        command,
+        timeoutMs: options.timeoutMs === undefined ? undefined : Number(options.timeoutMs),
+        maxOutputBytes: options.maxOutputBytes === undefined ? undefined : Number(options.maxOutputBytes)
+      });
+      console.log(`Proof ${result.artifact.exitCode === 0 && !result.artifact.timedOut ? "passed" : "failed"}: ${result.artifact.name} (${result.artifact.durationMs} ms)`);
+      console.log("Saved .quorate/proofs/latest.json and .quorate/proofs/latest.md");
+      if (result.exitCode !== 0) process.exitCode = result.exitCode;
+    });
+
+  proofCmd
+    .command("show")
+    .description("Print the latest proof Markdown artifact (stale artifacts are labeled).")
+    .action(() => {
+      const result = showLatestProof(cwdFrom(program));
+      process.stdout.write(result.output);
+      if (!result.verification.ok) {
+        console.error(`Proof ${result.verification.reason}: ${result.verification.detail ?? "not verified"}`);
+        if (result.verification.reason === "tampered" || result.verification.reason === "missing") process.exitCode = 1;
+      }
+    });
+
+  proofCmd
+    .command("verify")
+    .description("Verify the latest proof hash, Markdown digest, and current worktree fingerprint.")
+    .option("--json", "Print machine-readable verification JSON")
+    .action((options) => {
+      const result = verifyLatestProof(cwdFrom(program));
+      if (options.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      else console.log(result.ok ? "Proof verification PASSED." : `Proof verification FAILED: ${result.reason} — ${result.detail ?? "not verified"}`);
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  const contractCmd = program
+    .command("contract")
+    .helpGroup("Review:")
+    .description("Detect externally visible API contract drift between two OpenAPI documents.");
+
+  contractCmd
+    .command("check")
+    .description("Compare OpenAPI JSON/YAML (git refs or files) and save .quorate/contract/latest.{json,md}.")
+    .option("--spec <path>", "Spec path resolved at both git refs (requires --base/--head)")
+    .option("--base <ref>", "Baseline git ref for --spec")
+    .option("--head <ref>", "Candidate git ref for --spec")
+    .option("--before <path>", "Explicit baseline OpenAPI file (alternative to --spec/--base/--head)")
+    .option("--after <path>", "Explicit candidate OpenAPI file (alternative to --spec/--base/--head)")
+    .option("--gate", "Exit non-zero only on a BLOCK verdict")
+    .option("--json", "Print the contract artifact JSON")
+    .action(async (options) => {
+      const outcome = await runContractCheck({
+        cwd: cwdFrom(program),
+        spec: options.spec,
+        base: options.base,
+        head: options.head,
+        before: options.before,
+        after: options.after,
+        gate: Boolean(options.gate),
+        json: Boolean(options.json)
+      });
+      if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
+    });
+
+  program
+    .command("metrics")
+    .helpGroup("Review:")
+    .description("Aggregate local, privacy-preserving run evidence: verdicts, durations, approvals, proofs, contract.")
+    .option("--json", "Print machine-readable metrics JSON")
+    .action(async (options) => {
+      const result = await runMetrics({ cwd: cwdFrom(program), json: Boolean(options.json) });
+      process.stdout.write(result.output);
+      if (result.exitCode !== 0) process.exitCode = result.exitCode;
+    });
+
+  auditCmd
+    .command("export")
+    .description("Export verified approval decisions for SIEM ingestion.")
+    .option("--format <format>", "Output format: jsonl or json", "jsonl")
+    .option("--decision <decision>", "Filter by allow, deny, or timeout")
+    .option("--source <source>", "Filter by approval source")
+    .option("--since <iso-date>", "Include decisions at or after this ISO timestamp")
+    .option("--until <iso-date>", "Include decisions at or before this ISO timestamp")
+    .option("--dir <path>", "Audit directory (default ~/.quorate/audit)")
+    .action((options) => {
+      process.stdout.write(runAuditExport(options));
     });
 
   program
@@ -1688,8 +1820,8 @@ export function buildProgram(): Command {
       writeExport(options.writeMd, renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
       writeExport(options.writeReviewgraph, renderReviewGraph(report));
 
-      mkdirSync(resolve(cwd, ".quorate"), { recursive: true });
-      writeFileSync(resolve(cwd, ".quorate", "last-plan-report.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+      mkdirSync(resolve(cwd, ".quorate"), { recursive: true, mode: 0o700 });
+      writeFileSync(resolve(cwd, ".quorate", "last-plan-report.json"), `${JSON.stringify(report, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 
       if (!options.json) {
         console.log(renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
@@ -1710,7 +1842,7 @@ export function buildProgram(): Command {
     .description("Watch live council runs on this machine — agents, lanes, and per-lane output.")
     .option("--json", "Print the live run registry as JSON and exit (no TUI)")
     .option("--web", "Serve a browser dashboard on 127.0.0.1 instead of the TUI")
-    .option("--serve", "Headless server: print one {url,token,pid} JSON line, serve until Ctrl+C (for monitor)")
+    .option("--serve", "Headless server: print one {url,token,pid} JSON line, serve until Ctrl+C (for control clients)")
     .option("--port <port>", "Fixed port for --web/--serve (default: random)")
     .option("--no-open", "With --web, do not auto-open the browser")
     .action(async (options) => {
@@ -1727,7 +1859,7 @@ export function buildProgram(): Command {
         }
         const url = await listenMonitorServer(handle, port);
         if (options.serve) {
-          // Headless: one JSON line for the native app to parse, then block.
+          // Headless: one JSON line for a control client to parse, then block.
           process.stdout.write(`${JSON.stringify({ url, token: handle.token, pid: process.pid })}\n`);
         } else {
           console.error(`Quorate monitor: ${url}`);
@@ -1825,25 +1957,6 @@ export function buildProgram(): Command {
     .requiredOption("--event <event>", "Hook event name")
     .action(async (options) => {
       await runHookReportCli({ source: options.source, event: options.event });
-    });
-
-  monitorCmd
-    .command("install-companion")
-    .description("Install the monitor native macOS app (from a GitHub Release, or --from-local).")
-    .option("--from-local", "Build from the in-tree SwiftPM package instead of downloading")
-    .option("--release <tag>", "Release tag to install from (default: latest)")
-    .option("--dir <path>", "Install directory (default: ~/Applications)")
-    .option("--force", "Overwrite an existing install")
-    .action(async (options) => {
-      const result = await installCompanion({
-        fromLocal: Boolean(options.fromLocal),
-        release: options.release,
-        dir: options.dir,
-        force: Boolean(options.force),
-        repoRoot: cwdFrom(program)
-      });
-      console.error(result.message);
-      if (!result.ok) process.exitCode = 1;
     });
 
   program

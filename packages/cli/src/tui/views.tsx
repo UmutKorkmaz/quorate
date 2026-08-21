@@ -30,14 +30,42 @@ function shortCwd(cwd: string): string {
   return cwd.startsWith(home) ? `~${cwd.slice(home.length)}` : cwd;
 }
 
-// Matches CSI SGR color/style escapes so streamed agent output renders as plain text.
-const ANSI = /\x1b\[[0-9;]*m/g;
+// The full ANSI-escape family, so streamed agent/diff output can't drive the
+// user's terminal — not just SGR color, but cursor jumps, screen clears, OSC
+// window-title/clipboard writes, and OSC-8 hyperlink payloads:
+//   1. CSI sequences: ESC [ <parameter bytes 0x30–0x3F>* <intermediate bytes
+//      0x20–0x2F>* <final byte 0x40–0x7E> (the old SGR-only rule is a subset);
+//   2. OSC strings (title/clipboard/hyperlink): ESC ] … terminated by BEL or
+//      ST (ESC \) — possibly spanning lines to reach the terminator;
+//   3. an OSC that is never terminated: swallowed through end of line;
+//   4. any other ESC + single character (RIS reset, reverse index, DECSC…);
+//   5. a stray trailing ESC byte, so no raw ESC ever reaches the terminal.
+// Everything else — ordinary text, newlines, tabs, other control bytes — is
+// left untouched.
+const ANSI_ESCAPE = new RegExp(
+  [
+    "\\x1b\\[[0-9:;<=>?]*[ !\"#$%&'()*+,./-]*[@-~]",
+    "\\x1b\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)",
+    "\\x1b\\][^\\x07\\x1b\\n]*",
+    "\\x1b[^\\[\\]\\n]",
+    "\\x1b"
+  ].join("|"),
+  "g"
+);
+
+/** Strip every ANSI escape sequence (CSI, OSC, and other ESC-led controls)
+ *  from `text`, leaving ordinary bytes — including newlines and tabs — alone.
+ *  Pure + exported so every view that renders captured agent output shares one
+ *  sanitizer; the previous SGR-only stripping is a strict subset of this. */
+export function stripAnsiEscapes(text: string): string {
+  return text.replace(ANSI_ESCAPE, "");
+}
 
 /** Strip ANSI, collapse to a single trimmed line, and hard-truncate to `maxCols`
  *  with a glyph-aware ellipsis. Pure + exported so the truncation rule can be unit
  *  tested without rendering a component. */
 export function truncateLine(text: string, maxCols: number): string {
-  const segments = text.replace(ANSI, "").replace(/\r/g, "").split("\n");
+  const segments = stripAnsiEscapes(text).replace(/\r/g, "").split("\n");
   const clean = (segments.filter((part) => part.trim().length > 0).pop() ?? "").trim();
   if (maxCols <= 1 || clean.length <= maxCols) return clean;
   const ell = glyphs().separator === "-" ? "..." : "…";
@@ -49,7 +77,7 @@ export function truncateLine(text: string, maxCols: number): string {
  *  spaces; carriage returns are dropped. Pure + exported for unit testing the
  *  per-line rendering used by the /logs body. */
 export function stripAnsiLine(text: string, maxCols: number): string {
-  const clean = text.replace(ANSI, "").replace(/\r/g, "").replace(/\t/g, "  ");
+  const clean = stripAnsiEscapes(text).replace(/\r/g, "").replace(/\t/g, "  ");
   if (maxCols <= 1 || clean.length <= maxCols) return clean;
   const ell = glyphs().separator === "-" ? "..." : "…";
   return clean.slice(0, Math.max(0, maxCols - ell.length)) + ell;
@@ -268,11 +296,16 @@ export function VerdictReport({
               : count > 0
                 ? { text: `${g.check} ${count} finding${count === 1 ? "" : "s"}`, color: PALETTE.pass }
                 : { text: `${g.check} done`, color: PALETTE.dim };
+          // Per-lane timing is the cost signal we have on every provider
+          // (token cost is only estimable at the request level); surface it so
+          // slow reviewers are visible at a glance.
+          const secs = r.durationMs > 0 ? ` (${(r.durationMs / 1000).toFixed(1)}s)` : "";
           return (
             <Box key={`${r.providerId}-${r.role}-${i}`} width={innerWidth} justifyContent="space-between">
               <Text>
                 <Text color="white">{r.providerId}</Text>
                 <Text color={PALETTE.dim}>{`:${r.role}`}</Text>
+                <Text color={PALETTE.dim}>{secs}</Text>
               </Text>
               <Text color={right.color}>{right.text}</Text>
             </Box>
@@ -341,12 +374,29 @@ export function VerdictReport({
 
       <Box marginTop={1}>
         <Text color={PALETTE.dim}>
-          {`${(slowestMs / 1000).toFixed(1)}s ${g.separator} /markdown <path> to export`}
+          {`${(slowestMs / 1000).toFixed(1)}s`}
+          {budgetSummary(report) ? ` ${g.separator} ${budgetSummary(report)}` : ""}
+          {` ${g.separator} /markdown <path> to export`}
           {report.providerResults.length > 0 ? ` ${g.separator} /logs to read each agent` : ""}
         </Text>
       </Box>
     </Box>
   );
+}
+
+/** Compact input-size / cost estimate for the report footer, when the run
+ *  carried a review-budget summary. Cost when priced, else token estimate. */
+function budgetSummary(report: CouncilReport): string {
+  const b = report.metadata.budget;
+  if (!b) return "";
+  if (b.estimatedInputCostUsd != null && b.estimatedInputCostUsd > 0) {
+    return `~$${b.estimatedInputCostUsd.toFixed(2)} in`;
+  }
+  if (b.estimatedInputTokens > 0) {
+    const k = b.estimatedInputTokens / 1000;
+    return k >= 1 ? `~${k.toFixed(1)}k tok in` : `~${b.estimatedInputTokens} tok in`;
+  }
+  return "";
 }
 
 export interface RunRow {

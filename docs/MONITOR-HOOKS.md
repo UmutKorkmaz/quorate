@@ -54,7 +54,7 @@ uninstalled or moved never breaks the foreign CLI:
 A `PermissionRequest` hook only blocks when a monitor is actually attached. If
 nobody is watching (`~/.quorate/live/monitor.json` stale or absent), the hook
 exits 0 immediately and the agent proceeds with its own default — zero
-overhead. Run `quorate monitor --web`, `--serve`, or the monitor app to
+overhead. Run `quorate monitor --web` or `--serve` to
 make approve/deny cards live. If you don't answer within 55 seconds, the hook
 defers (exit 0) so the agent is never wedged.
 

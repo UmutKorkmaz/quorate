@@ -7,6 +7,18 @@ export interface DoctorFormatOptions {
   color?: boolean;
 }
 
+const MIN_NODE_MAJOR = 22;
+const MIN_NODE_MINOR = 22;
+
+/** The workspace and website dependency minimum: Node 22.22.0 or newer. */
+export function isSupportedNodeVersion(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > MIN_NODE_MAJOR || (major === MIN_NODE_MAJOR && minor >= MIN_NODE_MINOR);
+}
+
 function doctorRow(
   glyph: string,
   color: string,
@@ -44,13 +56,13 @@ export function formatDoctorReport(state: ShellState, options: DoctorFormatOptio
   ];
 
   lines.push("", `  ${heading("Environment")}`);
-  const nodeOk = Number(process.versions.node.split(".")[0]) >= 22;
+  const nodeOk = isSupportedNodeVersion(process.versions.node);
   lines.push(
     doctorRow(
       nodeOk ? g.check : g.cross,
       nodeOk ? PALETTE.ok : PALETTE.missing,
       `Node ${process.versions.node}`,
-      nodeOk ? "Node >= 22 — ok" : "Quorate requires Node >= 22",
+      nodeOk ? "Node >= 22.22.0 — ok" : "Quorate requires Node >= 22.22.0",
       false,
       options
     )

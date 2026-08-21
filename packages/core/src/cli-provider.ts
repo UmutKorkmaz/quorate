@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findExecutable } from "./providers.js";
 import { buildReviewPrompt } from "./prompt.js";
+import { redactSecrets } from "./redact.js";
 import { severities } from "./types.js";
 import type { CouncilRequest, Finding, ProviderConfig, ProviderResult, Severity } from "./types.js";
 
@@ -154,9 +155,17 @@ async function runCommand(
  * Long-form dangerous flags (lowercased) plus bare unsafe tokens. This replaces
  * the old anchored-regex array: it is matched against the POST-substitution,
  * normalized arg tokens produced by `normalizeArgForPolicy`, so `--resume=foo`,
- * `--RESUME`, and `{subject}`-injected tokens are all caught. Bare short flags
- * `-c`/`-r` are intentionally absent (overloaded across providers; a single
- * provider may ban a short alias via its `headlessAllowlist`).
+ * `--RESUME`, and `{subject}`-injected tokens are all caught. Matching uses
+ * boundary-prefix semantics: a token is dangerous when it equals a listed
+ * flag OR extends it with `-` / `=` (so `--resume` also bans `--resume-session`
+ * and `--dangerously` bans `--dangerously-skip-permissions`; the `=` arm is
+ * defensive because `normalizeArgForPolicy` already strips `=value` suffixes).
+ * Benign lookalikes stay allowed: `--dangerous`, `--resumable`, `--sessions`
+ * extend a shared prefix with a letter, not a boundary char. Bare tokens
+ * without leading dashes (`bypasspermissions`, `yolo`) are never followed by
+ * `-`/`=` in practice, so they remain effectively exact-match. Bare short
+ * flags `-c`/`-r` are intentionally absent (overloaded across providers; a
+ * single provider may ban a short alias via its `headlessAllowlist`).
  */
 export const DANGEROUS_LONG_FLAGS: string[] = [
   "--continue",
@@ -229,8 +238,14 @@ export function validateCliProvider(
       }
     }
   } else if (!provider.allowDangerousArgs) {
+    const isDangerousToken = (token: string) =>
+      DANGEROUS_LONG_FLAGS.some(
+        (flag) =>
+          token === flag ||
+          (token.startsWith(flag) && (token[flag.length] === "-" || token[flag.length] === "="))
+      );
     const dangerous = args.find((arg) =>
-      normalizeArgForPolicy(arg).some((token) => DANGEROUS_LONG_FLAGS.includes(token))
+      normalizeArgForPolicy(arg).some((token) => isDangerousToken(token))
     );
     if (dangerous) {
       return `CLI provider ${provider.id} uses dangerous argument ${dangerous}. Set allowDangerousArgs only if you fully trust this profile.`;
@@ -511,6 +526,10 @@ export async function runCliProvider(
       }
     );
 
+    // Provider-configured env values are secrets too (API keys etc.); they are
+    // short-circuit-skipped by redactSecrets when under 4 chars.
+    const envSecrets = Object.values(provider.env ?? {});
+
     if (result.aborted) {
       const combinedSoFar = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
       return {
@@ -520,13 +539,16 @@ export async function runCliProvider(
         status: "interrupted",
         summary: "Provider run interrupted.",
         findings: [],
-        rawOutput: combinedSoFar || undefined,
+        rawOutput: redactSecrets(combinedSoFar, envSecrets) || undefined,
         durationMs: Date.now() - startedAt
       };
     }
 
     const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-    const findings = parseFindings(combinedOutput, provider.id, role);
+    // Redact once at the source: summary, findings, rawOutput, and error all
+    // flow into last-report.json, --write-* exports, and the doctor bundle.
+    const redactedOutput = redactSecrets(combinedOutput, envSecrets) ?? combinedOutput;
+    const findings = parseFindings(redactedOutput, provider.id, role);
 
     if (result.timedOut || result.exitCode !== 0) {
       return {
@@ -540,8 +562,8 @@ export async function runCliProvider(
             ? `Provider output exceeded ${provider.maxOutputBytes ?? 1_000_000} bytes.`
           : `Provider exited with code ${result.exitCode ?? "unknown"}.`,
         findings,
-        rawOutput: combinedOutput,
-        error: combinedOutput || result.signal || "Provider failed.",
+        rawOutput: redactedOutput,
+        error: redactedOutput || result.signal || "Provider failed.",
         durationMs: Date.now() - startedAt
       };
     }
@@ -551,9 +573,9 @@ export async function runCliProvider(
       role,
       providerType: provider.type,
       status: "ok",
-      summary: firstMeaningfulLine(combinedOutput),
+      summary: firstMeaningfulLine(redactedOutput),
       findings,
-      rawOutput: combinedOutput,
+      rawOutput: redactedOutput,
       durationMs: Date.now() - startedAt
     };
   } finally {

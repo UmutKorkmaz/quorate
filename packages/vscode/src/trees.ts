@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { providerRunState, resolveFindingPath } from "./cli";
 import type { CouncilReport, DoctorReport, Finding, ProviderConfig, RunState, Severity } from "./cli";
+import { escapeMd } from "./decorations";
 
 const RUN_STATE_META: Record<RunState, { icon: string; hint: string }> = {
   ready: { icon: "pass", hint: "ready" },
@@ -203,7 +204,7 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
             : lp.error
               ? `failed — ${lp.error.split("\n")[0].slice(0, 80)}`
               : "failed";
-      if (lp.error) item.tooltip = new vscode.MarkdownString(`\`\`\`\n${lp.error}\n\`\`\``);
+      if (lp.error) item.tooltip = new vscode.MarkdownString(`\`\`\`\n${escapeMd(lp.error)}\n\`\`\``);
       item.command = { command: "quorate.openLane", title: "Watch Agent Output", arguments: [node.key] };
       return item;
     }
@@ -237,7 +238,9 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
           ? `failed — ${node.error.split("\n")[0].slice(0, 80)}`
           : node.status;
       if (node.error) {
-        item.tooltip = new vscode.MarkdownString(`**${node.id}:${node.role} ${node.status}**\n\n\`\`\`\n${node.error}\n\`\`\``);
+        item.tooltip = new vscode.MarkdownString(
+          `**${escapeMd(node.id)}:${escapeMd(node.role)} ${escapeMd(node.status)}**\n\n\`\`\`\n${escapeMd(node.error)}\n\`\`\``
+        );
       }
       item.command = { command: "quorate.openLane", title: "Open Agent Output", arguments: [`${node.id}:${node.role}`] };
       return item;
@@ -256,7 +259,9 @@ export class ResultsTree implements vscode.TreeDataProvider<ResultNode> {
     item.iconPath = new vscode.ThemeIcon(SEVERITY_ICON[f.severity]);
     const agreed = f.agreedBy?.length ? ` · agreed by ${f.agreedBy.join(", ")}` : "";
     item.description = `${f.severity}${f.role ? ` · ${f.role}` : ""}${agreed}`;
-    item.tooltip = new vscode.MarkdownString(`**${f.severity.toUpperCase()}** ${f.body}${f.suggestion ? `\n\n_Suggestion:_ ${f.suggestion}` : ""}`);
+    item.tooltip = new vscode.MarkdownString(
+      `**${escapeMd(f.severity.toUpperCase())}** ${escapeMd(f.body)}${f.suggestion ? `\n\n_Suggestion:_ ${escapeMd(f.suggestion)}` : ""}`
+    );
     if (f.file) {
       item.command = {
         command: "quorate.openFinding",

@@ -51,6 +51,11 @@ export interface SessionState {
   transcript?: Array<{ input: string; at: string }>;
   sessionId?: string;
   sessionName?: string;
+  /** Cumulative estimates for completed requests in this in-memory session.
+   * Cost is explicitly the priced-input subtotal; unpriced lanes are not
+   * silently treated as free. */
+  sessionEstimatedInputTokens?: number;
+  sessionEstimatedPricedInputCostUsd?: number;
 }
 
 export interface ProviderSnapshot {

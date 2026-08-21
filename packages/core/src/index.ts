@@ -4,6 +4,7 @@ export * from "./budget.js";
 export * from "./pack-coverage.js";
 export * from "./cli-provider.js";
 export * from "./config.js";
+export * from "./contract.js";
 export * from "./council.js";
 export * from "./custom-packs.js";
 export * from "./export.js";
