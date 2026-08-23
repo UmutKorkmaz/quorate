@@ -81,6 +81,31 @@ vi.mock("@quorate/core", async (importOriginal) => {
   };
 });
 
+// A pathname swapped for another regular file between validation and open must
+// still be rejected. The wrapper renames the replacement over the target after
+// the real lstat returns, reproducing the replacement window synchronously.
+const localSpecRace = vi.hoisted(() => ({
+  targetPath: undefined as string | undefined,
+  replacementPath: undefined as string | undefined
+}));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    lstatSync: (...args: Parameters<typeof actual.lstatSync>) => {
+      const stats = actual.lstatSync(...args);
+      const target = args[0];
+      if (typeof target === "string" && target === localSpecRace.targetPath && localSpecRace.replacementPath) {
+        const replacement = localSpecRace.replacementPath;
+        localSpecRace.targetPath = undefined;
+        actual.renameSync(replacement, target);
+      }
+      return stats;
+    }
+  };
+});
+
 import * as core from "@quorate/core";
 import {
   CONTRACT_ARTIFACT_DIR,
@@ -421,6 +446,41 @@ describe("quorate contract check (fail-closed validation)", () => {
     expect(outcome.exitCode).toBe(1);
     expect(outcome.summary).toMatch(/before\.yaml.*not a regular file/i);
     expect(engine.parseOpenApi).not.toHaveBeenCalled();
+  });
+
+  it("rejects a local spec replaced by another file between validation and open", async () => {
+    const beforePath = resolve(dir, "before.yaml");
+    const replacementPath = resolve(dir, "replacement.yaml");
+    writeFileSync(beforePath, BEFORE_SPEC, "utf8");
+    writeFileSync(replacementPath, BEFORE_SPEC, "utf8");
+    writeFileSync(resolve(dir, "after.yaml"), AFTER_SPEC, "utf8");
+    localSpecRace.targetPath = beforePath;
+    localSpecRace.replacementPath = replacementPath;
+
+    const outcome = await runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" });
+    localSpecRace.targetPath = undefined;
+    localSpecRace.replacementPath = undefined;
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.summary).toMatch(/before\.yaml.*not a regular file or was replaced while opening/i);
+    expect(engine.parseOpenApi).not.toHaveBeenCalled();
+    expect(existsSync(artifactDir(dir))).toBe(false);
+  });
+
+  it("accepts a local spec of exactly the 5 MiB bounded input limit", async () => {
+    const prefix = `${BEFORE_SPEC}\n# padding to exactly the 5 MiB ceiling: `;
+    const padding = 5 * 1024 * 1024 - Buffer.byteLength(prefix, "utf8");
+    const boundedSpec = prefix + "a".repeat(padding);
+    writeFileSync(resolve(dir, "before.yaml"), boundedSpec, "utf8");
+    writeFileSync(resolve(dir, "after.yaml"), AFTER_SPEC, "utf8");
+
+    expect(statSync(resolve(dir, "before.yaml")).size).toBe(5 * 1024 * 1024);
+
+    const outcome = await runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" });
+
+    expect(outcome.exitCode).toBe(0);
+    expect(engine.parseOpenApi).toHaveBeenCalledWith(boundedSpec);
+    expect(readContractArtifact(dir)?.artifactHash).toBeTruthy();
   });
 });
 
