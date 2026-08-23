@@ -108,14 +108,16 @@ describe("audit commands", () => {
 
   it("human verification diagnostics escape terminal control characters from --dir", () => {
     const root = mkdtempSync(join(tmpdir(), "quorate-audit-control-"));
-    const dir = join(root, "audit-\u001b[31m");
+    // DEL (0x7f) is filesystem-valid on Windows, unlike 0x00-0x1f such as ESC,
+    // while still exercising the same terminal-control escaping path.
+    const dir = join(root, "audit-\u007f");
     mkdirSync(dir, { mode: 0o700 });
     mkdirSync(auditKeyPath(dir));
 
     const result = runAuditVerify({ dir, json: false });
 
     expect(result.exitCode).toBe(1);
-    expect(result.output).not.toContain("\u001b");
-    expect(result.output).toContain("\\u001b");
+    expect(result.output).not.toContain("\u007f");
+    expect(result.output).toContain("\\u007f");
   });
 });

@@ -271,7 +271,7 @@ function exactKeys(value: Record<string, unknown>, expected: string[]): boolean 
   return Object.keys(value).sort().join("\0") === [...expected].sort().join("\0");
 }
 
-function inspectAuditDirectory(dir: string): { exists: boolean; errors: string[] } {
+function inspectAuditDirectory(dir: string, enforceModeBits: boolean): { exists: boolean; errors: string[] } {
   try {
     const before = lstatSync(dir);
     if (before.isSymbolicLink()) return { exists: true, errors: ["Audit path must not be a symlink."] };
@@ -285,7 +285,9 @@ function inspectAuditDirectory(dir: string): { exists: boolean; errors: string[]
     } finally {
       closeSync(fd);
     }
-    const errors = (before.mode & 0o777) === DIR_MODE ? [] : ["Audit directory permissions must be 0700."];
+    const errors = !enforceModeBits || (before.mode & 0o777) === DIR_MODE
+      ? []
+      : ["Audit directory permissions must be 0700."];
     return { exists: true, errors };
   } catch (error: unknown) {
     if (error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -445,14 +447,14 @@ function parseHead(bytes: Buffer, key: Buffer, errors: string[]): AuditHead | un
   return head;
 }
 
-function inspectLock(dir: string, errors: string[]): void {
+function inspectLock(dir: string, errors: string[], enforceModeBits: boolean): void {
   const lock = readBoundedFile(auditLockPath(dir), MAX_SMALL_FILE_BYTES);
   if (lock.error) {
     errors.push(lock.error);
     return;
   }
   if (!lock.bytes) return;
-  if (lock.mode !== FILE_MODE) errors.push("Audit lock permissions must be 0600.");
+  if (enforceModeBits && lock.mode !== FILE_MODE) errors.push("Audit lock permissions must be 0600.");
   if (!parseLock(lock.bytes)) errors.push("Audit lock is malformed or has an invalid lease interval.");
 }
 
@@ -466,20 +468,21 @@ function fileIdentity(result: BoundedFileRead): FileIdentity | undefined {
   return { dev: result.dev, ino: result.ino, mtimeMs: result.mtimeMs, size: result.size };
 }
 
-function scanAuditStore(dir: string): ScanResult {
-  const directory = inspectAuditDirectory(dir);
+function scanAuditStore(dir: string, platform: string = process.platform): ScanResult {
+  const enforceModeBits = platform !== "win32";
+  const directory = inspectAuditDirectory(dir, enforceModeBits);
   if (!directory.exists) {
     return { verification: { ok: true, records: 0, headSequence: 0, errors: [] }, records: [], headBehind: false };
   }
   const errors = [...directory.errors];
-  inspectLock(dir, errors);
+  inspectLock(dir, errors, enforceModeBits);
   const keyRead = readBoundedFile(auditKeyPath(dir), 33);
   const initKeyRead = readBoundedFile(auditInitKeyPath(dir), 33);
   const ledgerRead = readBoundedFile(auditLedgerPath(dir), MAX_AUDIT_LEDGER_BYTES);
   const headRead = readBoundedFile(auditHeadPath(dir), MAX_SMALL_FILE_BYTES);
   for (const result of [keyRead, initKeyRead, ledgerRead, headRead]) if (result.error) errors.push(result.error);
   for (const [label, result] of [["key", keyRead], ["provisional key", initKeyRead], ["ledger", ledgerRead], ["head", headRead]] as const) {
-    if (fileWasFound(result) && result.mode !== undefined && result.mode !== FILE_MODE) {
+    if (enforceModeBits && fileWasFound(result) && result.mode !== undefined && result.mode !== FILE_MODE) {
       errors.push(`Audit ${label} permissions must be 0600.`);
     }
   }
@@ -496,7 +499,8 @@ function scanAuditStore(dir: string): ScanResult {
     if (keyPresent) errors.push("Audit final and provisional signing keys must not coexist.");
     if (ledgerPresent) errors.push("Audit ledger exists before signing key initialization completed.");
     const initIdentity = fileIdentity(initKeyRead);
-    const validInitKey = initKeyRead.bytes?.length === 32 && initKeyRead.mode === FILE_MODE && initIdentity !== undefined;
+    const validInitKey = initKeyRead.bytes?.length === 32 && (!enforceModeBits || initKeyRead.mode === FILE_MODE) &&
+      initIdentity !== undefined;
     if (!validInitKey) errors.push("Audit provisional signing key must be an owner-only regular file of exactly 32 bytes.");
 
     let headReady = false;
@@ -512,8 +516,10 @@ function scanAuditStore(dir: string): ScanResult {
     const recoverable = validInitKey && !keyPresent && !ledgerPresent &&
       (!headPresent || headReady) && errors.length === 0;
     const corruptIdentity = initIdentity;
-    const corruptProvisional = !keyPresent && !ledgerPresent && !headPresent && initKeyRead.mode === FILE_MODE &&
-      corruptIdentity && initKeyRead.size !== 32 ? corruptIdentity : undefined;
+    const corruptProvisional = !keyPresent && !ledgerPresent && !headPresent &&
+      (!enforceModeBits || initKeyRead.mode === FILE_MODE) && corruptIdentity && initKeyRead.size !== 32
+      ? corruptIdentity
+      : undefined;
     errors.push(recoverable
       ? "Audit initialization is incomplete; the provisional signing key is not published."
       : "Audit provisional signing key state is invalid.");
@@ -564,7 +570,7 @@ function scanAuditStore(dir: string): ScanResult {
 
 function ensureWritableAuditDir(dir: string): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: DIR_MODE });
-  const inspected = inspectAuditDirectory(dir);
+  const inspected = inspectAuditDirectory(dir, process.platform !== "win32");
   if (!inspected.exists || inspected.errors.length > 0) throw new Error(inspected.errors.join(" ") || "Audit directory is unavailable.");
 }
 
@@ -908,9 +914,9 @@ function recoverHeadIfNeeded(dir: string, scan: ScanResult, lock: OpenedLock): v
   writeAtomicHead(dir, signedHead(scan.key, tail), undefined, () => assertAuditLockOwned(lock));
 }
 
-export function verifyApprovalAuditLedger(options: { dir?: string } = {}): AuditVerification {
+export function verifyApprovalAuditLedger(options: { dir?: string; platform?: string } = {}): AuditVerification {
   try {
-    return scanAuditStore(options.dir ?? defaultAuditDir()).verification;
+    return scanAuditStore(options.dir ?? defaultAuditDir(), options.platform ?? process.platform).verification;
   } catch (error: unknown) {
     return { ok: false, records: 0, headSequence: 0, errors: [errorText(error)] };
   }

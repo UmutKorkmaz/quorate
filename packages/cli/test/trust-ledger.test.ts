@@ -325,6 +325,59 @@ describe("approval trust ledger", () => {
     expect(statSync(auditLockPath(dir)).mode & 0o777).toBe(0o644);
   });
 
+  it("does not let widened permission bits decide verification on Windows", () => {
+    const dir = tempAuditDir();
+    append(dir, "ap-1");
+    chmodSync(dir, 0o755);
+    chmodSync(auditKeyPath(dir), 0o644);
+    chmodSync(auditLedgerPath(dir), 0o644);
+    chmodSync(auditHeadPath(dir), 0o644);
+    writeFileSync(auditLockPath(dir), `${JSON.stringify({
+      token: "a".repeat(32), pid: process.pid,
+      createdAt: new Date().toISOString(), leaseUntil: new Date(Date.now() + 10_000).toISOString()
+    })}\n`, { mode: 0o644 });
+
+    const result = verifyApprovalAuditLedger({ dir, platform: "win32" });
+
+    expect(result).toEqual({ ok: true, records: 1, headSequence: 1, errors: [] });
+  });
+
+  it("still fails widened permission bits on POSIX platforms", () => {
+    const dir = tempAuditDir();
+    append(dir, "ap-1");
+    chmodSync(dir, 0o755);
+
+    const result = verifyApprovalAuditLedger({ dir, platform: "darwin" });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/permissions/i);
+  });
+
+  it("keeps symlink, file-type, and malformed-lock checks decisive on Windows", () => {
+    const root = mkdtempSync(join(tmpdir(), "quorate-audit-win-link-"));
+    const target = join(root, "target");
+    const linkedDir = join(root, "audit");
+    mkdirSync(target, { mode: 0o755 });
+    symlinkSync(target, linkedDir);
+
+    const linked = verifyApprovalAuditLedger({ dir: linkedDir, platform: "win32" });
+
+    expect(linked.ok).toBe(false);
+    expect(linked.errors.join(" ")).toMatch(/symlink|real directory/i);
+
+    const dir = tempAuditDir();
+    append(dir, "ap-1");
+    rmSync(auditKeyPath(dir));
+    mkdirSync(auditKeyPath(dir));
+    writeFileSync(auditLockPath(dir), "not-json", { mode: 0o600 });
+
+    const result = verifyApprovalAuditLedger({ dir, platform: "win32" });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/not a regular file/i);
+    expect(result.errors.join(" ")).toMatch(/lock is malformed/i);
+  });
+
   it("verify and export are read-only and never create a missing directory or lock", () => {
     const dir = tempAuditDir();
     expect(existsSync(dir)).toBe(false);
