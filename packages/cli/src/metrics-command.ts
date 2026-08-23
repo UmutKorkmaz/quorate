@@ -91,6 +91,8 @@ interface ContractArtifact {
   createdAt: string;
 }
 
+type ContractArtifactValidator = (value: unknown) => ContractArtifact | undefined;
+
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((left, right) => left - right);
@@ -175,48 +177,29 @@ function collectProofs(cwd: string): ProofMetrics | undefined {
   }
 }
 
-function asContractArtifact(value: unknown): ContractArtifact | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const artifact = value as Record<string, unknown>;
-  if (artifact.schema !== 1) return undefined;
-  if (artifact.verdict !== "pass" && artifact.verdict !== "warn" && artifact.verdict !== "block") return undefined;
-  const counts = artifact.counts as Record<string, unknown> | undefined;
-  if (!counts || typeof counts !== "object" || Array.isArray(counts)) return undefined;
-  for (const key of ["breaking", "ambiguous", "additive"] as const) {
-    const count = counts[key];
-    if (typeof count !== "number" || !Number.isInteger(count) || count < 0) return undefined;
-  }
-  if (!Array.isArray(artifact.findings)) return undefined;
-  for (const side of ["before", "after"] as const) {
-    const ref = artifact[side] as Record<string, unknown> | undefined;
-    if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.label !== "string" || typeof ref.hash !== "string") {
-      return undefined;
-    }
-  }
-  if (typeof artifact.artifactHash !== "string" || typeof artifact.createdAt !== "string") return undefined;
-  return value as ContractArtifact;
-}
-
 /**
  * Prefer the contract command's own reader. The specifier stays non-literal so
  * resolution is a runtime concern while `contract-command.ts` lands as a
- * concurrent change; a missing module simply falls back to the raw artifact.
+ * concurrent change; an unavailable module leaves contract metrics absent but
+ * never lets an unverified raw artifact into the report.
  */
-async function readContractArtifactViaModule(cwd: string): Promise<ContractArtifact | undefined> {
+async function loadContractArtifactModule(): Promise<{
+  readContractArtifact?: (cwd: string) => unknown;
+  validateContractArtifact?: ContractArtifactValidator;
+} | undefined> {
   try {
     const specifier = CONTRACT_MODULE_SPECIFIER;
-    const loaded = (await import(/* @vite-ignore */ specifier)) as {
+    return (await import(/* @vite-ignore */ specifier)) as {
       readContractArtifact?: (cwd: string) => unknown;
+      validateContractArtifact?: ContractArtifactValidator;
     };
-    if (typeof loaded?.readContractArtifact !== "function") return undefined;
-    return asContractArtifact(loaded.readContractArtifact(cwd));
   } catch {
     return undefined;
   }
 }
 
-/** Shape-validated read of the on-disk contract artifact (latest.json first). */
-function readContractArtifactRaw(cwd: string): ContractArtifact | undefined {
+/** Validator-backed read of the on-disk contract artifact (latest.json first). */
+function readContractArtifactRaw(cwd: string, validate: ContractArtifactValidator): ContractArtifact | undefined {
   const dir = join(resolve(cwd), CONTRACT_ARTIFACT_DIR);
   try {
     if (!existsSync(dir) || !statSync(dir).isDirectory()) return undefined;
@@ -228,7 +211,7 @@ function readContractArtifactRaw(cwd: string): ContractArtifact | undefined {
     });
     for (const name of names) {
       try {
-        const artifact = asContractArtifact(JSON.parse(readFileSync(join(dir, name), "utf8")));
+        const artifact = validate(JSON.parse(readFileSync(join(dir, name), "utf8")));
         if (artifact) return artifact;
       } catch {
         // Malformed candidate — try the next file.
@@ -241,7 +224,13 @@ function readContractArtifactRaw(cwd: string): ContractArtifact | undefined {
 }
 
 async function collectContract(cwd: string): Promise<ContractMetrics | undefined> {
-  const artifact = (await readContractArtifactViaModule(cwd)) ?? readContractArtifactRaw(cwd);
+  const loaded = await loadContractArtifactModule();
+  const validate = loaded?.validateContractArtifact;
+  if (typeof validate !== "function") return undefined;
+  const reader = loaded?.readContractArtifact;
+  const artifact =
+    (typeof reader === "function" ? validate(reader(cwd)) : undefined) ??
+    readContractArtifactRaw(cwd, validate);
   if (!artifact) return undefined;
   return {
     verdict: artifact.verdict,

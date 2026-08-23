@@ -1,6 +1,6 @@
 import { execFile, type ExecFileOptionsWithStringEncoding } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import * as core from "@quorate/core";
@@ -110,6 +110,65 @@ function computeArtifactHash(artifact: Omit<ContractArtifact, "artifactHash" | "
   return sha256(canonicalJson(artifact));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isContractFinding(value: unknown): value is ContractFinding {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.id !== "string" ||
+    (value.changeType !== "breaking" && value.changeType !== "additive" && value.changeType !== "ambiguous") ||
+    typeof value.rule !== "string" ||
+    typeof value.title !== "string" ||
+    typeof value.body !== "string" ||
+    typeof value.severity !== "string"
+  ) {
+    return false;
+  }
+  return (value.method === undefined || typeof value.method === "string") && (value.path === undefined || typeof value.path === "string");
+}
+
+/** Verify the complete persisted artifact shape and its canonical hash before any consumer trusts it. */
+export function validateContractArtifact(value: unknown): ContractArtifact | undefined {
+  if (!isRecord(value) || value.schema !== CONTRACT_SCHEMA_VERSION) return undefined;
+  if (value.verdict !== "pass" && value.verdict !== "warn" && value.verdict !== "block") return undefined;
+
+  const counts = value.counts;
+  if (
+    !isRecord(counts) ||
+    !isNonNegativeInteger(counts.breaking) ||
+    !isNonNegativeInteger(counts.additive) ||
+    !isNonNegativeInteger(counts.ambiguous)
+  ) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value.findings) || !value.findings.every(isContractFinding)) return undefined;
+  for (const side of ["before", "after"] as const) {
+    const reference = value[side];
+    if (!isRecord(reference) || typeof reference.label !== "string" || typeof reference.hash !== "string") return undefined;
+  }
+  if (typeof value.artifactHash !== "string" || !/^[a-f0-9]{64}$/.test(value.artifactHash) || typeof value.createdAt !== "string") {
+    return undefined;
+  }
+
+  const artifact = value as unknown as ContractArtifact;
+  const expectedHash = computeArtifactHash({
+    schema: artifact.schema,
+    verdict: artifact.verdict,
+    counts: artifact.counts,
+    findings: artifact.findings,
+    before: artifact.before,
+    after: artifact.after
+  });
+  return artifact.artifactHash === expectedHash ? artifact : undefined;
+}
+
 interface ContractInput {
   source: string;
   label: string;
@@ -137,11 +196,33 @@ async function showGitSpec(ref: string, specPath: string, cwd: string): Promise<
 }
 
 function readSpecFile(path: string, option: string): string {
+  let fd: number | undefined;
   try {
-    return readFileSync(path, "utf8");
+    if (!lstatSync(path).isFile()) throw new Error("not a regular file");
+    fd = openSync(path, constants.O_RDONLY);
+    const initial = fstatSync(fd);
+    if (!initial.isFile()) throw new Error("not a regular file");
+    if (initial.size > GIT_SHOW_MAX_BYTES) {
+      throw new Error(`exceeds the bounded input limit of 5 MiB`);
+    }
+
+    const buffer = Buffer.allocUnsafe(GIT_SHOW_MAX_BYTES + 1);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const read = readSync(fd, buffer, bytesRead, buffer.length - bytesRead, null);
+      if (read === 0) break;
+      bytesRead += read;
+    }
+    const final = fstatSync(fd);
+    if (bytesRead > GIT_SHOW_MAX_BYTES || final.size > GIT_SHOW_MAX_BYTES) {
+      throw new Error(`exceeds the bounded input limit of 5 MiB`);
+    }
+    return buffer.subarray(0, bytesRead).toString("utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`cannot read the ${option} spec file ${path}: ${message}`);
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }
 
@@ -303,12 +384,12 @@ export async function runContractCheck(options: ContractCheckOptions): Promise<C
   return { verdict: comparison.verdict, exitCode, summary, artifactPath: artifactJsonPath };
 }
 
-/** Plain loader for the latest contract artifact — no re-verification, undefined when absent or unreadable. */
+/** Verified loader for the latest contract artifact, undefined when absent, malformed, or hash-mismatched. */
 export function readContractArtifact(cwd: string): ContractArtifact | undefined {
   const path = resolve(cwd, CONTRACT_ARTIFACT_DIR, "latest.json");
   if (!existsSync(path)) return undefined;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as ContractArtifact;
+    return validateContractArtifact(JSON.parse(readFileSync(path, "utf8")));
   } catch {
     return undefined;
   }

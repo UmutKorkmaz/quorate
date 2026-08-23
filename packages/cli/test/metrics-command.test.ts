@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { historyPath } from "../src/history-command.js";
+import { runContractCheck } from "../src/contract-command.js";
 import { runProof } from "../src/proof-runner.js";
 import { appendApprovalAuditRecord, type ApprovalAuditDecision } from "../src/trust-ledger.js";
 import { collectMetrics, renderMetrics, runMetrics, type MetricsReport } from "../src/metrics-command.js";
@@ -64,24 +65,26 @@ function writeHistory(cwd: string, lines: Array<Record<string, unknown> | string
   writeFileSync(path, `${lines.map((line) => (typeof line === "string" ? line : JSON.stringify(line))).join("\n")}\n`, "utf8");
 }
 
-function contractArtifact(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    schema: 1,
-    verdict: "warn",
-    counts: { breaking: 1, ambiguous: 2, additive: 3 },
-    findings: [{ rule: "removed-operation" }, { rule: "newly-required-field" }],
-    before: { label: "base", hash: "a".repeat(64) },
-    after: { label: "head", hash: "b".repeat(64) },
-    artifactHash: "c".repeat(64),
-    createdAt: "2026-08-14T00:00:00.000Z",
-    ...overrides
-  };
-}
-
 function writeContract(cwd: string, artifact: Record<string, unknown>): void {
   const dir = join(cwd, ".quorate", "contract");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "latest.json"), `${JSON.stringify(artifact, null, 2)}\n`, "utf8");
+}
+
+async function writeValidContract(cwd: string): Promise<Record<string, unknown>> {
+  writeFileSync(
+    join(cwd, "before.yaml"),
+    "openapi: 3.1.0\ninfo:\n  title: Metrics API\n  version: 1.0.0\npaths:\n  /users:\n    get:\n      responses:\n        '200':\n          description: ok\n",
+    "utf8"
+  );
+  writeFileSync(
+    join(cwd, "after.yaml"),
+    "openapi: 3.1.0\ninfo:\n  title: Metrics API\n  version: 1.0.0\npaths:\n  /users:\n    get:\n      responses:\n        '200':\n          description: ok\n",
+    "utf8"
+  );
+  const outcome = await runContractCheck({ cwd, before: "before.yaml", after: "after.yaml" });
+  expect(outcome.exitCode).toBe(0);
+  return JSON.parse(readFileSync(join(cwd, ".quorate", "contract", "latest.json"), "utf8")) as Record<string, unknown>;
 }
 
 function approval(decision: ApprovalAuditDecision, sequence: number) {
@@ -235,16 +238,16 @@ describe("quorate metrics", () => {
 
   it("aggregates the latest contract artifact", async () => {
     const cwd = workspace();
-    writeContract(cwd, contractArtifact());
+    await writeValidContract(cwd);
     const report = await collectMetrics({ cwd });
-    expect(report.contract).toEqual({
-      verdict: "warn",
-      counts: { breaking: 1, ambiguous: 2, additive: 3 },
-      findings: 2,
-      before: { label: "base", hash: "a".repeat(64) },
-      after: { label: "head", hash: "b".repeat(64) },
-      artifactHash: "c".repeat(64),
-      createdAt: "2026-08-14T00:00:00.000Z"
+    expect(report.contract).toMatchObject({
+      verdict: "pass",
+      counts: { breaking: 0, ambiguous: 0, additive: 0 },
+      findings: 0,
+      before: { label: "before.yaml", hash: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      after: { label: "after.yaml", hash: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      artifactHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      createdAt: expect.any(String)
     });
   });
 
@@ -256,9 +259,19 @@ describe("quorate metrics", () => {
     const absent = await collectMetrics({ cwd });
     expect(absent.contract).toBeUndefined();
 
-    writeContract(cwd, contractArtifact({ schema: 2 }));
+    writeContract(cwd, { schema: 2 });
     const wrongSchema = await collectMetrics({ cwd });
     expect(wrongSchema.contract).toBeUndefined();
+  });
+
+  it("ignores a contract artifact whose hash-bearing field was changed after it was written", async () => {
+    const cwd = workspace();
+    const artifact = await writeValidContract(cwd);
+    writeContract(cwd, { ...artifact, verdict: "block" });
+
+    const report = await collectMetrics({ cwd });
+
+    expect(report.contract).toBeUndefined();
   });
 
   it("aggregates verified approval decisions from the trust ledger", async () => {
@@ -294,7 +307,7 @@ describe("quorate metrics", () => {
   it("round-trips the JSON output", async () => {
     const cwd = workspace();
     writeHistory(cwd, [historyEntry({ verdict: "fail", durationMs: 1500, agreement: 0.5, findingCounts: { high: 1 } })]);
-    writeContract(cwd, contractArtifact());
+    await writeValidContract(cwd);
     await runProof({ cwd, name: "round-trip", command: [process.execPath, "-e", ""] });
 
     const report = await collectMetrics({ cwd });
@@ -317,7 +330,7 @@ describe("quorate metrics", () => {
         providerResults: [{ providerId: "glm", status: "ok" }]
       })
     ]);
-    writeContract(cwd, contractArtifact());
+    await writeValidContract(cwd);
     await runProof({ cwd, name: "render-proof", command: [process.execPath, "-e", ""] });
 
     const text = renderMetrics(await collectMetrics({ cwd }));
@@ -327,6 +340,6 @@ describe("quorate metrics", () => {
     expect(text).toContain("Median duration: 2000 ms");
     expect(text).toContain("Median council agreement: 75%");
     expect(text).toContain("render-proof: passed — exit 0");
-    expect(text).toContain("warn — 1 breaking · 2 ambiguous · 3 additive");
+    expect(text).toContain("pass — 0 breaking · 0 ambiguous · 0 additive");
   });
 });

@@ -385,6 +385,30 @@ describe("quorate contract check (fail-closed validation)", () => {
     expect(outcome.summary).toMatch(/error:/i);
     expect(outcome.summary).toMatch(/gone\.yaml/);
   });
+
+  it("rejects an oversized local spec before it reaches the OpenAPI parser", async () => {
+    writeFileSync(resolve(dir, "before.yaml"), "openapi: 3.1.0\n".padEnd(5 * 1024 * 1024 + 1, " "), "utf8");
+    writeFileSync(resolve(dir, "after.yaml"), AFTER_SPEC, "utf8");
+
+    const outcome = await runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" });
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.summary).toMatch(/before\.yaml.*bounded input.*5 MiB/i);
+    expect(engine.parseOpenApi).not.toHaveBeenCalled();
+    expect(existsSync(artifactDir(dir))).toBe(false);
+  });
+
+  it("rejects a non-regular local spec before it reaches the OpenAPI parser", async () => {
+    mkdirSync(resolve(dir, "before.yaml"));
+    writeFileSync(resolve(dir, "after.yaml"), AFTER_SPEC, "utf8");
+
+    const outcome = await runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" });
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.summary).toMatch(/before\.yaml.*not a regular file/i);
+    expect(engine.parseOpenApi).not.toHaveBeenCalled();
+    expect(existsSync(artifactDir(dir))).toBe(false);
+  });
 });
 
 describe("contract artifact determinism and permissions", () => {
@@ -425,6 +449,10 @@ describe("contract artifact determinism and permissions", () => {
 
     const fromDisk = JSON.parse(readFileSync(artifactJsonPath(dir), "utf8")) as ContractArtifact;
     expect(readContractArtifact(dir)).toEqual(fromDisk);
+
+    fromDisk.counts.breaking = 99;
+    writeFileSync(artifactJsonPath(dir), JSON.stringify(fromDisk), "utf8");
+    expect(readContractArtifact(dir)).toBeUndefined();
 
     writeFileSync(artifactJsonPath(dir), "{not json", "utf8");
     expect(readContractArtifact(dir)).toBeUndefined();
