@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
@@ -163,6 +163,20 @@ afterEach(() => {
 });
 
 describe("quorate contract check (file mode)", () => {
+  it("rejects a symlinked ContractCourt artifact directory without changing its outside latest artifact", async () => {
+    writeFileModeFixtures();
+    const outside = mkdtempSync(join(tmpdir(), "quorate-contract-outside-"));
+    const outsideContract = join(outside, "contract");
+    const victim = join(outsideContract, "latest.json");
+    mkdirSync(outsideContract);
+    writeFileSync(victim, "outside remains intact\n", "utf8");
+    symlinkSync(outside, join(dir, ".quorate"));
+
+    await expect(runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" })).rejects.toThrow(/symbolic link/i);
+    expect(readFileSync(victim, "utf8")).toBe("outside remains intact\n");
+    rmSync(outside, { recursive: true, force: true });
+  });
+
   it("compares --before/--after specs, writes the artifact, and exits 0 without --gate", async () => {
     writeFileModeFixtures();
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -41,6 +41,25 @@ function captureLog(): string[] {
 }
 
 describe("v0.10 CLI feature surfaces", () => {
+  it("rejects a symlinked review report destination without changing the outside victim", async () => {
+    writeConfig();
+    writeFileSync(resolve(dir, "change.diff"), "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1,2 @@\n-old\n+new\n", "utf8");
+    const outside = mkdtempSync(join(tmpdir(), "quorate-review-outside-"));
+    const victim = resolve(outside, "report.json");
+    writeFileSync(victim, "outside remains intact\n", "utf8");
+    // The parent is real; only the fixed application-owned destination is redirected.
+    mkdirSync(resolve(dir, ".quorate"));
+    symlinkSync(victim, resolve(dir, ".quorate", "last-report.json"));
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const program = buildProgram();
+    program.exitOverride();
+
+    await expect(program.parseAsync(["node", "quorate", "--cwd", dir, "review", "--diff", "change.diff"], { from: "node" })).rejects.toThrow(/symbolic link/i);
+    expect(readFileSync(victim, "utf8")).toBe("outside remains intact\n");
+    rmSync(outside, { recursive: true, force: true });
+  });
+
   it("fails before provider execution when review budget caps are exceeded", async () => {
     writeConfig({ budget: { maxChangedLines: 1 } });
     writeFileSync(
@@ -92,6 +111,22 @@ describe("v0.10 CLI feature surfaces", () => {
     expect(readFileSync(resolve(dir, "plan.md"), "utf8")).toContain("Quorate Report");
     expect(JSON.parse(readFileSync(resolve(dir, "graph.json"), "utf8")).providers).toBeDefined();
     expect(existsSync(resolve(dir, ".quorate", "last-plan-report.json"))).toBe(true);
+  });
+
+  it("rejects a symlinked plan report destination without changing the outside victim", async () => {
+    writeConfig();
+    const outside = mkdtempSync(join(tmpdir(), "quorate-plan-outside-"));
+    const victim = resolve(outside, "report.json");
+    writeFileSync(victim, "outside remains intact\n", "utf8");
+    mkdirSync(resolve(dir, ".quorate"));
+    symlinkSync(victim, resolve(dir, ".quorate", "last-plan-report.json"));
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const program = buildProgram();
+    program.exitOverride();
+
+    await expect(program.parseAsync(["node", "quorate", "--cwd", dir, "plan", "Add a guarded checkout flow"], { from: "node" })).rejects.toThrow(/symbolic link/i);
+    expect(readFileSync(victim, "utf8")).toBe("outside remains intact\n");
+    rmSync(outside, { recursive: true, force: true });
   });
 
   it("keeps the persisted last report owner-only while exports keep default permissions", async () => {

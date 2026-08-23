@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import {
   fetchProviderModels,
@@ -45,6 +45,7 @@ import {
   type PersistedSession
 } from "../sessions.js";
 import type { ShellContext } from "./context.js";
+import { writeSecureWorkspaceState } from "../secure-state.js";
 
 export interface SlashCommand {
   name: string;
@@ -132,9 +133,7 @@ function persistSession(ctx: ShellContext): void {
   const snapshot = sessionFromState({ ...state, sessionId: id, sessionName: name });
   saveSession(state.cwd, snapshot);
   if (state.lastReport) {
-    const reportDir = resolve(state.cwd, ".quorate");
-    mkdirSync(reportDir, { recursive: true, mode: 0o700 });
-    writeFileSync(resolve(reportDir, "last-report.json"), `${JSON.stringify(state.lastReport, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+    writeSecureWorkspaceState(state.cwd, ".quorate/last-report.json", `${JSON.stringify(state.lastReport, null, 2)}\n`);
   }
 }
 

@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -196,6 +196,24 @@ describe("parseAndRun", () => {
     await parseAndRun(ctx, "review the change");
     expect(getState().lastReport?.verdict).toBe("pass");
     expect(cells.some((cell) => cell.kind === "findings")).toBe(true);
+  });
+
+  it("rejects a symlinked TUI last report destination without changing the outside victim", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-tui-secure-state-"));
+    const outside = mkdtempSync(join(tmpdir(), "quorate-tui-outside-"));
+    const victim = join(outside, "report.json");
+    writeFileSync(victim, "outside remains intact\n", "utf8");
+    mkdirSync(join(dir, ".quorate"));
+    symlinkSync(victim, join(dir, ".quorate", "last-report.json"));
+    const diffPath = join(dir, "change.diff");
+    writeFileSync(diffPath, "diff --git a/x b/x\n", "utf8");
+    const { ctx } = makeCtx(dir);
+
+    await parseAndRun(ctx, "/diff change.diff");
+    await expect(parseAndRun(ctx, "review the change")).rejects.toThrow(/symbolic link/i);
+    expect(readFileSync(victim, "utf8")).toBe("outside remains intact\n");
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   });
 
   it("unknown command emits a helpful text cell", async () => {

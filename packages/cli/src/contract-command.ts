@@ -1,9 +1,10 @@
 import { execFile, type ExecFileOptionsWithStringEncoding } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import * as core from "@quorate/core";
+import { writeSecureWorkspaceState } from "./secure-state.js";
 
 export const CONTRACT_ARTIFACT_DIR = ".quorate/contract";
 
@@ -279,13 +280,9 @@ export async function runContractCheck(options: ContractCheckOptions): Promise<C
   };
 
   const markdown = renderContractMarkdown(artifact);
-  const artifactDir = resolve(cwd, CONTRACT_ARTIFACT_DIR);
-  // Creation-time modes only (a write never re-chmods an existing file),
-  // matching how sessions and proofs keep .quorate state owner-only.
-  mkdirSync(artifactDir, { recursive: true, mode: 0o700 });
-  const artifactJsonPath = join(artifactDir, "latest.json");
-  writeFileSync(artifactJsonPath, `${JSON.stringify(artifact, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-  writeFileSync(join(artifactDir, "latest.md"), `${markdown}\n`, { encoding: "utf8", mode: 0o600 });
+  const artifactJsonPath = resolve(cwd, CONTRACT_ARTIFACT_DIR, "latest.json");
+  writeSecureWorkspaceState(cwd, `${CONTRACT_ARTIFACT_DIR}/latest.json`, `${JSON.stringify(artifact, null, 2)}\n`);
+  writeSecureWorkspaceState(cwd, `${CONTRACT_ARTIFACT_DIR}/latest.md`, `${markdown}\n`);
 
   if (options.json) {
     console.log(JSON.stringify(artifact, null, 2));

@@ -101,6 +101,7 @@ import { prepareReviewRequest } from "./review-preparation.js";
 import { attachLatestProofToReview, detectProofCommands, runDetectedProofs, runProof, showLatestProof, verifyLatestProof } from "./proof-runner.js";
 import { runContractCheck } from "./contract-command.js";
 import { runMetrics } from "./metrics-command.js";
+import { writeSecureWorkspaceState } from "./secure-state.js";
 
 interface GlobalOptions {
   config?: string;
@@ -1195,12 +1196,7 @@ export function buildProgram(): Command {
       // Persist the RAW report for `quorate fix` and `quorate baseline` (same
       // file the TUI writes) — never the baseline-filtered view, or a follow-up
       // `quorate baseline` would record a shrunken set.
-      mkdirSync(resolve(cwd, ".quorate"), { recursive: true, mode: 0o700 });
-      writeFileSync(
-        resolve(cwd, ".quorate", "last-report.json"),
-        `${JSON.stringify(rawReport ?? report, null, 2)}\n`,
-        { encoding: "utf8", mode: 0o600 }
-      );
+      writeSecureWorkspaceState(cwd, ".quorate/last-report.json", `${JSON.stringify(rawReport ?? report, null, 2)}\n`);
       // Append to the per-repo history store (best-effort, never throws). The
       // gated report is what the team saw and the gate acted on; suppressed
       // findings are excluded from the counts by toHistoryEntry.
@@ -1820,8 +1816,7 @@ export function buildProgram(): Command {
       writeExport(options.writeMd, renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
       writeExport(options.writeReviewgraph, renderReviewGraph(report));
 
-      mkdirSync(resolve(cwd, ".quorate"), { recursive: true, mode: 0o700 });
-      writeFileSync(resolve(cwd, ".quorate", "last-plan-report.json"), `${JSON.stringify(report, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+      writeSecureWorkspaceState(cwd, ".quorate/last-plan-report.json", `${JSON.stringify(report, null, 2)}\n`);
 
       if (!options.json) {
         console.log(renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
