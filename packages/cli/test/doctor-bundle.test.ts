@@ -121,8 +121,8 @@ describe("doctor bundle", () => {
     const buffer = buildDoctorBundle(config, dir);
     const archiveText = zipContents(buffer);
 
+    expect(buffer.includes(Buffer.from(reportSecret))).toBe(false);
     for (const secret of [reportSecret, providerEnvSecret, apiKeySecret]) {
-      expect(buffer.includes(Buffer.from(secret))).toBe(false);
       expect(archiveText).not.toContain(secret);
     }
     expect(archiveText).toContain("[redacted]");
@@ -166,6 +166,29 @@ describe("doctor bundle", () => {
     const entries = zipEntries(buildDoctorBundle(config, dir));
 
     expect(entries.get("last-report.json")).toBe("null\n");
+  });
+
+  it("stops visiting a wide report after its sanitization node budget is exhausted", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-bundle-"));
+    const reportDir = join(dir, ".quorate");
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(
+      join(reportDir, "last-report.json"),
+      JSON.stringify({ findings: Array.from({ length: 20_000 }, () => "ordinary report text") }),
+      "utf8"
+    );
+    let visited = 0;
+
+    const entries = zipEntries(
+      buildDoctorBundle(createDefaultConfig([]), dir, {
+        onReportNodeVisited: (nodes) => {
+          visited = nodes;
+        }
+      })
+    );
+
+    expect(entries.get("last-report.json")).toBe("null\n");
+    expect(visited).toBeLessThan(10_100);
   });
 
   it.skipIf(process.platform === "win32")("rejects a FIFO substituted after validation without blocking", () => {

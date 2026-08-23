@@ -40,6 +40,8 @@ interface ZipEntry {
 interface DoctorBundleHooks {
   /** Test-only synchronization point for deterministic file-replacement coverage. */
   beforeLastReportOpen?: () => void;
+  /** Test-only observer for bounded report-sanitization traversal coverage. */
+  onReportNodeVisited?: (nodes: number) => void;
 }
 
 function crc32(buffer: Buffer): number {
@@ -199,23 +201,36 @@ function redactKnownSecrets(value: string, secrets: Array<string | undefined>): 
   return redactSecrets(knownSecretsRedacted, secrets) ?? knownSecretsRedacted;
 }
 
-function redactReportStrings(value: unknown, secrets: Array<string | undefined>): unknown | undefined {
+function redactReportStrings(
+  value: unknown,
+  secrets: Array<string | undefined>,
+  hooks?: DoctorBundleHooks
+): unknown | undefined {
   let nodes = 0;
   const visit = (current: unknown, depth: number): unknown | typeof OMIT_REPORT => {
     nodes += 1;
+    hooks?.onReportNodeVisited?.(nodes);
     if (nodes > MAX_REPORT_REDACTION_NODES || depth > MAX_REPORT_REDACTION_DEPTH) {
       return OMIT_REPORT;
     }
     if (typeof current === "string") return redactKnownSecrets(current, secrets);
     if (Array.isArray(current)) {
-      const items = current.map((item) => visit(item, depth + 1));
-      return items.includes(OMIT_REPORT) ? OMIT_REPORT : items;
+      const items: unknown[] = [];
+      for (const item of current) {
+        const redacted = visit(item, depth + 1);
+        if (redacted === OMIT_REPORT) return OMIT_REPORT;
+        items.push(redacted);
+      }
+      return items;
     }
     if (current && typeof current === "object") {
-      const entries = Object.entries(current).map(([key, item]) => [key, visit(item, depth + 1)]);
-      return entries.some(([, item]) => item === OMIT_REPORT)
-        ? OMIT_REPORT
-        : Object.fromEntries(entries);
+      const entries: Array<[string, unknown]> = [];
+      for (const [key, item] of Object.entries(current)) {
+        const redacted = visit(item, depth + 1);
+        if (redacted === OMIT_REPORT) return OMIT_REPORT;
+        entries.push([key, redacted]);
+      }
+      return Object.fromEntries(entries);
     }
     return current;
   };
@@ -240,7 +255,8 @@ export function buildDoctorBundle(
   const latest = latestSession(cwd);
   const lastReport = redactReportStrings(
     readLastReport(cwd, hooks) ?? latest?.lastReportSummary ?? null,
-    providerSecrets(config)
+    providerSecrets(config),
+    hooks
   ) ?? null;
 
   const manifest = {

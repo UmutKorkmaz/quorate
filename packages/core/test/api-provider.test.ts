@@ -185,6 +185,27 @@ describe("runApiProvider", () => {
     expect(result.rawOutput ?? "").not.toContain(token);
   });
 
+  it("caps expanded redaction output when repeated short tokens fit the original byte limit", async () => {
+    const token = "xy";
+    const content = "- [high] Kept finding (file.ts:1): xyxyxyxyxyxy";
+    const maxOutputBytes = Buffer.byteLength(content);
+    const fetchMock = vi.fn().mockResolvedValue(chatCompletion(content));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({ apiKeyEnv: "MY_TOKEN", maxOutputBytes }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.summary).toContain("truncated");
+    expect(result.findings).toHaveLength(1);
+    expect(result.rawOutput ?? "").toContain("[redacted]");
+    expect(Buffer.byteLength(result.rawOutput ?? "")).toBeLessThanOrEqual(maxOutputBytes);
+  });
+
   it("returns error without calling fetch when model is missing", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

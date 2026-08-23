@@ -135,8 +135,10 @@ export async function runApiProvider(
     const rawContent = json.choices?.[0]?.message?.content;
     const text = typeof rawContent === "string" ? rawContent : "";
 
-    const outputTruncated = Buffer.byteLength(text) > maxOutputBytes;
+    const originalOutputTruncated = Buffer.byteLength(text) > maxOutputBytes;
     const redactedText = redactProviderText(text, [apiToken]);
+    const outputTruncated =
+      originalOutputTruncated || Buffer.byteLength(redactedText) > maxOutputBytes;
     const output = outputTruncated
       ? Buffer.from(redactedText).subarray(0, maxOutputBytes).toString("utf8")
       : redactedText;
