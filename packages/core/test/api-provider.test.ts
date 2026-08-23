@@ -113,6 +113,29 @@ describe("runApiProvider", () => {
     expect(result.error).toContain("[redacted]");
   });
 
+  it("redacts an echoed API token before deriving successful provider output", async () => {
+    const token = "provider-token-value-123456";
+    const fetchMock = vi.fn().mockResolvedValue(
+      chatCompletion(
+        `${token} summary\n- [high] ${token} finding (secret.ts:7): echoed ${token}`
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({ apiKeyEnv: "MY_TOKEN" }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.summary).not.toContain(token);
+    expect(JSON.stringify(result.findings)).not.toContain(token);
+    expect(result.error ?? "").not.toContain(token);
+    expect(result.rawOutput ?? "").not.toContain(token);
+  });
+
   it("returns error without calling fetch when model is missing", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

@@ -133,16 +133,17 @@ export async function runApiProvider(
       text = Buffer.from(text).subarray(0, maxOutputBytes).toString("utf8");
     }
 
-    const findings = parseFindings(text, provider.id, role);
+    const redactedText = redactSecrets(text, [apiToken]) ?? text;
+    const findings = parseFindings(redactedText, provider.id, role);
 
     return {
       ...base,
       status: "ok",
       summary: outputTruncated
         ? `Provider output truncated to ${maxOutputBytes} bytes.`
-        : firstMeaningfulLine(text),
+        : firstMeaningfulLine(redactedText),
       findings,
-      rawOutput: redactSecrets(text || undefined, [apiToken]),
+      rawOutput: redactedText || undefined,
       durationMs: Date.now() - startedAt
     };
   } catch (error) {

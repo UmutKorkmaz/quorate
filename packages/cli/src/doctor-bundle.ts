@@ -1,11 +1,13 @@
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
 import { deflateRawSync } from "node:zlib";
-import { redactUrlCredentials, serializeConfig, type QuorateConfig } from "@quorate/core";
+import { redactSecrets, redactUrlCredentials, serializeConfig, type QuorateConfig } from "@quorate/core";
 import { formatDoctorReport } from "./doctor.js";
 import { providerSnapshots, type ShellState } from "./session.js";
 import { latestSession } from "./sessions.js";
 import { readVersion } from "./version.js";
+
+const MAX_LAST_REPORT_BYTES = 5 * 1024 * 1024;
 
 export function redactConfig(config: QuorateConfig): QuorateConfig {
   return {
@@ -119,13 +121,51 @@ export function createZipBuffer(files: Array<{ name: string; data: string }>): B
 }
 
 function readLastReport(cwd: string): unknown {
+  const stateDir = resolve(cwd, ".quorate");
   const path = resolve(cwd, ".quorate", "last-report.json");
-  if (!existsSync(path)) return null;
+  let fd: number | undefined;
   try {
-    return JSON.parse(readFileSync(path, "utf8")) as unknown;
+    const stateDirStat = lstatSync(stateDir);
+    if (stateDirStat.isSymbolicLink() || !stateDirStat.isDirectory()) return null;
+
+    const pathStat = lstatSync(path);
+    if (pathStat.isSymbolicLink() || !pathStat.isFile()) return null;
+
+    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.size > MAX_LAST_REPORT_BYTES) return null;
+
+    const bytes = Buffer.alloc(stat.size);
+    let offset = 0;
+    while (offset < stat.size) {
+      const count = readSync(fd, bytes, offset, stat.size - offset, offset);
+      if (count === 0) return null;
+      offset += count;
+    }
+    return JSON.parse(bytes.toString("utf8")) as unknown;
   } catch {
     return null;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
+}
+
+function providerSecrets(config: QuorateConfig): Array<string | undefined> {
+  return config.providers.flatMap((provider) => [
+    ...Object.values(provider.env ?? {}),
+    provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : undefined
+  ]);
+}
+
+function redactReportStrings(value: unknown, secrets: Array<string | undefined>): unknown {
+  if (typeof value === "string") return redactSecrets(value, secrets) ?? value;
+  if (Array.isArray(value)) return value.map((item) => redactReportStrings(item, secrets));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactReportStrings(item, secrets)])
+    );
+  }
+  return value;
 }
 
 /** Zip diagnostics: redacted config, provider grid, doctor text, and last report. */
@@ -134,7 +174,10 @@ export function buildDoctorBundle(config: QuorateConfig, cwd: string): Buffer {
   const redacted = redactConfig(config);
   const snapshots = providerSnapshots(shellState);
   const latest = latestSession(cwd);
-  const lastReport = readLastReport(cwd) ?? latest?.lastReportSummary ?? null;
+  const lastReport = redactReportStrings(
+    readLastReport(cwd) ?? latest?.lastReportSummary ?? null,
+    providerSecrets(config)
+  );
 
   const manifest = {
     tool: "quorate",
