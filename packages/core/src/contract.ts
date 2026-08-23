@@ -13,12 +13,14 @@ import YAML from "yaml";
  *   (explicit `required: true` or implicit path parameters); newly required
  *   request-body fields (added with `required: true` or newly listed in the
  *   `required` array); incompatible type changes (both sides typed, types
- *   differ); removed enum values, and enum constraints added to previously
- *   unconstrained values (they exclude values the old spec accepted); removed
- *   2xx success responses.
+ *   differ); removed request enum values and enum constraints added to
+ *   previously unconstrained request values (they exclude values the old spec
+ *   accepted); added response enum values and removed response enum
+ *   constraints; removed 2xx success responses.
  * - additive → verdict stays "pass": added operations; added optional
- *   parameters/fields; relaxed constraints (required→optional, enum values or
- *   the enum constraint itself removed); added 2xx responses.
+ *   parameters/fields; relaxed request constraints (required→optional, enum
+ *   values or the enum constraint itself removed); narrowed response enums or
+ *   newly added response enum constraints; added 2xx responses.
  * - ambiguous → verdict "warn": removed parameters and request fields
  *   (consumers may still send them); format-only changes (int32→int64);
  *   one-sided type changes (untyped→typed). Honest titles, never silently
@@ -94,6 +96,7 @@ export interface ContractComparisonResult {
 }
 
 type JsonRecord = Record<string, unknown>;
+type SchemaDirection = "request" | "response";
 
 const HTTP_METHODS = ["delete", "get", "head", "options", "patch", "post", "put", "trace"] as const;
 const ID_HEX = 16;
@@ -367,8 +370,9 @@ function collectFields(schema: unknown, prefix: string, depth: number, out: Map<
 
 function collectRequestFields(requestBody: unknown, doc: JsonRecord): Map<string, FieldView> {
   const fields = new Map<string, FieldView>();
-  if (!isRecord(requestBody) || !isRecord(requestBody.content)) return fields;
-  const content = requestBody.content as JsonRecord;
+  const resolvedRequestBody = resolveRef(doc, requestBody);
+  if (!isRecord(resolvedRequestBody) || !isRecord(resolvedRequestBody.content)) return fields;
+  const content = resolvedRequestBody.content as JsonRecord;
   const sortedKeys = Object.keys(content).sort(compareStrings);
   const mediaKey = sortedKeys.includes("application/json")
     ? "application/json"
@@ -475,27 +479,32 @@ function compareEnums(
   label: string,
   detailKey: string,
   beforeValues: string[] | undefined,
-  afterValues: string[] | undefined
+  afterValues: string[] | undefined,
+  direction: SchemaDirection
 ): void {
   if (beforeValues === undefined && afterValues === undefined) return;
   if (beforeValues === undefined || afterValues === undefined) {
     if (beforeValues !== undefined) {
       pushFinding(
         findings,
-        "additive",
+        direction === "response" ? "breaking" : "additive",
         "enum-constraint-removed",
         "Enum constraint removed",
-        `${label} lost its enum constraint (before: [${beforeValues.join(", ")}]; after: unconstrained).`,
+        direction === "response"
+          ? `${label} lost its enum constraint (before: [${beforeValues.join(", ")}]; after: unconstrained). Clients may receive values outside the previous enum.`
+          : `${label} lost its enum constraint (before: [${beforeValues.join(", ")}]; after: unconstrained).`,
         `${detailKey} enum constraint removed`,
         scope
       );
     } else if (afterValues !== undefined) {
       pushFinding(
         findings,
-        "breaking",
+        direction === "response" ? "additive" : "breaking",
         "enum-constraint-added",
         "Enum constraint added",
-        `${label} gained an enum constraint (before: unconstrained; after: [${afterValues.join(", ")}]). Previously accepted values may now be rejected.`,
+        direction === "response"
+          ? `${label} gained an enum constraint (before: unconstrained; after: [${afterValues.join(", ")}]).`
+          : `${label} gained an enum constraint (before: unconstrained; after: [${afterValues.join(", ")}]). Previously accepted values may now be rejected.`,
         `${detailKey} enum constraint added ${canonicalJson(afterValues)}`,
         scope
       );
@@ -507,10 +516,12 @@ function compareEnums(
   if (removed.length > 0) {
     pushFinding(
       findings,
-      "breaking",
+      direction === "response" ? "additive" : "breaking",
       "enum-value-removed",
       "Enum value removed",
-      `${label} no longer accepts enum value(s) (before: [${beforeValues.join(", ")}]; after: [${afterValues.join(", ")}]; removed: ${removed.join(", ")}). Requests sending a removed value will be rejected.`,
+      direction === "response"
+        ? `${label} no longer returns enum value(s) (before: [${beforeValues.join(", ")}]; after: [${afterValues.join(", ")}]; removed: ${removed.join(", ")}).`
+        : `${label} no longer accepts enum value(s) (before: [${beforeValues.join(", ")}]; after: [${afterValues.join(", ")}]; removed: ${removed.join(", ")}). Requests sending a removed value will be rejected.`,
       `${detailKey} enum removed ${canonicalJson(removed)}`,
       scope
     );
@@ -518,10 +529,12 @@ function compareEnums(
   if (added.length > 0) {
     pushFinding(
       findings,
-      "additive",
+      direction === "response" ? "breaking" : "additive",
       "enum-value-added",
       "Enum value added",
-      `${label} now accepts additional enum value(s) (before: [${beforeValues.join(", ")}]; after: [${afterValues.join(", ")}]; added: ${added.join(", ")}).`,
+      direction === "response"
+        ? `${label} may now return additional enum value(s) (before: [${beforeValues.join(", ")}]; after: [${afterValues.join(", ")}]; added: ${added.join(", ")}). Clients may not handle the new values.`
+        : `${label} now accepts additional enum value(s) (before: [${beforeValues.join(", ")}]; after: [${afterValues.join(", ")}]; added: ${added.join(", ")}).`,
       `${detailKey} enum added ${canonicalJson(added)}`,
       scope
     );
@@ -529,9 +542,9 @@ function compareEnums(
 }
 
 /**
- * Type/format/enum comparison shared by parameters and request fields. A type
- * change (breaking when both sides are typed, ambiguous when one-sided) subsumes
- * format and enum noise; format-only changes are honestly ambiguous.
+ * Type/format/enum comparison shared by request inputs and response fields. A
+ * type change (breaking when both sides are typed, ambiguous when one-sided)
+ * subsumes format and enum noise; format-only changes are honestly ambiguous.
  */
 function compareTypeFormatEnum(
   findings: ContractFinding[],
@@ -539,7 +552,8 @@ function compareTypeFormatEnum(
   label: string,
   detailKey: string,
   before: SchemaView,
-  after: SchemaView
+  after: SchemaView,
+  direction: SchemaDirection
 ): void {
   if (before.type !== after.type) {
     const incompatible = before.type !== undefined && after.type !== undefined;
@@ -568,7 +582,7 @@ function compareTypeFormatEnum(
     );
     return;
   }
-  compareEnums(findings, scope, label, detailKey, before.enumValues, after.enumValues);
+  compareEnums(findings, scope, label, detailKey, before.enumValues, after.enumValues, direction);
 }
 
 function compareParameters(
@@ -641,7 +655,7 @@ function compareParameters(
         scope
       );
     }
-    compareTypeFormatEnum(findings, scope, label, detailKey, beforeParameter, afterParameter);
+    compareTypeFormatEnum(findings, scope, label, detailKey, beforeParameter, afterParameter, "request");
   }
 }
 
@@ -714,7 +728,7 @@ function compareRequestFields(
         scope
       );
     }
-    compareTypeFormatEnum(findings, scope, label, detailKey, beforeField, afterField);
+    compareTypeFormatEnum(findings, scope, label, detailKey, beforeField, afterField, "request");
   }
 }
 
@@ -773,7 +787,8 @@ function compareResponseFields(
         `Response ${status} body field "${name}"`,
         `response ${status} body field ${name}`,
         beforeField,
-        afterField
+        afterField,
+        "response"
       );
     }
   }

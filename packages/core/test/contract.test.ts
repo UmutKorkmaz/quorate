@@ -422,6 +422,52 @@ describe("compareContracts: request body fields", () => {
     expect(result.findings).toEqual([]);
     expect(result.verdict).toBe("pass");
   });
+
+  it("blocks a field becoming required through a referenced request body", () => {
+    const result = compareContracts({
+      before: {
+        label: "base",
+        source: spec(
+          { "/a": get({ requestBody: { $ref: "#/components/requestBodies/CreateTask" } }) },
+          {
+            components: {
+              requestBodies: {
+                CreateTask: {
+                  content: {
+                    "application/json": {
+                      schema: { type: "object", properties: { name: { type: "string" } }, required: [] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        )
+      },
+      after: {
+        label: "head",
+        source: spec(
+          { "/a": get({ requestBody: { $ref: "#/components/requestBodies/CreateTask" } }) },
+          {
+            components: {
+              requestBodies: {
+                CreateTask: {
+                  content: {
+                    "application/json": {
+                      schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        )
+      }
+    });
+    expect(rules(result.findings)).toEqual(["request-field-became-required"]);
+    expect(result.verdict).toBe("block");
+    expect(result.findings[0].body).toContain('Request body field "name"');
+  });
 });
 
 describe("compareContracts: enums", () => {
@@ -478,6 +524,156 @@ describe("compareContracts: enums", () => {
 });
 
 describe("compareContracts: responses", () => {
+  it("blocks a response enum widened with a new value", () => {
+    const result = run(
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { status: { type: "string", enum: ["active"] } } }
+                }
+              }
+            }
+          }
+        })
+      },
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { status: { type: "string", enum: ["active", "inactive"] } }
+                  }
+                }
+              }
+            }
+          }
+        })
+      }
+    );
+    expect(rules(result.findings)).toEqual(["enum-value-added"]);
+    expect(result.findings[0].changeType).toBe("breaking");
+    expect(result.verdict).toBe("block");
+  });
+
+  it("passes when a response enum is narrowed by removing a value", () => {
+    const result = run(
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { status: { type: "string", enum: ["active", "inactive"] } }
+                  }
+                }
+              }
+            }
+          }
+        })
+      },
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { status: { type: "string", enum: ["active"] } } }
+                }
+              }
+            }
+          }
+        })
+      }
+    );
+    expect(rules(result.findings)).toEqual(["enum-value-removed"]);
+    expect(result.findings[0].changeType).toBe("additive");
+    expect(result.verdict).toBe("pass");
+  });
+
+  it("blocks a response enum constraint removed to allow new values", () => {
+    const result = run(
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { status: { type: "string", enum: ["active"] } } }
+                }
+              }
+            }
+          }
+        })
+      },
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { status: { type: "string" } } }
+                }
+              }
+            }
+          }
+        })
+      }
+    );
+    expect(rules(result.findings)).toEqual(["enum-constraint-removed"]);
+    expect(result.findings[0].changeType).toBe("breaking");
+    expect(result.verdict).toBe("block");
+  });
+
+  it("passes when a response enum constraint is added", () => {
+    const result = run(
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { status: { type: "string" } } }
+                }
+              }
+            }
+          }
+        })
+      },
+      {
+        "/a": get({
+          responses: {
+            "200": {
+              description: "ok",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { status: { type: "string", enum: ["active"] } } }
+                }
+              }
+            }
+          }
+        })
+      }
+    );
+    expect(rules(result.findings)).toEqual(["enum-constraint-added"]);
+    expect(result.findings[0].changeType).toBe("additive");
+    expect(result.verdict).toBe("pass");
+  });
+
   it("blocks a removed 2xx response", () => {
     const result = run(
       { "/a": get({ responses: { "200": { description: "ok" }, "201": { description: "created" } } }) },
