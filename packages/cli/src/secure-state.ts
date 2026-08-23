@@ -185,12 +185,16 @@ function errorCode(error: unknown): string | undefined {
   return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
 }
 
-function fsyncDirectory(path: string, options: SecureStateWriteOptions, context: SecureStateFaultContext): void {
+function fsyncDirectory(expected: DirectoryIdentity, options: SecureStateWriteOptions, context: SecureStateFaultContext): void {
   if (platform() === "win32") return;
   let fd: number | undefined;
   try {
     options.fault?.("before-directory-fsync", context);
-    fd = openSync(path, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+    fd = openSync(expected.path, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | NOFOLLOW);
+    const opened = fstatSync(fd);
+    if (!opened.isDirectory() || opened.dev !== expected.dev || opened.ino !== expected.ino) {
+      throw stateError("state directory changed before directory sync.");
+    }
     fsyncSync(fd);
   } catch (error: unknown) {
     if (UNSUPPORTED_DIRECTORY_SYNC_CODES.has(errorCode(error) ?? "")) return;
@@ -263,8 +267,17 @@ export function writeSecureWorkspaceState(
     renameSync(temporary, destination);
     assertTemporaryDescriptor(fd, temp);
     assertDestinationMatchesTemporary(destination, temp);
+    let directorySyncError: unknown;
+    try {
+      fsyncDirectory(directories.at(-1)!, options, context);
+    } catch (error: unknown) {
+      directorySyncError = error;
+    }
+    for (const directory of directories) assertDirectoryIdentity(directory, workspace);
+    assertTemporaryDescriptor(fd, temp);
+    assertDestinationMatchesTemporary(destination, temp);
     publicationConfirmed = true;
-    fsyncDirectory(parent, options, context);
+    if (directorySyncError) throw directorySyncError;
   } finally {
     if (fd !== undefined) {
       if (!publicationConfirmed) {

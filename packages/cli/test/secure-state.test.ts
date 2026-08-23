@@ -121,6 +121,24 @@ describe("writeSecureWorkspaceState", () => {
     expect(readFileSync(join(workspace, ".quorate", "last-report.json"), "utf8")).toBe("report\n");
   });
 
+  it.skipIf(platform() === "win32")("does not confirm publication when the parent changes before directory fsync", () => {
+    const stateDir = join(workspace, ".quorate");
+    const movedStateDir = join(workspace, ".quorate-moved");
+    const destination = join(stateDir, "last-report.json");
+    const movedDestination = join(movedStateDir, "last-report.json");
+
+    expect(() => writeSecureWorkspaceState(workspace, ".quorate/last-report.json", "secret report\n", {
+      fault: (point) => {
+        if (point !== "before-directory-fsync") return;
+        renameSync(stateDir, movedStateDir);
+        mkdirSync(stateDir);
+      }
+    })).toThrow(/state directory changed/i);
+
+    expect(existsSync(destination)).toBe(false);
+    expect(readFileSync(movedDestination, "utf8")).toBe("");
+  });
+
   it.skipIf(platform() === "win32")("propagates a real directory fsync EIO", () => {
     expect(() => writeSecureWorkspaceState(workspace, ".quorate/last-report.json", "report\n", {
       fault: (point) => {
@@ -129,5 +147,6 @@ describe("writeSecureWorkspaceState", () => {
         }
       }
     })).toThrow("injected EIO");
+    expect(readFileSync(join(workspace, ".quorate", "last-report.json"), "utf8")).toBe("report\n");
   });
 });
