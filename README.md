@@ -174,7 +174,7 @@ required roles and real-provider floors.
 Deterministic OpenAPI 3 breaking-change detection — blocks releases on removed operations, newly required fields, incompatible types, or removed enum values. Compare git refs or local files:
 
 ```bash
-quorate contract check --spec openapi.yml --before v1.0.0.yml --after v1.1.0.yml --gate
+quorate contract check --before v1.0.0.yml --after v1.1.0.yml --gate
 ```
 
 Writes artifacts to `.quorate/contract/latest.json` and `latest.md` with deterministic hashes. The `quorate metrics` command aggregates local run evidence (verdict distribution, duration, finding counts, council agreement, proof pass rate, contract verdicts) — purely local, never transmitted.

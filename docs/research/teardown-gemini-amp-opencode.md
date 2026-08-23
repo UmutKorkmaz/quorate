@@ -1,7 +1,7 @@
 I'll research Gemini CLI, Sourcegraph Amp, and OpenCode across product docs, repos, and user feedback, then write a concrete competitive teardown.Pulling official docs and deeper product pages next for concrete UX, permissions, and extension details.# Competitive Teardown: Gemini CLI · Sourcegraph Amp · OpenCode
 
-**Audience:** builders of a competing agentic coding CLI  
-**Research date:** July 2026  
+**Audience:** builders of a competing agentic coding CLI
+**Research date:** July 2026
 **Scope:** product docs, official blogs, GitHub, hands-on reviews, and community feedback
 
 ---
@@ -115,15 +115,15 @@ Changelog shows obsessive UX polish: YOLO/auto mode indicator, MCP OAuth complet
 
 **Auth ladder (excellent product thinking):**
 
-1. **Google OAuth** — free tier historically ~60 RPM / 1,000 RPD; no key management  
-2. **Gemini API key** (`GEMINI_API_KEY`) — model control, higher paid ceilings  
-3. **Vertex AI** — enterprise GCP path (`GOOGLE_GENAI_USE_VERTEXAI`)  
-4. Workspace / Code Assist license via `GOOGLE_CLOUD_PROJECT`  
+1. **Google OAuth** — free tier historically ~60 RPM / 1,000 RPD; no key management
+2. **Gemini API key** (`GEMINI_API_KEY`) — model control, higher paid ceilings
+3. **Vertex AI** — enterprise GCP path (`GOOGLE_GENAI_USE_VERTEXAI`)
+4. Workspace / Code Assist license via `GOOGLE_CLOUD_PROJECT`
 
 **Onboarding frictions**
 
 - Free-tier **model restrictions** (Pro gated to paid plans as of March 2026 traffic prioritization).
-- Enterprise pain: 403s with `GOOGLE_CLOUD_PROJECT`, proxy crashes.  
+- Enterprise pain: 403s with `GOOGLE_CLOUD_PROJECT`, proxy crashes.
 - **Product transition risk:** unpaid/Google One users pushed to Antigravity CLI — onboarding trust damaged.
 - Abuse detection around “OAuth used by third-party software” created fear for ACP/headless automation.
 
@@ -137,19 +137,19 @@ Changelog shows obsessive UX polish: YOLO/auto mode indicator, MCP OAuth complet
 
 **Onboarding strengths**
 
-- Extension into existing editor → near-zero workflow rupture  
-- Free credits / Amp Free mode for trial  
-- Built-in MCP servers (e.g. mermaid, web page) so “first magic moment” happens without config  
+- Extension into existing editor → near-zero workflow rupture
+- Free credits / Amp Free mode for trial
+- Built-in MCP servers (e.g. mermaid, web page) so “first magic moment” happens without config
 
 **Frictions**
 
-- Credit burn surprises (“tens of dollars/day” on trial reported on HN)  
-- Threads always on Sourcegraph servers — enterprise security review starts on day 1  
-- Early FIF rejected model selection; teams used to BYOK feel locked in  
+- Credit burn surprises (“tens of dollars/day” on trial reported on HN)
+- Threads always on Sourcegraph servers — enterprise security review starts on day 1
+- Early FIF rejected model selection; teams used to BYOK feel locked in
 
 ### OpenCode
 
-**Install:** curl install script, npm `opencode-ai`, brew, choco/scoop, Docker, nix.  
+**Install:** curl install script, npm `opencode-ai`, brew, choco/scoop, Docker, nix.
 
 **Auth:** `opencode auth login` → interactive **provider picker** (Anthropic, OpenAI, OpenRouter, Google, Copilot, local, …). Credentials stay under user control.
 
@@ -183,12 +183,12 @@ This is table-stakes differentiation. All three converged on “YOLO/auto” but
 
 Additional security product features:
 
-- **Permanent tool approval** (“always allow this tool”) — gated by `security.enablePermanentToolApproval`  
-- **Folder trust / trusted folders**  
-- **Sandboxing** (process or tool-level sandbox; network toggle; allowed paths)  
-- **Conseca** — LLM-based context-aware security scan of proposed tool calls (optional)  
-- **excludeTools** / extension-level tool restrictions  
-- Env var redaction  
+- **Permanent tool approval** (“always allow this tool”) — gated by `security.enablePermanentToolApproval`
+- **Folder trust / trusted folders**
+- **Sandboxing** (process or tool-level sandbox; network toggle; allowed paths)
+- **Conseca** — LLM-based context-aware security scan of proposed tool calls (optional)
+- **excludeTools** / extension-level tool restrictions
+- Env var redaction
 
 **Design insight:** YOLO is deliberately hard to make permanent — Google treats full auto as a *session choice*, not a config default. Plan mode + plan-model routing (Pro plan → Flash implement) is a strong safe-by-default workflow.
 
@@ -196,11 +196,11 @@ Additional security product features:
 
 Amp’s model is **rule-list permissions** + **bash allowlists**, optimized for autonomous runs.
 
-- Rules evaluated **in order** until match; actions: allow / reject / ask / **delegate**  
-- Tool-level permissions with argument patterns (`amp permissions edit`)  
-- Classic `amp.commands.allowlist` for bash prefixes; repo-stored allowlists praised for enterprise auditability  
-- FIF: edit-by-edit approval is considered a **local maximum that kills agentic loops**  
-- Security research notes allowlists can be poisoned if the agent can edit settings (prompt-injection class risk)  
+- Rules evaluated **in order** until match; actions: allow / reject / ask / **delegate**
+- Tool-level permissions with argument patterns (`amp permissions edit`)
+- Classic `amp.commands.allowlist` for bash prefixes; repo-stored allowlists praised for enterprise auditability
+- FIF: edit-by-edit approval is considered a **local maximum that kills agentic loops**
+- Security research notes allowlists can be poisoned if the agent can edit settings (prompt-injection class risk)
 
 **Design insight:** Amp optimizes for *completion of multi-step work*, not for “approve every `ls`.” Permission UX is for *dangerous classes of actions*, not every tool call.
 
@@ -236,36 +236,36 @@ Most expressive permission DSL of the three:
 
 ### Gemini CLI
 
-- `/chat save <tag>` / `resume` / `list` / share-to-file  
-- Checkpointing for **workspace file snapshots** before mutating tools  
-- Session retention auto-cleanup (`maxAge` e.g. `30d`)  
-- Context compression threshold (default 0.5 of window)  
-- Multi-directory workspace as one session  
-- Headless continue less mature than OpenCode’s session IDs  
-- Memory: `/memory add|show|refresh` + hierarchical `GEMINI.md`  
+- `/chat save <tag>` / `resume` / `list` / share-to-file
+- Checkpointing for **workspace file snapshots** before mutating tools
+- Session retention auto-cleanup (`maxAge` e.g. `30d`)
+- Context compression threshold (default 0.5 of window)
+- Multi-directory workspace as one session
+- Headless continue less mature than OpenCode’s session IDs
+- Memory: `/memory add|show|refresh` + hierarchical `GEMINI.md`
 
 ### Amp — “Threads” as the product
 
 This is Amp’s killer collaboration primitive:
 
-- **One thread per task** (official guidance)  
-- Threads **sync to ampcode.com**; resume across laptop/server/phone  
-- Visibility: public / workspace / private (shared-by-default is intentional for teams; FIF defends this)  
-- **Mention other threads** via URL or `@T-uuid` / `@@` search — agent extracts relevant technique  
-- Compact thread / new thread with summary  
-- Agents Panel for concurrent threads  
-- Power user report: **4 months, ~6000 threads** as a personal knowledge system  
+- **One thread per task** (official guidance)
+- Threads **sync to ampcode.com**; resume across laptop/server/phone
+- Visibility: public / workspace / private (shared-by-default is intentional for teams; FIF defends this)
+- **Mention other threads** via URL or `@T-uuid` / `@@` search — agent extracts relevant technique
+- Compact thread / new thread with summary
+- Agents Panel for concurrent threads
+- Power user report: **4 months, ~6000 threads** as a personal knowledge system
 
 **Tradeoff:** cloud-hosted conversation history is a gift for multiplayer and a liability for regulated codebases. Early reviews flagged “all threads on Sourcegraph servers” as a top concern.
 
 ### OpenCode
 
-- First-class session IDs: list, continue (`-c`), specific (`-s`), **fork**, export/import, archive  
-- `/share` → URL; `/export` markdown; import from share URL  
-- Compaction with `small_model` for cheap summarization  
-- Snapshots for undo (internal git snapshot repo — can be heavy on monorepos; `"snapshot": false` escape hatch)  
-- Server-attached sessions: multiple TUIs / desktop tabs / remote attach  
-- GitHub Action can auto-share sessions on public repos  
+- First-class session IDs: list, continue (`-c`), specific (`-s`), **fork**, export/import, archive
+- `/share` → URL; `/export` markdown; import from share URL
+- Compaction with `small_model` for cheap summarization
+- Snapshots for undo (internal git snapshot repo — can be heavy on monorepos; `"snapshot": false` escape hatch)
+- Server-attached sessions: multiple TUIs / desktop tabs / remote attach
+- GitHub Action can auto-share sessions on public repos
 
 **UX win:** sessions feel like **git branches of conversation** — fork an approach, share a URL, import a colleague’s session.
 
@@ -408,14 +408,14 @@ You do **not** win by cloning one of these. You win by combining their non-overl
 
 Without these, users bounce in a day:
 
-1. **Streaming agent loop** with visible tool calls (not a chat box that “thinks”)  
-2. **Approval model:** `ask` / `allow` / `deny` + session YOLO + **Plan mode**  
-3. **MCP client** (stdio + remote + OAuth)  
-4. **Project memory file** (`AGENTS.md` / equivalent) with `/init`  
-5. **`@file` context** + ignore-file respect (`.gitignore` + agent ignore)  
-6. **Headless mode** with JSON / NDJSON stream for CI  
-7. **Session resume, list, fork, export**  
-8. **Diff preview before write** + undo/restore story  
+1. **Streaming agent loop** with visible tool calls (not a chat box that “thinks”)
+2. **Approval model:** `ask` / `allow` / `deny` + session YOLO + **Plan mode**
+3. **MCP client** (stdio + remote + OAuth)
+4. **Project memory file** (`AGENTS.md` / equivalent) with `/init`
+5. **`@file` context** + ignore-file respect (`.gitignore` + agent ignore)
+6. **Headless mode** with JSON / NDJSON stream for CI
+7. **Session resume, list, fork, export**
+8. **Diff preview before write** + undo/restore story
 
 ### B. Steal the best from each (synthesis target)
 
@@ -430,48 +430,48 @@ Without these, users bounce in a day:
 These are the concrete opportunities:
 
 #### 1) **Trustworthy autonomy (not YOLO cosplay)**
-- Default to **ask on write/bash**, one-click “trusted project profile” after git remote / sandbox check  
-- Policy packs: `personal-yolo`, `work-strict`, `ci-allowlist`  
-- **Prove** what ran: signed session audit log (tool, args hash, outcome) exportable to SIEM  
-- Amp-style allowlists **plus** OpenCode globs **plus** Gemini sandbox  
+- Default to **ask on write/bash**, one-click “trusted project profile” after git remote / sandbox check
+- Policy packs: `personal-yolo`, `work-strict`, `ci-allowlist`
+- **Prove** what ran: signed session audit log (tool, args hash, outcome) exportable to SIEM
+- Amp-style allowlists **plus** OpenCode globs **plus** Gemini sandbox
 
 #### 2) **Terminal UX that doesn’t suck**
-- Fix the shared Ink/React failure mode: scroll anchors, no vanishing widgets, bounded memory  
-- Diff viewer that matches `delta`/`difftastic` quality in-terminal  
-- Subagent dashboard in pure TUI (Amp’s visibility + OpenCode’s speed)  
-- Optional alternate-screen *and* inline mode (SSH-safe)  
+- Fix the shared Ink/React failure mode: scroll anchors, no vanishing widgets, bounded memory
+- Diff viewer that matches `delta`/`difftastic` quality in-terminal
+- Subagent dashboard in pure TUI (Amp’s visibility + OpenCode’s speed)
+- Optional alternate-screen *and* inline mode (SSH-safe)
 
 #### 3) **Sessions without forced cloud**
-- Local-first sessions with **optional** share (OpenCode model)  
-- Amp-like multiplayer **without** mandatory central retention: encrypted share links, team relay you host, or git-notes-backed threads  
-- Cross-device resume via user-controlled sync (not vendor lock)  
+- Local-first sessions with **optional** share (OpenCode model)
+- Amp-like multiplayer **without** mandatory central retention: encrypted share links, team relay you host, or git-notes-backed threads
+- Cross-device resume via user-controlled sync (not vendor lock)
 
 #### 4) **Model strategy that is honest**
-- Don’t be Gemini (one lab) or early Amp (hidden routing only)  
-- Be OpenCode on flexibility, Amp on **quality routing**:  
-  - Automatic router with **visible** “used X for plan, Y for edit, Z for review”  
-  - `small_model` for titles/compaction (OpenCode lesson)  
-  - Optional Oracle-class consult tool  
+- Don’t be Gemini (one lab) or early Amp (hidden routing only)
+- Be OpenCode on flexibility, Amp on **quality routing**:
+  - Automatic router with **visible** “used X for plan, Y for edit, Z for review”
+  - `small_model` for titles/compaction (OpenCode lesson)
+  - Optional Oracle-class consult tool
 
 #### 5) **Cost UX as a product feature**
-- Live token/cost meter per session, per tool, per subagent  
-- Budgets with hard stop / degrade-to-local  
-- Beat Amp’s bill shock and OpenCode’s “no quota plugin” complaint  
+- Live token/cost meter per session, per tool, per subagent
+- Budgets with hard stop / degrade-to-local
+- Beat Amp’s bill shock and OpenCode’s “no quota plugin” complaint
 
 #### 6) **Extension packaging for teams**
-- Gemini’s TOML commands + OpenCode’s plugin events + Amp’s agent-tools  
-- One artifact: `skill` = prompts + MCP + permissions + hooks + tests  
-- Project vs global with **explicit disable inheritance** (Gemini users begged for this)  
+- Gemini’s TOML commands + OpenCode’s plugin events + Amp’s agent-tools
+- One artifact: `skill` = prompts + MCP + permissions + hooks + tests
+- Project vs global with **explicit disable inheritance** (Gemini users begged for this)
 
 #### 7) **Reliability SLOs**
-- Gemini and Claude-class CLIs lose users on freezes and 429 UX  
-- Offline queue, clear quota remaining, retry with jitter, never silent loop  
-- “Doom loop” detector (OpenCode) + max step budget + user-visible plan  
+- Gemini and Claude-class CLIs lose users on freezes and 429 UX
+- Offline queue, clear quota remaining, retry with jitter, never silent loop
+- “Doom loop” detector (OpenCode) + max step budget + user-visible plan
 
 #### 8) **Evaluation moat**
-- Amp wins hearts by **completing tasks**; Gemini by **access**; OpenCode by **freedom**  
-- Ship a public harness: multi-file bugs, flaky tests, monorepo nav — publish scores  
-- Optimize for *resolved PR* rate, not chat latency demos  
+- Amp wins hearts by **completing tasks**; Gemini by **access**; OpenCode by **freedom**
+- Ship a public harness: multi-file bugs, flaky tests, monorepo nav — publish scores
+- Optimize for *resolved PR* rate, not chat latency demos
 
 ### D. Positioning matrix for an upstart
 
@@ -491,32 +491,32 @@ These are the concrete opportunities:
 
 **Winning narrative options** (pick one primary):
 
-1. **“Local-first Amp”** — multiplayer threads & agency, but sessions/keys stay yours  
-2. **“Enterprise OpenCode”** — OSS harness + SSO, policy packs, audit, support  
-3. **“Reliable Gemini”** — best free-path onboarding + TUI that never breaks + clear quotas  
+1. **“Local-first Amp”** — multiplayer threads & agency, but sessions/keys stay yours
+2. **“Enterprise OpenCode”** — OSS harness + SSO, policy packs, audit, support
+3. **“Reliable Gemini”** — best free-path onboarding + TUI that never breaks + clear quotas
 
 ### E. Concrete MVP feature checklist (order matters)
 
 **Week 0–4 — Retain**
-- [ ] TUI: stream tokens, tool cards, interrupt, `@` files, themes  
-- [ ] Permissions: ask/allow/deny + YOLO + plan mode  
-- [ ] Sessions: save/resume/list  
-- [ ] AGENTS.md + /init  
+- [ ] TUI: stream tokens, tool cards, interrupt, `@` files, themes
+- [ ] Permissions: ask/allow/deny + YOLO + plan mode
+- [ ] Sessions: save/resume/list
+- [ ] AGENTS.md + /init
 - [ ] One solid model path (don’t block on 75 providers day one)
 
 **Week 4–8 — Differentiate**
-- [ ] Permission DSL + project policy file committed to repo  
-- [ ] Cost meter + budgets  
-- [ ] MCP + 5 custom slash commands  
-- [ ] Undo via snapshots  
-- [ ] Headless JSON/NDJSON  
+- [ ] Permission DSL + project policy file committed to repo
+- [ ] Cost meter + budgets
+- [ ] MCP + 5 custom slash commands
+- [ ] Undo via snapshots
+- [ ] Headless JSON/NDJSON
 
 **Week 8–16 — Beat**
-- [ ] Parallel subagents with TUI dashboard  
-- [ ] Optional share links (local-first)  
-- [ ] Client/server + IDE ACP  
-- [ ] Review specialist tool (Oracle pattern)  
-- [ ] Eval harness + public leaderboard of *tasks completed*  
+- [ ] Parallel subagents with TUI dashboard
+- [ ] Optional share links (local-first)
+- [ ] Client/server + IDE ACP
+- [ ] Review specialist tool (Oracle pattern)
+- [ ] Eval harness + public leaderboard of *tasks completed*
 
 ---
 
@@ -544,18 +544,18 @@ These are the concrete opportunities:
 
 ## Strategic takeaways for a competitor
 
-1. **OpenCode sets the open-source UX and architecture bar.** If your TUI is slower or less keyboard-driven, power users will leave.  
-2. **Amp sets the agency and team bar.** If your agent stops at 80% and can’t show parallel work or shared threads, teams stay on Amp.  
-3. **Gemini sets the distribution and packaging bar** (auth ladder, extensions, Google ecosystem) — but **reliability and product continuity** are now its Achilles’ heel; don’t copy the churn.  
-4. **Everyone has MCP.** MCP is not a differentiator; **permissioned MCP + cost of tool schemas in context** is.  
-5. **Everyone has YOLO.** Differentiator is **safe defaults + fast path to trusted autonomy + audit**.  
-6. **The market rewards finish rate.** Marketing “agentic” without task-completion evals is table stakes theater.  
-7. **Cloud threads are a double-edged sword.** Amp’s multiplayer is beloved *and* blocked by security teams — own a design that does both.  
+1. **OpenCode sets the open-source UX and architecture bar.** If your TUI is slower or less keyboard-driven, power users will leave.
+2. **Amp sets the agency and team bar.** If your agent stops at 80% and can’t show parallel work or shared threads, teams stay on Amp.
+3. **Gemini sets the distribution and packaging bar** (auth ladder, extensions, Google ecosystem) — but **reliability and product continuity** are now its Achilles’ heel; don’t copy the churn.
+4. **Everyone has MCP.** MCP is not a differentiator; **permissioned MCP + cost of tool schemas in context** is.
+5. **Everyone has YOLO.** Differentiator is **safe defaults + fast path to trusted autonomy + audit**.
+6. **The market rewards finish rate.** Marketing “agentic” without task-completion evals is table stakes theater.
+7. **Cloud threads are a double-edged sword.** Amp’s multiplayer is beloved *and* blocked by security teams — own a design that does both.
 8. **Model lock-in is a liability in 2026.** OpenCode’s Anthropic episode is the case study; design for credential/policy shocks.
 
 ---
 
 ## Source index (primary)
 
-- Gemini CLI: [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli), [geminicli.com docs](https://geminicli.com/docs/), Addy Osmani tips, Google Antigravity transition blog  
+- Gemini CLI: [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli), [geminicli.com docs](https://geminicli.com/docs/), Addy Osmani tips, Google Antigravity transition blog
 - Amp: [ampcode.com](https://ampcode.com) (Oracle, Librarian, FIF, permissions), StackHawk, Hamel notes, Zoltan Bourne early review, LinkedIn/Medium user comparisons

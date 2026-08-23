@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - Unreleased
 
 ### Added
 
@@ -16,6 +16,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`quorate metrics`** — local-only aggregation over past runs: verdict counts,
   durations, findings, agreement, approvals, proof pass rate, and contract
   verdicts, with `--json` for machine output.
+- **Foreign-agent ingest + hook installer** — `quorate monitor setup`
+  installs Quorate hook-report entries in foreign AI CLIs so the monitor can
+  observe them. Claude Code gets the rich surface (lanes, subagents, and live
+  approve/deny for `PermissionRequest` prompts); Codex gets a guarded notify
+  shim only when its notify slot is empty (never clobbered). Other CLIs
+  (gemini, qwen, kimi, opencode, crush, goose) are observed by process scan.
+  See `docs/MONITOR-HOOKS.md` for the honest capability matrix.
+- **`quorate hook-report --source <s> --event <E>`** — the foreign-CLI hook
+  bridge. Writes external runs into the live spool as `kind: "external"` and,
+  for `PermissionRequest` only, blocks the agent until the monitor answers an
+  approve/deny card (defers silently when no monitor is attached — zero
+  overhead when nobody is watching).
+- **`quorate monitor --serve`** — a headless server mode that prints one
+  `{url, token, pid}` JSON line and serves the SSE feed.
+  Writes a `~/.quorate/live/monitor.json` discovery file with a 2s heartbeat
+  on listen and removes it on close; this is what makes foreign
+  `PermissionRequest` hooks block for an answer.
+- **Approvals + foreign agents + jump across surfaces** — the SSE payload now
+  carries top-level `approvals`, `external`, and `stats`; `POST /control`
+  accepts `approve`/`deny` (approval id) and `jump` (runId) alongside
+  abort/rerun. The TUI renders pending-approval cards at the top (`y`/`n`) and
+  a detected-processes strip; the web page gains an approvals section, an
+  external badge, per-run Jump, and a stats footer. `j` in the TUI (and the
+  web's Jump button) focuses the run's terminal via tmux → iTerm2 →
+  Terminal.app (macOS).
 - **ProofRunner attach** — reviews can attach explicit `--proof <path>` evidence,
   and proof commands are discovered from package.json scripts.
 - **`examples/contract/`** — fixture corpus for contract drift checking.
@@ -49,36 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The monitor web page now serves a strict Content-Security-Policy
   (`default-src 'none'`, same-origin connects only) on top of its existing
   markup escaping.
-
-## [1.4.0] - 2026-07-20
-
-### Added
-
-- **Foreign-agent ingest + hook installer** — `quorate monitor setup`
-  installs Quorate hook-report entries in foreign AI CLIs so the monitor can
-  observe them. Claude Code gets the rich surface (lanes, subagents, and live
-  approve/deny for `PermissionRequest` prompts); Codex gets a guarded notify
-  shim only when its notify slot is empty (never clobbered). Other CLIs
-  (gemini, qwen, kimi, opencode, crush, goose) are observed by process scan.
-  See `docs/MONITOR-HOOKS.md` for the honest capability matrix.
-- **`quorate hook-report --source <s> --event <E>`** — the foreign-CLI hook
-  bridge. Writes external runs into the live spool as `kind: "external"` and,
-  for `PermissionRequest` only, blocks the agent until the monitor answers an
-  approve/deny card (defers silently when no monitor is attached — zero
-  overhead when nobody is watching).
-- **`quorate monitor --serve`** — a headless server mode that prints one
-  `{url, token, pid}` JSON line and serves the SSE feed.
-  Writes a `~/.quorate/live/monitor.json` discovery file with a 2s heartbeat
-  on listen and removes it on close; this is what makes foreign
-  `PermissionRequest` hooks block for an answer.
-- **Approvals + foreign agents + jump across surfaces** — the SSE payload now
-  carries top-level `approvals`, `external`, and `stats`; `POST /control`
-  accepts `approve`/`deny` (approval id) and `jump` (runId) alongside
-  abort/rerun. The TUI renders pending-approval cards at the top (`y`/`n`) and
-  a detected-processes strip; the web page gains an approvals section, an
-  external badge, per-run Jump, and a stats footer. `j` in the TUI (and the
-  web's Jump button) focuses the run's terminal via tmux → iTerm2 →
-  Terminal.app (macOS).
 
 ## [1.3.0] - 2026-07-20
 

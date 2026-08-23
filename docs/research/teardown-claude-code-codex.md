@@ -1,8 +1,8 @@
 # Competitive Teardown: OpenAI Codex CLI vs Anthropic Claude Code CLI
 
-**Audience:** builders of a competing agentic coding CLI  
-**As of:** mid–late 2026 (models, plan names, and limits change quarterly)  
-**Primary sources:** official docs/repos, vendor engineering posts, HN/Reddit, long-form practitioner writeups  
+**Audience:** builders of a competing agentic coding CLI
+**As of:** mid–late 2026 (models, plan names, and limits change quarterly)
+**Primary sources:** official docs/repos, vendor engineering posts, HN/Reddit, long-form practitioner writeups
 
 ---
 
@@ -486,26 +486,26 @@ Incumbents brag SWE-bench. You should also publish:
 ## Appendix B — Source map (starting points)
 
 **Official / primary**
-- https://github.com/openai/codex  
-- https://developers.openai.com/codex (docs; may redirect)  
-- https://code.claude.com/docs (CLI, sandboxing, commands, auth)  
-- https://www.anthropic.com/engineering/claude-code-auto-mode  
-- https://www.anthropic.com/engineering/claude-code-sandboxing  
+- https://github.com/openai/codex
+- https://developers.openai.com/codex (docs; may redirect)
+- https://code.claude.com/docs (CLI, sandboxing, commands, auth)
+- https://www.anthropic.com/engineering/claude-code-auto-mode
+- https://www.anthropic.com/engineering/claude-code-sandboxing
 
 **Deep comparisons**
-- https://www.firecrawl.dev/blog/claude-code-vs-codex  
-- https://blakecrosley.com/blog/codex-vs-claude-code-2026  
-- https://composio.dev/content/claude-code-vs-openai-codex  
-- https://newsletter.pragmaticengineer.com/p/how-codex-is-built  
+- https://www.firecrawl.dev/blog/claude-code-vs-codex
+- https://blakecrosley.com/blog/codex-vs-claude-code-2026
+- https://composio.dev/content/claude-code-vs-openai-codex
+- https://newsletter.pragmaticengineer.com/p/how-codex-is-built
 
 **Cheatsheets**
-- https://shipyard.build/blog/codex-cli-cheat-sheet/  
-- Claude Code commands: https://code.claude.com/docs/en/commands  
+- https://shipyard.build/blog/codex-cli-cheat-sheet/
+- Claude Code commands: https://code.claude.com/docs/en/commands
 
 **Community signal**
-- HN: “Claude CLI better UX / Codex better complex correctness” threads  
-- r/ClaudeCode, r/ClaudeAI (limits, token burn)  
-- r/codex (quota changes)  
+- HN: “Claude CLI better UX / Codex better complex correctness” threads
+- r/ClaudeCode, r/ClaudeAI (limits, token burn)
+- r/codex (quota changes)
 
 ---
 

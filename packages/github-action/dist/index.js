@@ -35433,6 +35433,13 @@ var REVIEWER_INSTRUCTIONS = [
 function firstMeaningfulLine2(output) {
   return output.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "Provider returned output.";
 }
+function redactProviderText(input, secrets) {
+  let knownSecretsRedacted = input;
+  for (const secret of secrets) {
+    if (secret) knownSecretsRedacted = knownSecretsRedacted.replaceAll(secret, "[redacted]");
+  }
+  return redactSecrets(knownSecretsRedacted, secrets) ?? knownSecretsRedacted;
+}
 async function runApiProvider(provider, role, request2, hooks) {
   const startedAt = Date.now();
   const base = {
@@ -35502,7 +35509,7 @@ async function runApiProvider(provider, role, request2, hooks) {
     });
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      const trimmed = redactSecrets(errorText.trim(), [apiToken]) ?? "";
+      const trimmed = redactProviderText(errorText.trim(), [apiToken]);
       return fail(
         `API provider ${provider.id} returned HTTP ${response.status}.`,
         trimmed || `HTTP ${response.status} ${response.statusText}`.trim(),
@@ -35511,19 +35518,18 @@ async function runApiProvider(provider, role, request2, hooks) {
     }
     const json2 = await response.json();
     const rawContent = json2.choices?.[0]?.message?.content;
-    let text = typeof rawContent === "string" ? rawContent : "";
-    let outputTruncated = false;
-    if (Buffer.byteLength(text) > maxOutputBytes) {
-      outputTruncated = true;
-      text = Buffer.from(text).subarray(0, maxOutputBytes).toString("utf8");
-    }
-    const findings = parseFindings(text, provider.id, role);
+    const text = typeof rawContent === "string" ? rawContent : "";
+    const originalOutputTruncated = Buffer.byteLength(text) > maxOutputBytes;
+    const redactedText = redactProviderText(text, [apiToken]);
+    const outputTruncated = originalOutputTruncated || Buffer.byteLength(redactedText) > maxOutputBytes;
+    const output = outputTruncated ? Buffer.from(redactedText).subarray(0, maxOutputBytes).toString("utf8") : redactedText;
+    const findings = parseFindings(output, provider.id, role);
     return {
       ...base,
       status: "ok",
-      summary: outputTruncated ? `Provider output truncated to ${maxOutputBytes} bytes.` : firstMeaningfulLine2(text),
+      summary: outputTruncated ? `Provider output truncated to ${maxOutputBytes} bytes.` : firstMeaningfulLine2(output),
       findings,
-      rawOutput: redactSecrets(text || void 0, [apiToken]),
+      rawOutput: output || void 0,
       durationMs: Date.now() - startedAt
     };
   } catch (error52) {
@@ -35541,7 +35547,7 @@ async function runApiProvider(provider, role, request2, hooks) {
     }
     return fail(
       `API provider ${provider.id} request failed.`,
-      redactSecrets(error52 instanceof Error ? error52.message : String(error52), [apiToken])
+      redactProviderText(error52 instanceof Error ? error52.message : String(error52), [apiToken])
     );
   } finally {
     clearTimeout(timer);

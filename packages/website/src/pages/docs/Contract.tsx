@@ -29,7 +29,6 @@ export default function Contract() {
       <h3>File mode</h3>
       <p>Compare two local spec files directly:</p>
       <CodeBlock language="bash">{`quorate contract check \\
-  --spec openapi.yml \\
   --before snapshot/v1.0.0.yml \\
   --after snapshot/v1.1.0.yml`}</CodeBlock>
 
@@ -133,14 +132,14 @@ export default function Contract() {
         Add <InlineCode>--gate</InlineCode> to exit non-zero when the verdict is <strong>BLOCK</strong>:
       </p>
       <CodeBlock language="bash">{`quorate contract check \\
-  --spec openapi.yml \\
   --before snapshot/v1.0.0.yml \\
   --after snapshot/v1.1.0.yml \\
   --gate`}</CodeBlock>
       <p>
-        Exit codes: <InlineCode>0</InlineCode> for pass or warn, <InlineCode>1</InlineCode> for BLOCK
-        (or missing spec/base/head), <InlineCode>2</InlineCode> for ambiguous parser errors. Use
-        this in CI to block merges on breaking changes.
+        Exit codes: <InlineCode>0</InlineCode> for a pass or warn verdict (and for BLOCK without{" "}
+        <InlineCode>--gate</InlineCode>), <InlineCode>1</InlineCode> for a BLOCK verdict with{" "}
+        <InlineCode>--gate</InlineCode> or for any input, git, or parse error. Use this in CI to
+        block merges on breaking changes.
       </p>
 
       <h2>JSON mode</h2>

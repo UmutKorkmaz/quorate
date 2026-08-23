@@ -1,7 +1,7 @@
 I'll research these agentic coding CLIs in depth—starting with their repos, docs, and recent user feedback—then synthesize a competitive teardown.# Competitive Teardown: Agentic Coding CLIs (2025–2026)
 
-**Research date:** 2026-07-23  
-**Scope:** Aider, Goose (Block/AAIF), Crush (Charm), Pi (Earendil / Mario Zechner), plus OpenCode, Cline CLI, Qwen Code, Kilo CLI, Factory Droid  
+**Research date:** 2026-07-23
+**Scope:** Aider, Goose (Block/AAIF), Crush (Charm), Pi (Earendil / Mario Zechner), plus OpenCode, Cline CLI, Qwen Code, Kilo CLI, Factory Droid
 **Purpose:** Concrete competitive intelligence for building a competing agentic coding CLI
 
 ---
@@ -97,10 +97,10 @@ Usage scale claims: ~39k stars, multi-million installs, billions of tokens/week.
 
 ### 2.3 Permission model (differentiator)
 Industry-leading open-source security story:
-- Tool permission controls  
-- Sandbox mode  
-- **Prompt injection detection**  
-- **Adversary reviewer** that watches for unsafe actions.  
+- Tool permission controls
+- Sandbox mode
+- **Prompt injection detection**
+- **Adversary reviewer** that watches for unsafe actions.
 
 This is the reference design if you want enterprise trust without being Anthropic.
 
@@ -400,13 +400,13 @@ Be specific. You cannot win by being “Claude Code but open.” You need a **we
 ### 9.1 Non-negotiable parity (table stakes in 2026)
 If any of these are missing, power users bounce:
 
-1. **Multi-provider + local** with mid-session switch and cost display  
-2. **Agent loop:** read / search / edit / bash / (optional browser)  
-3. **AGENTS.md** hierarchical project instructions  
-4. **Git-aware workflow** (commit messages, diff review, undo or worktree reset)  
-5. **Headless mode** (`--print` / JSON events / CI)  
-6. **Skills or MCP** (ideally both, with progressive disclosure so tools don’t burn 15k tokens)  
-7. **Session resume** across days  
+1. **Multi-provider + local** with mid-session switch and cost display
+2. **Agent loop:** read / search / edit / bash / (optional browser)
+3. **AGENTS.md** hierarchical project instructions
+4. **Git-aware workflow** (commit messages, diff review, undo or worktree reset)
+5. **Headless mode** (`--print` / JSON events / CI)
+6. **Skills or MCP** (ideally both, with progressive disclosure so tools don’t burn 15k tokens)
+7. **Session resume** across days
 8. **Cross-platform single binary or one-line install**
 
 ### 9.2 Pick one primary wedge (own a dimension)
@@ -456,12 +456,12 @@ Add **adversary co-pilot** (Goose-inspired) on `sandbox`/`yolo` that can block e
 - Multi-client attach to workspace (Crush) for pair programming with an agent.
 
 #### E. Killer features still under-served (white space)
-1. **Verified apply:** run tests/typecheck automatically; only commit if green (Aider `/run` productized).  
-2. **Cost governor:** hard session budget, auto-downshift models.  
-3. **Context debugger:** show exact token breakdown (system / tools / repo-map / messages / skills).  
-4. **Cross-agent import:** open Claude Code / Aider / OpenCode session exports.  
-5. **Team policy as code:** org allowlists for MCP, domains, paths — portable JSON.  
-6. **True observability for subagents:** no black boxes (Pi’s complaint about Claude Code).  
+1. **Verified apply:** run tests/typecheck automatically; only commit if green (Aider `/run` productized).
+2. **Cost governor:** hard session budget, auto-downshift models.
+3. **Context debugger:** show exact token breakdown (system / tools / repo-map / messages / skills).
+4. **Cross-agent import:** open Claude Code / Aider / OpenCode session exports.
+5. **Team policy as code:** org allowlists for MCP, domains, paths — portable JSON.
+6. **True observability for subagents:** no black boxes (Pi’s complaint about Claude Code).
 7. **One-command offline:** Ollama path as polished as cloud path.
 
 ### 9.4 Go-to-market positioning one-liners
@@ -511,8 +511,8 @@ Add **adversary co-pilot** (Goose-inspired) on `sandbox`/`yolo` that can block e
 | **Kilo** | Distribution/500 models | Gateway + multi-surface packaging |
 | **Droid** | Enterprise multi-app sync | Missions, cross-surface session continuity |
 
-**The market gap in mid-2026:**  
-OpenCode won mindshare and stars; Claude Code won raw agent quality; Aider won git+cost; Crush won beauty; Pi won hackability; Goose won security/runtime standards.  
+**The market gap in mid-2026:**
+OpenCode won mindshare and stars; Claude Code won raw agent quality; Aider won git+cost; Crush won beauty; Pi won hackability; Goose won security/runtime standards.
 
 **Nobody has cleanly won:** *beautiful + transparent + sandboxed-by-default + cost-routed + git-safe + extension-friendly* as one coherent product.
 
