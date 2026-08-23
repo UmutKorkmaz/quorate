@@ -11,6 +11,7 @@ export const CONTRACT_ARTIFACT_DIR = ".quorate/contract";
 /** `git show` output is bounded so a mispointed ref at a binary blob fails closed instead of exhausting memory. */
 const GIT_SHOW_MAX_BYTES = 5 * 1024 * 1024;
 const CONTRACT_SCHEMA_VERSION = 1;
+const LOCAL_SPEC_OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
 
 export type ContractVerdict = "pass" | "warn" | "block";
 export type ContractChangeType = "breaking" | "additive" | "ambiguous";
@@ -110,63 +111,126 @@ function computeArtifactHash(artifact: Omit<ContractArtifact, "artifactHash" | "
   return sha256(canonicalJson(artifact));
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function hasExactOwnKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Reflect.ownKeys(value);
+  return (
+    actual.length === expected.length &&
+    expected.every((key) => Object.hasOwn(value, key)) &&
+    actual.every((key) => typeof key === "string" && expected.includes(key))
+  );
+}
+
+function ownValue(value: Record<string, unknown>, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return descriptor && "value" in descriptor ? descriptor.value : undefined;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
-function isContractFinding(value: unknown): value is ContractFinding {
-  if (!isRecord(value)) return false;
+function normalizeContractFinding(value: unknown): ContractFinding | undefined {
+  if (!isPlainRecord(value)) return undefined;
+  const optionalKeys = ["method", "path"].filter((key) => Object.hasOwn(value, key));
+  if (!hasExactOwnKeys(value, ["id", "changeType", "rule", "title", "body", "severity", ...optionalKeys])) return undefined;
+  const id = ownValue(value, "id");
+  const changeType = ownValue(value, "changeType");
+  const rule = ownValue(value, "rule");
+  const title = ownValue(value, "title");
+  const body = ownValue(value, "body");
+  const severity = ownValue(value, "severity");
   if (
-    typeof value.id !== "string" ||
-    (value.changeType !== "breaking" && value.changeType !== "additive" && value.changeType !== "ambiguous") ||
-    typeof value.rule !== "string" ||
-    typeof value.title !== "string" ||
-    typeof value.body !== "string" ||
-    typeof value.severity !== "string"
+    typeof id !== "string" ||
+    (changeType !== "breaking" && changeType !== "additive" && changeType !== "ambiguous") ||
+    typeof rule !== "string" ||
+    typeof title !== "string" ||
+    typeof body !== "string" ||
+    typeof severity !== "string"
   ) {
-    return false;
+    return undefined;
   }
-  return (value.method === undefined || typeof value.method === "string") && (value.path === undefined || typeof value.path === "string");
+  const method = ownValue(value, "method");
+  const path = ownValue(value, "path");
+  if ((Object.hasOwn(value, "method") && typeof method !== "string") || (Object.hasOwn(value, "path") && typeof path !== "string")) {
+    return undefined;
+  }
+  return {
+    id,
+    changeType,
+    rule,
+    title,
+    body,
+    severity,
+    ...(typeof method === "string" ? { method } : {}),
+    ...(typeof path === "string" ? { path } : {})
+  };
+}
+
+function normalizeReference(value: unknown): { label: string; hash: string } | undefined {
+  if (!isPlainRecord(value) || !hasExactOwnKeys(value, ["label", "hash"])) return undefined;
+  const label = ownValue(value, "label");
+  const hash = ownValue(value, "hash");
+  return typeof label === "string" && typeof hash === "string" ? { label, hash } : undefined;
 }
 
 /** Verify the complete persisted artifact shape and its canonical hash before any consumer trusts it. */
 export function validateContractArtifact(value: unknown): ContractArtifact | undefined {
-  if (!isRecord(value) || value.schema !== CONTRACT_SCHEMA_VERSION) return undefined;
-  if (value.verdict !== "pass" && value.verdict !== "warn" && value.verdict !== "block") return undefined;
+  if (!isPlainRecord(value) || !hasExactOwnKeys(value, ["schema", "verdict", "counts", "findings", "before", "after", "artifactHash", "createdAt"])) {
+    return undefined;
+  }
+  const schema = ownValue(value, "schema");
+  const verdict = ownValue(value, "verdict");
+  if (schema !== CONTRACT_SCHEMA_VERSION || (verdict !== "pass" && verdict !== "warn" && verdict !== "block")) return undefined;
 
-  const counts = value.counts;
+  const countsValue = ownValue(value, "counts");
+  if (!isPlainRecord(countsValue) || !hasExactOwnKeys(countsValue, ["breaking", "additive", "ambiguous"])) return undefined;
+  const breaking = ownValue(countsValue, "breaking");
+  const additive = ownValue(countsValue, "additive");
+  const ambiguous = ownValue(countsValue, "ambiguous");
   if (
-    !isRecord(counts) ||
-    !isNonNegativeInteger(counts.breaking) ||
-    !isNonNegativeInteger(counts.additive) ||
-    !isNonNegativeInteger(counts.ambiguous)
+    !isNonNegativeInteger(breaking) ||
+    !isNonNegativeInteger(additive) ||
+    !isNonNegativeInteger(ambiguous)
   ) {
     return undefined;
   }
 
-  if (!Array.isArray(value.findings) || !value.findings.every(isContractFinding)) return undefined;
-  for (const side of ["before", "after"] as const) {
-    const reference = value[side];
-    if (!isRecord(reference) || typeof reference.label !== "string" || typeof reference.hash !== "string") return undefined;
-  }
-  if (typeof value.artifactHash !== "string" || !/^[a-f0-9]{64}$/.test(value.artifactHash) || typeof value.createdAt !== "string") {
+  const findingsValue = ownValue(value, "findings");
+  if (!Array.isArray(findingsValue)) return undefined;
+  const findings = findingsValue.map(normalizeContractFinding);
+  if (findings.some((finding) => finding === undefined)) return undefined;
+  const before = normalizeReference(ownValue(value, "before"));
+  const after = normalizeReference(ownValue(value, "after"));
+  const artifactHash = ownValue(value, "artifactHash");
+  const createdAt = ownValue(value, "createdAt");
+  if (!before || !after || typeof artifactHash !== "string" || !/^[a-f0-9]{64}$/.test(artifactHash) || typeof createdAt !== "string") {
     return undefined;
   }
 
-  const artifact = value as unknown as ContractArtifact;
-  const expectedHash = computeArtifactHash({
+  const artifact: ContractArtifact = {
+    schema,
+    verdict,
+    counts: { breaking, additive, ambiguous },
+    findings: findings as ContractFinding[],
+    before,
+    after,
+    artifactHash,
+    createdAt
+  };
+  return artifact.artifactHash === computeArtifactHash({
     schema: artifact.schema,
     verdict: artifact.verdict,
     counts: artifact.counts,
     findings: artifact.findings,
     before: artifact.before,
     after: artifact.after
-  });
-  return artifact.artifactHash === expectedHash ? artifact : undefined;
+  })
+    ? artifact
+    : undefined;
 }
 
 interface ContractInput {
@@ -198,10 +262,13 @@ async function showGitSpec(ref: string, specPath: string, cwd: string): Promise<
 function readSpecFile(path: string, option: string): string {
   let fd: number | undefined;
   try {
-    if (!lstatSync(path).isFile()) throw new Error("not a regular file");
-    fd = openSync(path, constants.O_RDONLY);
+    const before = lstatSync(path);
+    if (!before.isFile()) throw new Error("not a regular file");
+    fd = openSync(path, LOCAL_SPEC_OPEN_FLAGS);
     const initial = fstatSync(fd);
-    if (!initial.isFile()) throw new Error("not a regular file");
+    if (!initial.isFile() || initial.dev !== before.dev || initial.ino !== before.ino) {
+      throw new Error("not a regular file or was replaced while opening");
+    }
     if (initial.size > GIT_SHOW_MAX_BYTES) {
       throw new Error(`exceeds the bounded input limit of 5 MiB`);
     }
@@ -214,7 +281,16 @@ function readSpecFile(path: string, option: string): string {
       bytesRead += read;
     }
     const final = fstatSync(fd);
-    if (bytesRead > GIT_SHOW_MAX_BYTES || final.size > GIT_SHOW_MAX_BYTES) {
+    const after = lstatSync(path);
+    if (
+      bytesRead > GIT_SHOW_MAX_BYTES ||
+      final.size > GIT_SHOW_MAX_BYTES ||
+      !after.isFile() ||
+      after.dev !== before.dev ||
+      after.ino !== before.ino ||
+      final.dev !== before.dev ||
+      final.ino !== before.ino
+    ) {
       throw new Error(`exceeds the bounded input limit of 5 MiB`);
     }
     return buffer.subarray(0, bytesRead).toString("utf8");

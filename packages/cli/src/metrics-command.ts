@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { computeStats, type HistoryEntry, type Severity } from "@quorate/core";
+import { readContractArtifact, validateContractArtifact, type ContractArtifact } from "./contract-command.js";
 import { readHistory } from "./history-command.js";
 import { verifyLatestProof } from "./proof-runner.js";
 import { exportApprovalAuditRecords, verifyApprovalAuditLedger } from "./trust-ledger.js";
@@ -16,7 +17,6 @@ import { exportApprovalAuditRecords, verifyApprovalAuditLedger } from "./trust-l
  * transmitted, and an empty store is a valid, all-zero report (never an error).
  */
 
-const CONTRACT_MODULE_SPECIFIER = "../src/contract-command.js";
 const CONTRACT_ARTIFACT_DIR = ".quorate/contract";
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
 
@@ -79,19 +79,6 @@ export interface MetricsReport {
   proofs?: ProofMetrics;
   contract?: ContractMetrics;
 }
-
-interface ContractArtifact {
-  schema: 1;
-  verdict: "pass" | "warn" | "block";
-  counts: { breaking: number; ambiguous: number; additive: number };
-  findings: unknown[];
-  before: { label: string; hash: string };
-  after: { label: string; hash: string };
-  artifactHash: string;
-  createdAt: string;
-}
-
-type ContractArtifactValidator = (value: unknown) => ContractArtifact | undefined;
 
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -177,29 +164,13 @@ function collectProofs(cwd: string): ProofMetrics | undefined {
   }
 }
 
-/**
- * Prefer the contract command's own reader. The specifier stays non-literal so
- * resolution is a runtime concern while `contract-command.ts` lands as a
- * concurrent change; an unavailable module leaves contract metrics absent but
- * never lets an unverified raw artifact into the report.
- */
-async function loadContractArtifactModule(): Promise<{
-  readContractArtifact?: (cwd: string) => unknown;
-  validateContractArtifact?: ContractArtifactValidator;
-} | undefined> {
-  try {
-    const specifier = CONTRACT_MODULE_SPECIFIER;
-    return (await import(/* @vite-ignore */ specifier)) as {
-      readContractArtifact?: (cwd: string) => unknown;
-      validateContractArtifact?: ContractArtifactValidator;
-    };
-  } catch {
-    return undefined;
-  }
+/** The command reader and raw candidate scan share the one static trust boundary. */
+function readContractArtifactViaModule(cwd: string): ContractArtifact | undefined {
+  return validateContractArtifact(readContractArtifact(cwd));
 }
 
 /** Validator-backed read of the on-disk contract artifact (latest.json first). */
-function readContractArtifactRaw(cwd: string, validate: ContractArtifactValidator): ContractArtifact | undefined {
+function readContractArtifactRaw(cwd: string): ContractArtifact | undefined {
   const dir = join(resolve(cwd), CONTRACT_ARTIFACT_DIR);
   try {
     if (!existsSync(dir) || !statSync(dir).isDirectory()) return undefined;
@@ -211,7 +182,7 @@ function readContractArtifactRaw(cwd: string, validate: ContractArtifactValidato
     });
     for (const name of names) {
       try {
-        const artifact = validate(JSON.parse(readFileSync(join(dir, name), "utf8")));
+        const artifact = validateContractArtifact(JSON.parse(readFileSync(join(dir, name), "utf8")));
         if (artifact) return artifact;
       } catch {
         // Malformed candidate — try the next file.
@@ -224,13 +195,7 @@ function readContractArtifactRaw(cwd: string, validate: ContractArtifactValidato
 }
 
 async function collectContract(cwd: string): Promise<ContractMetrics | undefined> {
-  const loaded = await loadContractArtifactModule();
-  const validate = loaded?.validateContractArtifact;
-  if (typeof validate !== "function") return undefined;
-  const reader = loaded?.readContractArtifact;
-  const artifact =
-    (typeof reader === "function" ? validate(reader(cwd)) : undefined) ??
-    readContractArtifactRaw(cwd, validate);
+  const artifact = readContractArtifactViaModule(cwd) ?? readContractArtifactRaw(cwd);
   if (!artifact) return undefined;
   return {
     verdict: artifact.verdict,

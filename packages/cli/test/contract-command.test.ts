@@ -86,6 +86,7 @@ import {
   CONTRACT_ARTIFACT_DIR,
   readContractArtifact,
   runContractCheck,
+  validateContractArtifact,
   type ContractArtifact
 } from "../src/contract-command.js";
 
@@ -409,6 +410,18 @@ describe("quorate contract check (fail-closed validation)", () => {
     expect(engine.parseOpenApi).not.toHaveBeenCalled();
     expect(existsSync(artifactDir(dir))).toBe(false);
   });
+
+  it("rejects a symlinked local spec before it reaches the OpenAPI parser", async () => {
+    writeFileSync(resolve(dir, "target.yaml"), BEFORE_SPEC, "utf8");
+    symlinkSync(resolve(dir, "target.yaml"), resolve(dir, "before.yaml"));
+    writeFileSync(resolve(dir, "after.yaml"), AFTER_SPEC, "utf8");
+
+    const outcome = await runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" });
+
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.summary).toMatch(/before\.yaml.*not a regular file/i);
+    expect(engine.parseOpenApi).not.toHaveBeenCalled();
+  });
 });
 
 describe("contract artifact determinism and permissions", () => {
@@ -456,6 +469,30 @@ describe("contract artifact determinism and permissions", () => {
 
     writeFileSync(artifactJsonPath(dir), "{not json", "utf8");
     expect(readContractArtifact(dir)).toBeUndefined();
+  });
+
+  it("rejects artifact objects with extra own keys, inherited fields, or extra nested keys", async () => {
+    writeFileModeFixtures();
+    await runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" });
+    const valid = JSON.parse(readFileSync(artifactJsonPath(dir), "utf8")) as ContractArtifact;
+    const extraRoot = { ...valid, unexpected: true };
+    const jsonPrototypeKey = JSON.parse(`{"__proto__":{"polluted":true},${JSON.stringify(valid).slice(1)}`) as unknown;
+    const inherited = Object.create(valid) as unknown;
+    const extraCounts = { ...valid, counts: { ...valid.counts, unexpected: true } };
+    const extraFinding = { ...valid, findings: [{ ...valid.findings[0], unexpected: true }, ...valid.findings.slice(1)] };
+    const extraBefore = { ...valid, before: { ...valid.before, unexpected: true } };
+    const extraAfter = { ...valid, after: { ...valid.after, unexpected: true } };
+
+    for (const malformed of [extraRoot, jsonPrototypeKey, inherited, extraCounts, extraFinding, extraBefore, extraAfter]) {
+      expect(validateContractArtifact(malformed)).toBeUndefined();
+    }
+    const normalized = validateContractArtifact(valid);
+    expect(normalized).toEqual(valid);
+    expect(normalized).not.toBe(valid);
+    expect(normalized?.counts).not.toBe(valid.counts);
+    expect(normalized?.findings).not.toBe(valid.findings);
+    expect(normalized?.before).not.toBe(valid.before);
+    expect(normalized?.after).not.toBe(valid.after);
   });
 
   it("exposes the artifact directory constant relative to the workspace", () => {

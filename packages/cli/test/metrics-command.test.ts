@@ -1,6 +1,8 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { build } from "esbuild";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { historyPath } from "../src/history-command.js";
@@ -16,6 +18,7 @@ process.env.QUORATE_PROOF_KEY_DIR = proofKeyDir;
 
 let home: string;
 const workdirs: string[] = [];
+const bundleDirs: string[] = [];
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "quorate-metrics-home-"));
@@ -27,6 +30,7 @@ afterEach(() => {
     rmSync(historyPath(dir), { force: true });
     rmSync(dir, { recursive: true, force: true });
   }
+  for (const dir of bundleDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   rmSync(home, { recursive: true, force: true });
   process.env.HOME = originalHome;
 });
@@ -85,6 +89,29 @@ async function writeValidContract(cwd: string): Promise<Record<string, unknown>>
   const outcome = await runContractCheck({ cwd, before: "before.yaml", after: "after.yaml" });
   expect(outcome.exitCode).toBe(0);
   return JSON.parse(readFileSync(join(cwd, ".quorate", "contract", "latest.json"), "utf8")) as Record<string, unknown>;
+}
+
+async function collectBundledMetrics(cwd: string): Promise<MetricsReport> {
+  const bundleDir = mkdtempSync(join(resolve(process.cwd(), "packages/cli"), ".metrics-bundle-test-"));
+  bundleDirs.push(bundleDir);
+  const entry = join(bundleDir, "index.js");
+  await build({
+    entryPoints: [resolve(process.cwd(), "packages/cli/src/index.ts")],
+    outfile: entry,
+    bundle: true,
+    platform: "node",
+    format: "esm",
+    target: "node22",
+    banner: { js: "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);" },
+    external: ["ink", "react", "react/jsx-runtime", "react/jsx-dev-runtime"]
+  });
+  return JSON.parse(
+    execFileSync(process.execPath, [entry, "metrics", "--json"], {
+      cwd,
+      encoding: "utf8",
+      env: { ...process.env, HOME: home, INIT_CWD: cwd, QUORATE_PROOF_KEY_DIR: proofKeyDir }
+    })
+  ) as MetricsReport;
 }
 
 function approval(decision: ApprovalAuditDecision, sequence: number) {
@@ -272,6 +299,18 @@ describe("quorate metrics", () => {
     const report = await collectMetrics({ cwd });
 
     expect(report.contract).toBeUndefined();
+  });
+
+  it("keeps valid contract evidence and rejects tampering in the bundled CLI", async () => {
+    const cwd = workspace();
+    const artifact = await writeValidContract(cwd);
+
+    const valid = await collectBundledMetrics(cwd);
+    expect(valid.contract).toMatchObject({ verdict: "pass", counts: { breaking: 0, ambiguous: 0, additive: 0 } });
+
+    writeContract(cwd, { ...artifact, verdict: "block" });
+    const tampered = await collectBundledMetrics(cwd);
+    expect(tampered.contract).toBeUndefined();
   });
 
   it("aggregates verified approval decisions from the trust ledger", async () => {
