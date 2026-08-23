@@ -8,6 +8,9 @@ import { latestSession } from "./sessions.js";
 import { readVersion } from "./version.js";
 
 const MAX_LAST_REPORT_BYTES = 5 * 1024 * 1024;
+const MAX_REPORT_REDACTION_DEPTH = 64;
+const MAX_REPORT_REDACTION_NODES = 10_000;
+const OMIT_REPORT = Symbol("omit report");
 
 export function redactConfig(config: QuorateConfig): QuorateConfig {
   return {
@@ -32,6 +35,11 @@ export function redactConfig(config: QuorateConfig): QuorateConfig {
 interface ZipEntry {
   name: string;
   data: Buffer;
+}
+
+interface DoctorBundleHooks {
+  /** Test-only synchronization point for deterministic file-replacement coverage. */
+  beforeLastReportOpen?: () => void;
 }
 
 function crc32(buffer: Buffer): number {
@@ -120,27 +128,53 @@ export function createZipBuffer(files: Array<{ name: string; data: string }>): B
   return Buffer.concat([...parts, centralDir, end]);
 }
 
-function readLastReport(cwd: string): unknown {
+function readLastReport(cwd: string, hooks?: DoctorBundleHooks): unknown {
   const stateDir = resolve(cwd, ".quorate");
   const path = resolve(cwd, ".quorate", "last-report.json");
   let fd: number | undefined;
   try {
-    const stateDirStat = lstatSync(stateDir);
-    if (stateDirStat.isSymbolicLink() || !stateDirStat.isDirectory()) return null;
+    const stateDirBefore = lstatSync(stateDir);
+    if (stateDirBefore.isSymbolicLink() || !stateDirBefore.isDirectory()) return null;
 
-    const pathStat = lstatSync(path);
-    if (pathStat.isSymbolicLink() || !pathStat.isFile()) return null;
+    const fileBefore = lstatSync(path);
+    if (fileBefore.isSymbolicLink() || !fileBefore.isFile()) return null;
 
-    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-    const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size > MAX_LAST_REPORT_BYTES) return null;
+    hooks?.beforeLastReportOpen?.();
+    fd = openSync(
+      path,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    );
+    const opened = fstatSync(fd);
+    if (
+      !opened.isFile() ||
+      opened.dev !== fileBefore.dev ||
+      opened.ino !== fileBefore.ino ||
+      opened.size > MAX_LAST_REPORT_BYTES
+    ) {
+      return null;
+    }
 
-    const bytes = Buffer.alloc(stat.size);
+    const bytes = Buffer.alloc(opened.size);
     let offset = 0;
-    while (offset < stat.size) {
-      const count = readSync(fd, bytes, offset, stat.size - offset, offset);
+    while (offset < opened.size) {
+      const count = readSync(fd, bytes, offset, opened.size - offset, offset);
       if (count === 0) return null;
       offset += count;
+    }
+
+    const fileAfter = lstatSync(path);
+    const stateDirAfter = lstatSync(stateDir);
+    if (
+      fileAfter.isSymbolicLink() ||
+      !fileAfter.isFile() ||
+      fileAfter.dev !== fileBefore.dev ||
+      fileAfter.ino !== fileBefore.ino ||
+      stateDirAfter.isSymbolicLink() ||
+      !stateDirAfter.isDirectory() ||
+      stateDirAfter.dev !== stateDirBefore.dev ||
+      stateDirAfter.ino !== stateDirBefore.ino
+    ) {
+      return null;
     }
     return JSON.parse(bytes.toString("utf8")) as unknown;
   } catch {
@@ -157,27 +191,57 @@ function providerSecrets(config: QuorateConfig): Array<string | undefined> {
   ]);
 }
 
-function redactReportStrings(value: unknown, secrets: Array<string | undefined>): unknown {
-  if (typeof value === "string") return redactSecrets(value, secrets) ?? value;
-  if (Array.isArray(value)) return value.map((item) => redactReportStrings(item, secrets));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, redactReportStrings(item, secrets)])
-    );
+function redactKnownSecrets(value: string, secrets: Array<string | undefined>): string {
+  let knownSecretsRedacted = value;
+  for (const secret of secrets) {
+    if (secret) knownSecretsRedacted = knownSecretsRedacted.replaceAll(secret, "[redacted]");
   }
-  return value;
+  return redactSecrets(knownSecretsRedacted, secrets) ?? knownSecretsRedacted;
+}
+
+function redactReportStrings(value: unknown, secrets: Array<string | undefined>): unknown | undefined {
+  let nodes = 0;
+  const visit = (current: unknown, depth: number): unknown | typeof OMIT_REPORT => {
+    nodes += 1;
+    if (nodes > MAX_REPORT_REDACTION_NODES || depth > MAX_REPORT_REDACTION_DEPTH) {
+      return OMIT_REPORT;
+    }
+    if (typeof current === "string") return redactKnownSecrets(current, secrets);
+    if (Array.isArray(current)) {
+      const items = current.map((item) => visit(item, depth + 1));
+      return items.includes(OMIT_REPORT) ? OMIT_REPORT : items;
+    }
+    if (current && typeof current === "object") {
+      const entries = Object.entries(current).map(([key, item]) => [key, visit(item, depth + 1)]);
+      return entries.some(([, item]) => item === OMIT_REPORT)
+        ? OMIT_REPORT
+        : Object.fromEntries(entries);
+    }
+    return current;
+  };
+
+  try {
+    const redacted = visit(value, 0);
+    return redacted === OMIT_REPORT ? undefined : redacted;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Zip diagnostics: redacted config, provider grid, doctor text, and last report. */
-export function buildDoctorBundle(config: QuorateConfig, cwd: string): Buffer {
+export function buildDoctorBundle(
+  config: QuorateConfig,
+  cwd: string,
+  hooks?: DoctorBundleHooks
+): Buffer {
   const shellState: ShellState = { cwd, config, mode: "review", transcript: [] };
   const redacted = redactConfig(config);
   const snapshots = providerSnapshots(shellState);
   const latest = latestSession(cwd);
   const lastReport = redactReportStrings(
-    readLastReport(cwd) ?? latest?.lastReportSummary ?? null,
+    readLastReport(cwd, hooks) ?? latest?.lastReportSummary ?? null,
     providerSecrets(config)
-  );
+  ) ?? null;
 
   const manifest = {
     tool: "quorate",

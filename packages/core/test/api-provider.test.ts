@@ -131,6 +131,55 @@ describe("runApiProvider", () => {
 
     expect(result.status).toBe("ok");
     expect(result.summary).not.toContain(token);
+    expect(result.findings).toHaveLength(1);
+    expect(JSON.stringify(result.findings)).not.toContain(token);
+    expect(JSON.stringify(result.findings)).toContain("[redacted]");
+    expect(result.error ?? "").not.toContain(token);
+    expect(result.rawOutput ?? "").not.toContain(token);
+  });
+
+  it("redacts a complete token before truncating a successful response", async () => {
+    const token = "token-that-is-long-enough-to-be-truncated-123456";
+    const findingPrefix = "- [high] Kept finding (file.ts:1): ";
+    const fetchMock = vi.fn().mockResolvedValue(chatCompletion(`${findingPrefix}${token}`));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({
+        apiKeyEnv: "MY_TOKEN",
+        maxOutputBytes: Buffer.byteLength(findingPrefix) + 12
+      }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.summary).toContain("truncated");
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]?.body).toContain("[redacted]");
+    expect(result.rawOutput ?? "").not.toContain(token);
+    expect(result.rawOutput ?? "").not.toContain(token.slice(0, 12));
+  });
+
+  it("redacts a short API token from every successful provider field", async () => {
+    const token = "xy";
+    const fetchMock = vi.fn().mockResolvedValue(
+      chatCompletion(`${token} summary\n- [high] ${token} finding (secret.ts:7): echoed ${token}`)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({ apiKeyEnv: "MY_TOKEN" }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.summary).toContain("[redacted]");
+    expect(result.findings).toHaveLength(1);
+    expect(JSON.stringify(result.findings)).toContain("[redacted]");
     expect(JSON.stringify(result.findings)).not.toContain(token);
     expect(result.error ?? "").not.toContain(token);
     expect(result.rawOutput ?? "").not.toContain(token);

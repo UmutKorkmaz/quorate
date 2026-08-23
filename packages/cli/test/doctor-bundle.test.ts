@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, renameSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateRawSync } from "node:zlib";
@@ -6,20 +7,26 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultConfig } from "@quorate/core";
 import { buildDoctorBundle, createZipBuffer, redactConfig } from "../src/doctor-bundle.js";
 
-function zipContents(buffer: Buffer): string {
-  const contents: string[] = [];
+function zipEntries(buffer: Buffer): Map<string, string> {
+  const entries = new Map<string, string>();
   let offset = 0;
 
   while (offset + 30 <= buffer.length && buffer.readUInt32LE(offset) === 0x04034b50) {
     const compressedSize = buffer.readUInt32LE(offset + 18);
     const nameLength = buffer.readUInt16LE(offset + 26);
     const extraLength = buffer.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
     const dataStart = offset + 30 + nameLength + extraLength;
-    contents.push(inflateRawSync(buffer.subarray(dataStart, dataStart + compressedSize)).toString("utf8"));
+    const name = buffer.subarray(nameStart, nameStart + nameLength).toString("utf8");
+    entries.set(name, inflateRawSync(buffer.subarray(dataStart, dataStart + compressedSize)).toString("utf8"));
     offset = dataStart + compressedSize;
   }
 
-  return contents.join("\n");
+  return entries;
+}
+
+function zipContents(buffer: Buffer): string {
+  return [...zipEntries(buffer).values()].join("\n");
 }
 
 afterEach(() => {
@@ -85,7 +92,8 @@ describe("doctor bundle", () => {
     const dir = mkdtempSync(join(tmpdir(), "quorate-bundle-"));
     const reportDir = join(dir, ".quorate");
     const reportSecret = "nested-report-secret-123456";
-    const providerSecret = "configured-provider-secret-123456";
+    const providerEnvSecret = "e1";
+    const apiKeySecret = "k2";
     mkdirSync(reportDir, { recursive: true });
     writeFileSync(
       join(reportDir, "last-report.json"),
@@ -93,12 +101,12 @@ describe("doctor bundle", () => {
         summary: `summary api_key=${reportSecret}`,
         findings: [
           {
-            title: `title ${providerSecret}`,
+            title: `title ${providerEnvSecret}`,
             body: `body api_key=${reportSecret}`,
-            suggestion: `suggestion ${providerSecret}`
+            suggestion: `suggestion ${apiKeySecret}`
           }
         ],
-        providerResults: [{ rawOutput: `raw api_key=${reportSecret} and ${providerSecret}` }]
+        providerResults: [{ rawOutput: `raw api_key=${reportSecret} and ${providerEnvSecret} and ${apiKeySecret}` }]
       }),
       "utf8"
     );
@@ -106,18 +114,76 @@ describe("doctor bundle", () => {
     const config = createDefaultConfig([]);
     const codex = config.providers.find((provider) => provider.id === "codex");
     if (!codex) throw new Error("missing codex provider");
-    codex.env = { PROVIDER_SECRET: providerSecret };
+    codex.env = { PROVIDER_SECRET: providerEnvSecret };
     codex.apiKeyEnv = "BUNDLE_PROVIDER_TOKEN";
-    vi.stubEnv("BUNDLE_PROVIDER_TOKEN", providerSecret);
+    vi.stubEnv("BUNDLE_PROVIDER_TOKEN", apiKeySecret);
 
     const buffer = buildDoctorBundle(config, dir);
     const archiveText = zipContents(buffer);
 
-    for (const secret of [reportSecret, providerSecret]) {
+    for (const secret of [reportSecret, providerEnvSecret, apiKeySecret]) {
       expect(buffer.includes(Buffer.from(secret))).toBe(false);
       expect(archiveText).not.toContain(secret);
     }
     expect(archiveText).toContain("[redacted]");
+  });
+
+  it("rejects a last report replaced between validation and open", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-bundle-"));
+    const reportDir = join(dir, ".quorate");
+    const reportPath = join(reportDir, "last-report.json");
+    const originalSecret = "original-report-secret-123456";
+    const replacementSecret = "replacement-report-secret-123456";
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(reportPath, JSON.stringify({ summary: originalSecret }), "utf8");
+    const replacement = join(dir, "replacement.json");
+    writeFileSync(replacement, JSON.stringify({ summary: replacementSecret }), "utf8");
+
+    const archiveText = zipContents(
+      buildDoctorBundle(createDefaultConfig([]), dir, {
+        beforeLastReportOpen: () => renameSync(replacement, reportPath)
+      })
+    );
+
+    expect(archiveText).not.toContain(originalSecret);
+    expect(archiveText).not.toContain(replacementSecret);
+  });
+
+  it("omits a deeply nested report when sanitization exceeds its traversal bound", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-bundle-"));
+    const reportDir = join(dir, ".quorate");
+    const reportSecret = "deep-report-secret-123456";
+    let report: unknown = { summary: reportSecret };
+    for (let index = 0; index < 128; index += 1) report = { nested: report };
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(join(reportDir, "last-report.json"), JSON.stringify(report), "utf8");
+
+    const config = createDefaultConfig([]);
+    const codex = config.providers.find((provider) => provider.id === "codex");
+    if (!codex) throw new Error("missing codex provider");
+    codex.env = { DEEP_REPORT_SECRET: reportSecret };
+
+    const entries = zipEntries(buildDoctorBundle(config, dir));
+
+    expect(entries.get("last-report.json")).toBe("null\n");
+  });
+
+  it.skipIf(process.platform === "win32")("rejects a FIFO substituted after validation without blocking", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quorate-bundle-"));
+    const reportDir = join(dir, ".quorate");
+    const reportPath = join(reportDir, "last-report.json");
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(reportPath, JSON.stringify({ summary: "safe report" }), "utf8");
+    const fifoPath = join(reportDir, "replacement.fifo");
+    execFileSync("mkfifo", [fifoPath]);
+
+    const entries = zipEntries(
+      buildDoctorBundle(createDefaultConfig([]), dir, {
+        beforeLastReportOpen: () => renameSync(fifoPath, reportPath)
+      })
+    );
+
+    expect(entries.get("last-report.json")).toBe("null\n");
   });
 
   it("rejects a symlinked last report instead of copying its contents into the bundle", () => {

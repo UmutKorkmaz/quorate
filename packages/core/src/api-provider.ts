@@ -23,6 +23,14 @@ function firstMeaningfulLine(output: string): string {
   );
 }
 
+function redactProviderText(input: string, secrets: Array<string | undefined>): string {
+  let knownSecretsRedacted = input;
+  for (const secret of secrets) {
+    if (secret) knownSecretsRedacted = knownSecretsRedacted.replaceAll(secret, "[redacted]");
+  }
+  return redactSecrets(knownSecretsRedacted, secrets) ?? knownSecretsRedacted;
+}
+
 /**
  * Runs an OpenAI-compatible chat-completions endpoint as a Quorate provider.
  * Returns the same {@link ProviderResult} shape as `runCliProvider`, with
@@ -112,7 +120,7 @@ export async function runApiProvider(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
-      const trimmed = redactSecrets(errorText.trim(), [apiToken]) ?? "";
+      const trimmed = redactProviderText(errorText.trim(), [apiToken]);
       return fail(
         `API provider ${provider.id} returned HTTP ${response.status}.`,
         trimmed || `HTTP ${response.status} ${response.statusText}`.trim(),
@@ -125,25 +133,24 @@ export async function runApiProvider(
     };
 
     const rawContent = json.choices?.[0]?.message?.content;
-    let text = typeof rawContent === "string" ? rawContent : "";
+    const text = typeof rawContent === "string" ? rawContent : "";
 
-    let outputTruncated = false;
-    if (Buffer.byteLength(text) > maxOutputBytes) {
-      outputTruncated = true;
-      text = Buffer.from(text).subarray(0, maxOutputBytes).toString("utf8");
-    }
+    const outputTruncated = Buffer.byteLength(text) > maxOutputBytes;
+    const redactedText = redactProviderText(text, [apiToken]);
+    const output = outputTruncated
+      ? Buffer.from(redactedText).subarray(0, maxOutputBytes).toString("utf8")
+      : redactedText;
 
-    const redactedText = redactSecrets(text, [apiToken]) ?? text;
-    const findings = parseFindings(redactedText, provider.id, role);
+    const findings = parseFindings(output, provider.id, role);
 
     return {
       ...base,
       status: "ok",
       summary: outputTruncated
         ? `Provider output truncated to ${maxOutputBytes} bytes.`
-        : firstMeaningfulLine(redactedText),
+        : firstMeaningfulLine(output),
       findings,
-      rawOutput: redactedText || undefined,
+      rawOutput: output || undefined,
       durationMs: Date.now() - startedAt
     };
   } catch (error) {
@@ -161,7 +168,7 @@ export async function runApiProvider(
     }
     return fail(
       `API provider ${provider.id} request failed.`,
-      redactSecrets(error instanceof Error ? error.message : String(error), [apiToken])
+      redactProviderText(error instanceof Error ? error.message : String(error), [apiToken])
     );
   } finally {
     clearTimeout(timer);
