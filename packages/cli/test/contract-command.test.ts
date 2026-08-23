@@ -177,6 +177,32 @@ describe("quorate contract check (file mode)", () => {
     rmSync(outside, { recursive: true, force: true });
   });
 
+  it("preflights ContractCourt artifacts before replacing JSON when Markdown is a symlink", async () => {
+    writeFileModeFixtures();
+    const outside = mkdtempSync(join(tmpdir(), "quorate-contract-markdown-outside-"));
+    const victim = join(outside, "latest.md");
+    const previousJson = "{\"previous\":true}\n";
+    mkdirSync(artifactDir(dir), { recursive: true });
+    writeFileSync(artifactJsonPath(dir), previousJson, "utf8");
+    writeFileSync(victim, "outside remains intact\n", "utf8");
+    symlinkSync(victim, artifactMdPath(dir));
+
+    await expect(runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" })).rejects.toThrow(/symbolic link/i);
+    expect(readFileSync(artifactJsonPath(dir), "utf8")).toBe(previousJson);
+    expect(readFileSync(victim, "utf8")).toBe("outside remains intact\n");
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("does not advance ContractCourt Markdown when latest JSON is not a regular file", async () => {
+    writeFileModeFixtures();
+    const previousMarkdown = "previous markdown\n";
+    mkdirSync(artifactJsonPath(dir), { recursive: true });
+    writeFileSync(artifactMdPath(dir), previousMarkdown, "utf8");
+
+    await expect(runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" })).rejects.toThrow(/not a regular file/i);
+    expect(readFileSync(artifactMdPath(dir), "utf8")).toBe(previousMarkdown);
+  });
+
   it("compares --before/--after specs, writes the artifact, and exits 0 without --gate", async () => {
     writeFileModeFixtures();
 

@@ -3,7 +3,10 @@ import {
   chmodSync,
   closeSync,
   constants,
+  fchmodSync,
   fsyncSync,
+  fstatSync,
+  ftruncateSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -19,12 +22,19 @@ import { isAbsolute, join, relative, resolve, win32 } from "node:path";
 const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
+const UNSUPPORTED_DIRECTORY_SYNC_CODES = new Set(["EINVAL", "ENOTSUP", "EOPNOTSUPP"]);
 
-export type SecureStateFaultPoint = "after-temp-fsync";
+export type SecureStateFaultPoint = "after-temp-fsync" | "before-directory-fsync";
 
-/** Test-only interruption point for proving that an uncommitted temp is never published. */
+export interface SecureStateFaultContext {
+  temporaryPath: string;
+  parentPath: string;
+  destinationPath: string;
+}
+
+/** Test-only interruption points for publication-race and directory-sync coverage. */
 export interface SecureStateWriteOptions {
-  fault?: (point: SecureStateFaultPoint) => void;
+  fault?: (point: SecureStateFaultPoint, context: SecureStateFaultContext) => void;
 }
 
 interface DirectoryIdentity {
@@ -36,6 +46,10 @@ interface DirectoryIdentity {
 interface FileIdentity {
   dev: number;
   ino: number;
+}
+
+interface TemporaryIdentity extends FileIdentity {
+  mode: number;
 }
 
 function optionalLstat(path: string): Stats | undefined {
@@ -75,10 +89,15 @@ function assertDirectory(path: string, label: string): Stats {
   return entry;
 }
 
-function privateDirectory(path: string, label: string): DirectoryIdentity {
+function directoryIdentity(path: string, label: string): DirectoryIdentity {
   const entry = assertDirectory(path, label);
-  if (platform() !== "win32") chmodSync(path, DIRECTORY_MODE);
   return { path, dev: entry.dev, ino: entry.ino };
+}
+
+function privateDescendantDirectory(path: string, label: string): DirectoryIdentity {
+  const identity = directoryIdentity(path, label);
+  if (platform() !== "win32") chmodSync(path, DIRECTORY_MODE);
+  return identity;
 }
 
 function assertDirectoryIdentity(directory: DirectoryIdentity, workspace: string): void {
@@ -91,13 +110,14 @@ function assertDirectoryIdentity(directory: DirectoryIdentity, workspace: string
 }
 
 function ensurePrivateParent(workspace: string, parts: string[]): { parent: string; directories: DirectoryIdentity[] } {
-  const directories = [privateDirectory(workspace, "workspace root")];
+  // The caller's workspace is only revalidated: its permissions are user-owned.
+  const directories = [directoryIdentity(workspace, "workspace root")];
   let current = workspace;
   for (const part of parts.slice(0, -1)) {
     const next = join(current, part);
     if (!isInside(workspace, next)) throw stateError("state directory resolves outside the workspace.");
     if (!optionalLstat(next)) mkdirSync(next, { mode: DIRECTORY_MODE });
-    const identity = privateDirectory(next, `state directory '${part}'`);
+    const identity = privateDescendantDirectory(next, `state directory '${part}'`);
     const resolved = realpathSync(next);
     if (!isInside(workspace, resolved)) throw stateError(`state directory '${part}' resolves outside the workspace.`);
     directories.push(identity);
@@ -122,6 +142,35 @@ function assertDestinationIdentity(path: string, expected: FileIdentity | undefi
   }
 }
 
+function temporaryIdentity(fd: number): TemporaryIdentity {
+  const entry = fstatSync(fd);
+  const mode = entry.mode & 0o777;
+  if (!entry.isFile()) throw stateError("temporary state descriptor is not a regular file.");
+  if (platform() !== "win32" && mode !== FILE_MODE) throw stateError("temporary state descriptor is not owner-only.");
+  return { dev: entry.dev, ino: entry.ino, mode };
+}
+
+function assertTemporaryDescriptor(fd: number, expected: TemporaryIdentity): void {
+  const current = temporaryIdentity(fd);
+  if (current.dev !== expected.dev || current.ino !== expected.ino || current.mode !== expected.mode) {
+    throw stateError("temporary state descriptor changed while publishing state.");
+  }
+}
+
+function assertTemporaryPathBound(path: string, expected: TemporaryIdentity): void {
+  const current = optionalLstat(path);
+  if (!current || current.isSymbolicLink() || !current.isFile() || current.dev !== expected.dev || current.ino !== expected.ino) {
+    throw stateError("temporary state file changed while publishing state.");
+  }
+}
+
+function assertDestinationMatchesTemporary(path: string, expected: TemporaryIdentity): void {
+  const current = destinationIdentity(path);
+  if (!current || current.dev !== expected.dev || current.ino !== expected.ino) {
+    throw stateError("state destination changed before publication could be confirmed.");
+  }
+}
+
 function writeAll(fd: number, content: string): void {
   const bytes = Buffer.from(content, "utf8");
   let offset = 0;
@@ -132,13 +181,50 @@ function writeAll(fd: number, content: string): void {
   }
 }
 
-function fsyncDirectory(path: string): void {
+function errorCode(error: unknown): string | undefined {
+  return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : undefined;
+}
+
+function fsyncDirectory(path: string, options: SecureStateWriteOptions, context: SecureStateFaultContext): void {
   if (platform() === "win32") return;
-  const fd = openSync(path, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
+  let fd: number | undefined;
   try {
+    options.fault?.("before-directory-fsync", context);
+    fd = openSync(path, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0));
     fsyncSync(fd);
+  } catch (error: unknown) {
+    if (UNSUPPORTED_DIRECTORY_SYNC_CODES.has(errorCode(error) ?? "")) return;
+    throw error;
   } finally {
-    closeSync(fd);
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+function removeTemporaryIfStillOwned(path: string, expected: TemporaryIdentity): void {
+  try {
+    const current = optionalLstat(path);
+    if (current?.isFile() && !current.isSymbolicLink() && current.dev === expected.dev && current.ino === expected.ino) {
+      rmSync(path);
+    }
+  } catch {
+    // Cleanup is best effort, but never removes a path whose identity we did not prove.
+  }
+}
+
+function canonicalWorkspace(workspaceCwd: string): string {
+  const workspace = realpathSync(resolve(workspaceCwd));
+  assertDirectory(workspace, "workspace root");
+  return workspace;
+}
+
+/** Validate every fixed target before a multi-file publisher changes any of them. */
+export function preflightSecureWorkspaceState(workspaceCwd: string, targets: readonly string[]): void {
+  const workspace = canonicalWorkspace(workspaceCwd);
+  for (const target of targets) {
+    const parts = assertRelativeTarget(target);
+    const { parent, directories } = ensurePrivateParent(workspace, parts);
+    for (const directory of directories) assertDirectoryIdentity(directory, workspace);
+    destinationIdentity(join(parent, parts.at(-1)!));
   }
 }
 
@@ -153,30 +239,43 @@ export function writeSecureWorkspaceState(
   options: SecureStateWriteOptions = {}
 ): void {
   const parts = assertRelativeTarget(target);
-  const workspace = realpathSync(resolve(workspaceCwd));
-  const workspaceEntry = assertDirectory(workspace, "workspace root");
-  if (!workspaceEntry.isDirectory()) throw stateError("workspace root is not a directory.");
-
+  const workspace = canonicalWorkspace(workspaceCwd);
   const { parent, directories } = ensurePrivateParent(workspace, parts);
   const destination = join(parent, parts.at(-1)!);
   const expectedDestination = destinationIdentity(destination);
   const temporary = join(parent, `.quorate-state-${process.pid}-${randomBytes(12).toString("hex")}.tmp`);
+  const context: SecureStateFaultContext = { temporaryPath: temporary, parentPath: parent, destinationPath: destination };
   let fd: number | undefined;
+  let temp: TemporaryIdentity | undefined;
+  let publicationConfirmed = false;
 
   try {
     fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, FILE_MODE);
-    if (platform() !== "win32") chmodSync(temporary, FILE_MODE);
+    if (platform() !== "win32") fchmodSync(fd, FILE_MODE);
+    temp = temporaryIdentity(fd);
     writeAll(fd, content);
     fsyncSync(fd);
-    options.fault?.("after-temp-fsync");
+    options.fault?.("after-temp-fsync", context);
+    assertTemporaryDescriptor(fd, temp);
+    assertTemporaryPathBound(temporary, temp);
     for (const directory of directories) assertDirectoryIdentity(directory, workspace);
     assertDestinationIdentity(destination, expectedDestination);
-    closeSync(fd);
-    fd = undefined;
     renameSync(temporary, destination);
-    fsyncDirectory(parent);
+    assertTemporaryDescriptor(fd, temp);
+    assertDestinationMatchesTemporary(destination, temp);
+    publicationConfirmed = true;
+    fsyncDirectory(parent, options, context);
   } finally {
-    if (fd !== undefined) closeSync(fd);
-    rmSync(temporary, { force: true });
+    if (fd !== undefined) {
+      if (!publicationConfirmed) {
+        try {
+          ftruncateSync(fd, 0);
+        } catch {
+          // Preserve the original publication failure; the path cleanup below remains identity-bound.
+        }
+      }
+      closeSync(fd);
+    }
+    if (!publicationConfirmed && temp) removeTemporaryIfStillOwned(temporary, temp);
   }
 }

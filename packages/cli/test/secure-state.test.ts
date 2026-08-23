@@ -1,5 +1,5 @@
-import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -62,5 +62,72 @@ describe("writeSecureWorkspaceState", () => {
     expect(existsSync(destination)).toBe(false);
     expect(existsSync(resolve(workspace, ".quorate"))).toBe(true);
     expect(lstatSync(resolve(workspace, ".quorate")).isDirectory()).toBe(true);
+  });
+
+  it("rejects a temporary path replaced with a symlink after fsync without publishing that symlink", () => {
+    const victim = join(outside, "victim.json");
+    const destination = join(workspace, ".quorate", "last-report.json");
+    writeFileSync(victim, "outside remains intact\n", "utf8");
+
+    expect(() => writeSecureWorkspaceState(workspace, ".quorate/last-report.json", "secret report\n", {
+      fault: (point) => {
+        if (point !== "after-temp-fsync") return;
+        const parent = join(workspace, ".quorate");
+        const temporary = readdirSync(parent).find((entry) => entry.startsWith(".quorate-state-"));
+        if (!temporary) throw new Error("expected temporary state file");
+        rmSync(join(parent, temporary));
+        symlinkSync(victim, join(parent, temporary));
+      }
+    })).toThrow(/temporary state file changed/i);
+
+    expect(readFileSync(victim, "utf8")).toBe("outside remains intact\n");
+    expect(existsSync(destination)).toBe(false);
+  });
+
+  it("zeros a moved temporary file when its parent is replaced after fsync", () => {
+    const stateDir = join(workspace, ".quorate");
+    const movedStateDir = join(workspace, ".quorate-moved");
+
+    expect(() => writeSecureWorkspaceState(workspace, ".quorate/last-report.json", "secret report\n", {
+      fault: (point) => {
+        if (point !== "after-temp-fsync") return;
+        renameSync(stateDir, movedStateDir);
+        mkdirSync(stateDir);
+      }
+    })).toThrow();
+
+    for (const entry of readdirSync(movedStateDir)) {
+      expect(readFileSync(join(movedStateDir, entry), "utf8")).toBe("");
+    }
+  });
+
+  it.skipIf(platform() === "win32")("preserves the workspace directory mode while making only state descendants private", () => {
+    chmodSync(workspace, 0o755);
+
+    writeSecureWorkspaceState(workspace, ".quorate/last-report.json", "report\n");
+
+    expect(statSync(workspace).mode & 0o777).toBe(0o755);
+    expect(statSync(join(workspace, ".quorate")).mode & 0o777).toBe(0o700);
+  });
+
+  it.each(["EINVAL", "ENOTSUP", "EOPNOTSUPP"])("succeeds when directory fsync is unsupported with %s", (code) => {
+    expect(() => writeSecureWorkspaceState(workspace, ".quorate/last-report.json", "report\n", {
+      fault: (point) => {
+        if ((point as string) === "before-directory-fsync") {
+          throw Object.assign(new Error(`injected ${code}`), { code });
+        }
+      }
+    })).not.toThrow();
+    expect(readFileSync(join(workspace, ".quorate", "last-report.json"), "utf8")).toBe("report\n");
+  });
+
+  it.skipIf(platform() === "win32")("propagates a real directory fsync EIO", () => {
+    expect(() => writeSecureWorkspaceState(workspace, ".quorate/last-report.json", "report\n", {
+      fault: (point) => {
+        if ((point as string) === "before-directory-fsync") {
+          throw Object.assign(new Error("injected EIO"), { code: "EIO" });
+        }
+      }
+    })).toThrow("injected EIO");
   });
 });
