@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Portable decision receipts for one-shot CLI, Action, and App reviews, with
+  input/revision, policy/configuration, provider and finding provenance, final
+  gate reasons, coverage limitations, and explicit content-integrity verification.
+- Offline `setup demo` fail → fix → pass journey, report-bound finding feedback,
+  and paired saved-report evaluation with explicit human labels and unknown metrics.
+- Opt-in adaptive execution with deterministic preflight, bounded provider
+  concurrency, policy-preserving role selection, and recorded routing reasons.
+- Versioned history duration/agreement measurements and bounded signed proof history.
+- Hosted App durable job recovery, delivery deduplication, per-PR serialization,
+  bounded admission, stale-revision checks, and graceful shutdown.
 - **`quorate contract check` (ContractCourt MVP)** — OpenAPI JSON/YAML drift
   detection with PASS/WARN/BLOCK rules, git-ref or before/after inputs,
   persisted `.quorate/contract/latest.{json,md}` artifacts, and a `--gate`
@@ -70,6 +80,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Invalid, empty, refused, or truncated provider responses fail their lane instead
+  of satisfying a real-provider coverage gate. Explicit valid empty findings remain valid.
+- Preserve corroborating provider identities through merge and reclustering.
+- Preserve contract array/item shape and disclose unsupported schema coverage.
+- Redact complete proof argument/output credentials before persistence and retain
+  byte caps across replacement and Unicode boundaries.
+- Apply hosted provider restrictions and canonical base policy/baseline/suppression
+  loading after configuration resolution; disallow provider credential redirects.
+- Bind VS Code fixes to their repository, report identity, and finding fingerprint.
+- Align custom executable readiness across doctor, provider tests, and shell setup;
+  JSON doctor formatting preserves its human-output exit status.
+- Include GitHub App build/typecheck and Docker smoke coverage in CI; retain
+  development build tools only in the image builder.
+- Update vulnerable transitive runtime/build dependencies while preserving the
+  existing Undici updates; regenerate the tracked Action bundle.
 - Pre-existing typecheck error in the live-spool truncate path.
 - The monitor web page now serves a strict Content-Security-Policy
   (`default-src 'none'`, same-origin connects only) on top of its existing

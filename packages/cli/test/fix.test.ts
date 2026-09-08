@@ -3,8 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Finding } from "@quorate/core";
-import { createFixSnapshot, finalizeFix, latestFix, listFixes, revertFix } from "../src/fix.js";
+import type { CouncilReport, Finding } from "@quorate/core";
+import { createFixSnapshot, finalizeFix, latestFix, listFixes, resolveBoundFixFinding, revertFix } from "../src/fix.js";
 import { buildFixPrompt, extractHunk } from "../src/fix-prompt.js";
 
 const FINDING: Finding = {
@@ -39,6 +39,19 @@ beforeEach(() => {
 afterEach(() => rmSync(repo, { recursive: true, force: true }));
 
 describe("fix snapshot + revert", () => {
+  it("binds editor fixes to the report run and fingerprint, independent of finding order", () => {
+    const target = { ...FINDING, fingerprint: "target" };
+    const report = { metadata: { reviewId: "review-1", generatedAt: "2026-09-08T12:00:00Z" }, findings: [{ ...FINDING, fingerprint: "other" }, target] } as CouncilReport;
+    const binding = { reportId: "review-1", reportGeneratedAt: report.metadata.generatedAt, findingFingerprint: "target" };
+    expect(resolveBoundFixFinding(report, binding)).toBe(target);
+    expect(resolveBoundFixFinding(report, {})).toBeUndefined();
+    expect(() => resolveBoundFixFinding(report, { reportId: "review-1" })).toThrow(/together/);
+    expect(() => resolveBoundFixFinding(report, { ...binding, reportId: "previous" })).toThrow(/saved review changed/);
+    expect(() => resolveBoundFixFinding(report, { ...binding, reportGeneratedAt: "previous" })).toThrow(/saved review changed/);
+    expect(() => resolveBoundFixFinding(report, { ...binding, findingFingerprint: "missing" })).toThrow(/missing or ambiguous/);
+    expect(() => resolveBoundFixFinding({ ...report, findings: [target, target] }, binding)).toThrow(/missing or ambiguous/);
+  });
+
   it("reverts agent edits to tracked files and deletes agent-created files", () => {
     const meta = createFixSnapshot(repo, FINDING, "claude");
     expect(meta.treeDirty).toBe(false);

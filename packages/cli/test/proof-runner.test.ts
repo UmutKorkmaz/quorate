@@ -9,6 +9,7 @@ import {
   loadProofArtifact,
   proofAttachmentFor,
   proofPaths,
+  redactProofText,
   runDetectedProofs,
   runProof,
   verifyLatestProof
@@ -43,6 +44,35 @@ afterAll(() => {
 });
 
 describe("ProofRunner Lite", () => {
+  it("redacts bare and quoted credentials including values cut off by the output cap", () => {
+    for (const text of [
+      "token=example-value", "password='two word secret'", '"api_key": "two word secret"',
+      "SERVICE_TOKEN=example-value", 'secret="partial secret', "authorization: Bearer example-value"
+    ]) {
+      const redacted = redactProofText(text);
+      expect(redacted).toContain("[REDACTED]");
+      expect(redacted).not.toMatch(/example-value|two word secret|partial secret/);
+    }
+  });
+
+  it("removes entire inline credential values from persisted and attached evidence", async () => {
+    const cwd = workspace();
+    const result = await runProof({
+      cwd, name: "inline-secrets",
+      command: [process.execPath, "-e", "console.log(process.argv.slice(1).join(' '))", "--",
+        "--token=EXAMPLE_SECRET_123", "--password", "OTHER_SECRET_456", "--keep=value"]
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.artifact.command.slice(-4)).toEqual([
+      "--token=[REDACTED]", "--password", "[REDACTED]", "--keep=value"
+    ]);
+    const evidence = [JSON.stringify(result.artifact), readFileSync(proofPaths(cwd).json, "utf8"),
+      readFileSync(proofPaths(cwd).markdown, "utf8"),
+      attachLatestProofToReview({ mode: "review", subject: "test", repoPath: cwd, diff: "diff" }).request.proof?.content].join("\n");
+    expect(evidence).not.toMatch(/EXAMPLE_SECRET_123|OTHER_SECRET_456/);
+    expect(verifyLatestProof(cwd).ok).toBe(true);
+  });
+
   it("runs a direct argv command, records a bounded redacted proof, and verifies it", async () => {
     const cwd = workspace();
     const marker = join(cwd, "must-not-exist");
@@ -115,6 +145,15 @@ describe("ProofRunner Lite", () => {
     expect(result.exitCode).toBe(0);
     expect(result.artifact.stdout).toMatchObject({ truncated: true });
     expect(Buffer.byteLength(result.artifact.stdout.text, "utf8")).toBeLessThanOrEqual(16);
+  });
+
+  it("preserves the byte cap after secret replacement and across Unicode boundaries", async () => {
+    for (const output of ["token=x 😃😃😃", "😃😃😃😃😃"]) {
+      const result = await runProof({ cwd: workspace(), name: "utf8-cap",
+        command: [process.execPath, "-e", `process.stdout.write(${JSON.stringify(output)})`], maxOutputBytes: 18 });
+      expect(Buffer.byteLength(result.artifact.stdout.text, "utf8")).toBeLessThanOrEqual(18);
+      expect(result.artifact.stdout.text).not.toContain("token=x");
+    }
   });
 
   it("rejects a tampered proof artifact", async () => {

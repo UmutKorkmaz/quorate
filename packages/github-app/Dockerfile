@@ -9,10 +9,9 @@ COPY packages/core/package.json      ./packages/core/package.json
 COPY packages/github-action/package.json ./packages/github-action/package.json
 COPY packages/github-app/package.json   ./packages/github-app/package.json
 
-RUN npm ci --workspace @quorate/core \
+RUN npm ci --include=dev --include-workspace-root --workspace @quorate/core \
            --workspace @quorate/github-action \
-           --workspace @quorate/github-app \
-    && npm ci --omit=dev
+           --workspace @quorate/github-app
 
 # ── build stage ──────────────────────────────────────────────────────────────
 FROM deps AS build
@@ -44,5 +43,12 @@ COPY packages/github-app/public ./public
 EXPOSE 3000
 
 ENV NODE_ENV=production
+ENV QUORATE_APP_STATE_DIR=/app/state
+RUN mkdir -p /app/state && chown node:node /app/state
+VOLUME ["/app/state"]
+
+USER node
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/health').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"
 
 CMD ["node", "dist/server.js"]

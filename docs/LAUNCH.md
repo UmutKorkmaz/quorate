@@ -20,8 +20,11 @@ market hypotheses until validated with design partners.
 
 ## Current launch dependency
 
-Phase 0 in [`ROADMAP.md`](./ROADMAP.md) is locally verified, and v1.1.0 follows
-the reviewed sequence in [`RELEASE-CHECKLIST.md`](./RELEASE-CHECKLIST.md).
+The public release is v1.3.0; v1.4 remains a local candidate. Follow the reviewed
+sequence in [`RELEASE-CHECKLIST.md`](./RELEASE-CHECKLIST.md). The local candidate
+now includes `setup demo`, report-bound feedback, and offline paired-report
+evaluation. These are preparation tools; publication and partner evidence below
+remain unfinished.
 
 ## Design-partner sprint
 

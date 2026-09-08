@@ -399,6 +399,11 @@ git add -f .quorate/suppressions.json && git commit -m "chore: suppress fixture 
           <InlineCode>reviewgraph-path</InlineCode> — the absolute path of ReviewGraph JSON when{" "}
           <InlineCode>reviewgraph-file</InlineCode> is set.
         </li>
+        <li>
+          <InlineCode>receipt-path</InlineCode> — v1.4 candidate: the portable decision JSON
+          in the runner temporary directory. Archive it with workflow artifacts; content
+          integrity does not attest execution.
+        </li>
       </ul>
 
       <h2>Runner choice</h2>

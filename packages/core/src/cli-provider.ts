@@ -404,6 +404,36 @@ export function parseFindings(output: string, providerId: string, role: string):
   return parseFindingsFromText(output, providerId, role);
 }
 
+/** A transport success is usable evidence only when the review itself parsed. */
+export function parseProviderReview(output: string, providerId: string, role: string): { findings: Finding[]; error?: string } {
+  const invalid = "Provider did not return a valid review. Return a JSON array (use [] for no findings) or severity-tagged findings.";
+  const payload = extractJsonPayload(output);
+  if (payload !== undefined) {
+    try {
+      const parsed: unknown = JSON.parse(payload);
+      if (Array.isArray(parsed)) {
+        const findings = parsed.map((item) => findingFromJson(item, providerId, role))
+          .filter((finding): finding is Finding => finding !== undefined);
+        if (findings.length === 0) {
+          const textFindings = parseFindingsFromText(output, providerId, role);
+          if (textFindings.length > 0) return { findings: textFindings, error: invalid };
+        }
+        return findings.length === parsed.length ? { findings } : { findings, error: invalid };
+      }
+      return { findings: parseFindingsFromText(output, providerId, role), error: invalid };
+    } catch {
+      // Markdown severity tags also look like brackets; only genuine JSON
+      // candidates are failures here, rather than the legacy finding format.
+      if (/```json\b/i.test(output) || /^\s*\[\s*(?:[\[\]{}"\d-]|true\b|false\b|null\b)/.test(payload)) {
+        return { findings: parseFindingsFromText(output, providerId, role), error: invalid };
+      }
+    }
+  }
+  const findings = parseFindingsFromText(output, providerId, role);
+  if (findings.length > 0 || /^\s*No (?:findings|issues)(?: found)?[.!]?\s*$/i.test(output)) return { findings };
+  return { findings, error: invalid };
+}
+
 function firstMeaningfulLine(output: string): string {
   return output
     .split(/\r?\n/)
@@ -548,9 +578,10 @@ export async function runCliProvider(
     // Redact once at the source: summary, findings, rawOutput, and error all
     // flow into last-report.json, --write-* exports, and the doctor bundle.
     const redactedOutput = redactSecrets(combinedOutput, envSecrets) ?? combinedOutput;
-    const findings = parseFindings(redactedOutput, provider.id, role);
+    const review = parseProviderReview(redactedOutput, provider.id, role);
+    const findings = review.findings;
 
-    if (result.timedOut || result.exitCode !== 0) {
+    if (result.timedOut || result.exitCode !== 0 || result.outputTruncated) {
       return {
         providerId: provider.id,
         role,
@@ -564,6 +595,14 @@ export async function runCliProvider(
         findings,
         rawOutput: redactedOutput,
         error: redactedOutput || result.signal || "Provider failed.",
+        durationMs: Date.now() - startedAt
+      };
+    }
+
+    if (review.error) {
+      return {
+        providerId: provider.id, role, providerType: provider.type, status: "error",
+        summary: review.error, error: review.error, findings, rawOutput: redactedOutput,
         durationMs: Date.now() - startedAt
       };
     }

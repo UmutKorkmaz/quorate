@@ -5,7 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import { build } from "esbuild";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { historyPath } from "../src/history-command.js";
+import { appendHistoryNow, historyPath } from "../src/history-command.js";
+import { createDefaultConfig, runCouncil } from "@quorate/core";
 import { runContractCheck } from "../src/contract-command.js";
 import { runProof } from "../src/proof-runner.js";
 import { appendApprovalAuditRecord, type ApprovalAuditDecision } from "../src/trust-ledger.js";
@@ -133,6 +134,24 @@ function stripGeneratedAt(report: MetricsReport): Record<string, unknown> {
 }
 
 describe("quorate metrics", () => {
+  it("measures the normal council-to-history path", async () => {
+    const cwd = workspace();
+    const report = await runCouncil({ mode: "review", subject: "metrics", diff: "", repoPath: cwd }, createDefaultConfig());
+    await appendHistoryNow(cwd, report);
+    const metrics = await collectMetrics({ cwd });
+    expect(metrics.history.runs).toBe(1);
+    expect(metrics.history.medianDurationMs).toEqual(expect.any(Number));
+  });
+
+  it("retains verified proof outcomes across successive runs without trusting tampered archives", async () => {
+    const cwd = workspace();
+    const passed = await runProof({ cwd, name: "first", command: [process.execPath, "-e", ""] });
+    await runProof({ cwd, name: "second", command: [process.execPath, "-e", "process.exit(3)"] });
+    expect((await collectMetrics({ cwd })).proofs).toMatchObject({ artifacts: 2, passRate: 0.5, passed: false });
+    writeFileSync(join(cwd, ".quorate/proofs/history", `${passed.artifact.artifactHash}.json`), "{}");
+    expect((await collectMetrics({ cwd })).proofs).toMatchObject({ artifacts: 1, passRate: 0 });
+  });
+
   it("returns a valid all-zero report when every store is empty", async () => {
     const cwd = workspace();
     const report = await collectMetrics({ cwd });
@@ -311,7 +330,7 @@ describe("quorate metrics", () => {
     writeContract(cwd, { ...artifact, verdict: "block" });
     const tampered = await collectBundledMetrics(cwd);
     expect(tampered.contract).toBeUndefined();
-  });
+  }, 20_000); // Multiple bounded child-process launches also run in the full parallel suite.
 
   it("aggregates verified approval decisions from the trust ledger", async () => {
     const dir = join(home, ".quorate", "audit");

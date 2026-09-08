@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { computeStats, type HistoryEntry, type Severity } from "@quorate/core";
 import { readContractArtifact, validateContractArtifact, type ContractArtifact } from "./contract-command.js";
 import { readHistory } from "./history-command.js";
-import { verifyLatestProof } from "./proof-runner.js";
+import { readProofHistory, verifyLatestProof } from "./proof-runner.js";
 import { exportApprovalAuditRecords, verifyApprovalAuditLedger } from "./trust-ledger.js";
 
 /**
@@ -54,7 +54,7 @@ export interface ProofMetrics {
   timedOut: boolean;
   durationMs: number;
   finishedAt: string;
-  /** Signed artifacts currently retained on disk (today: latest only). */
+  /** Verified signed proof runs retained on disk (up to 100). */
   artifacts: number;
   /** Passed artifacts / retained artifacts. */
   passRate: number;
@@ -98,11 +98,9 @@ async function collectHistory(cwd: string): Promise<HistoryMetrics> {
   const durations: number[] = [];
   const agreements: number[] = [];
   for (const entry of entries) {
-    // The persisted schema records verdicts and finding counts today; durations
-    // and council agreement are aggregated only when a run record carries them.
-    const durationMs = (entry as { durationMs?: unknown }).durationMs;
+    const durationMs = entry.durationMs;
     if (typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs >= 0) durations.push(durationMs);
-    const agreement = (entry as { agreement?: unknown }).agreement;
+    const agreement = entry.agreement;
     if (typeof agreement === "number" && Number.isFinite(agreement) && agreement >= 0 && agreement <= 1) {
       agreements.push(agreement);
     }
@@ -149,6 +147,7 @@ function collectProofs(cwd: string): ProofMetrics | undefined {
     const artifact = verification.artifact;
     if (!verification.ok || !artifact) return undefined;
     const passed = artifact.exitCode === 0 && !artifact.timedOut;
+    const history = readProofHistory(cwd);
     return {
       name: artifact.name,
       passed,
@@ -156,8 +155,8 @@ function collectProofs(cwd: string): ProofMetrics | undefined {
       timedOut: artifact.timedOut,
       durationMs: artifact.durationMs,
       finishedAt: artifact.finishedAt,
-      artifacts: 1,
-      passRate: passed ? 1 : 0
+      artifacts: history.length,
+      passRate: history.filter((run) => run.exitCode === 0 && !run.timedOut).length / history.length
     };
   } catch {
     return undefined;

@@ -3,7 +3,7 @@ import { platform, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDefaultConfig, serializeConfig } from "@quorate/core";
+import { createDefaultConfig, serializeConfig, validateDecisionRecord } from "@quorate/core";
 import { buildProgram } from "../src/index.js";
 
 let dir: string;
@@ -41,6 +41,99 @@ function captureLog(): string[] {
 }
 
 describe("v0.10 CLI feature surfaces", () => {
+  it.each([false, true])("preserves required adaptive roles in CLI review (json=%s)", async (json) => {
+    writeConfig({ councils: ["security", "maintainer"], providers: [{ id: "fixture", type: "cli", enabled: true,
+      command: process.execPath, args: ["-e", "process.stdin.resume(); process.stdin.on('end', () => console.log('[]'));"], roles: ["security", "maintainer"] }],
+      execution: { mode: "adaptive", maxParallelProviders: 1 } });
+    mkdirSync(resolve(dir, ".quorate"));
+    writeFileSync(resolve(dir, ".quorate/policy.yml"), "roles_required: [security]\nverdict:\n  fail_on: never\n");
+    writeFileSync(resolve(dir, "change.diff"), "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n");
+    captureLog();
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "review", "--diff", "change.diff", "--write-json", "report.json", ...(json ? ["--json"] : [])], { from: "node" });
+    const report = JSON.parse(readFileSync(resolve(dir, "report.json"), "utf8"));
+    expect(report.metadata.routing.selected).toContainEqual(expect.objectContaining({ providerId: "fixture", role: "security", reason: "Required by policy" }));
+    expect(report.metadata.decision.coverage.completed).toContain("fixture:security");
+  });
+
+  it("exports the final decision and verifies its exact input without claiming a diff file describes the checkout", async () => {
+    writeConfig();
+    writeFileSync(resolve(dir, "change.diff"), "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n");
+    captureLog();
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "review", "--diff", "change.diff", "--fail-on", "never", "--write-json", "report.json", "--write-receipt", "receipt.json"], { from: "node" });
+    const receipt = JSON.parse(readFileSync(resolve(dir, "receipt.json"), "utf8"));
+    expect(validateDecisionRecord(receipt)).toBe(true);
+    expect(receipt.source).toEqual({ kind: "diff" });
+    expect(receipt.policy.value.failOn).toBe("never");
+    expect(JSON.parse(readFileSync(resolve(dir, "report.json"), "utf8")).metadata.decision).toEqual(receipt);
+    expect(JSON.parse(readFileSync(resolve(dir, ".quorate", "decision.json"), "utf8"))).toEqual(receipt);
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "audit", "verify", "--receipt", "receipt.json", "--diff", "change.diff", "--json"], { from: "node" });
+    expect(process.exitCode).toBeUndefined();
+    writeFileSync(resolve(dir, "change.diff"), "changed input");
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "audit", "verify", "--receipt", "receipt.json", "--diff", "change.diff", "--json"], { from: "node" });
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "audit", "verify", "--receipt", "receipt.json", "--current", "--json"], { from: "node" });
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("runs and replays the offline setup demo with blocked and passing exit codes", async () => {
+    const output = captureLog();
+    const target = resolve(dir, "demo");
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "setup", "demo", "demo"], { from: "node" });
+    expect(output.join("\n")).toContain("3. PASSED");
+    expect(output.join("\n")).toContain(target);
+    expect(process.exitCode).toBeUndefined();
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", target, "supply-chain", "scan", "--diff", "before.diff", "--gate"], { from: "node" });
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", target, "supply-chain", "scan", "--diff", "after.diff", "--gate"], { from: "node" });
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("refuses stale editor fix handoffs before opening a terminal or taking a snapshot", async () => {
+    mkdirSync(resolve(dir, ".quorate"));
+    writeFileSync(resolve(dir, ".quorate", "last-report.json"), JSON.stringify({
+      metadata: { reviewId: "current", generatedAt: "2026-09-08T12:00:00Z" },
+      findings: [{ fingerprint: "finding", file: "a.ts", severity: "high", title: "Fix this", body: "detail" }]
+    }));
+    await expect(buildProgram().parseAsync([
+      "node", "quorate", "--cwd", dir, "fix", "--report-id", "previous", "--report-generated-at", "2026-09-08T12:00:00Z", "--finding-fingerprint", "finding"
+    ], { from: "node" })).rejects.toThrow(/saved review changed/);
+    expect(existsSync(resolve(dir, ".quorate", "fix"))).toBe(false);
+    captureLog();
+    await buildProgram().parseAsync([
+      "node", "quorate", "--cwd", dir, "fix", "--list", "--report-id", "current", "--report-generated-at", "2026-09-08T12:00:00Z", "--finding-fingerprint", "finding"
+    ], { from: "node" });
+    expect(existsSync(resolve(dir, ".quorate", "fix"))).toBe(false);
+  });
+
+  it("preserves doctor risk failure status when JSON output is selected", async () => {
+    writeConfig();
+    const output = captureLog();
+    for (const format of [[], ["--json"]]) {
+      process.exitCode = undefined;
+      output.length = 0;
+      await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "doctor", "--risk", ...format], { from: "node" });
+      expect(process.exitCode).toBe(1);
+      if (format.length > 0) expect(JSON.parse(output.join("\n")).items).toContainEqual(expect.objectContaining({ level: "risk", label: "Real providers" }));
+      else expect(output.join("\n")).toContain("Real providers");
+    }
+  });
+
+  it("prints a structured doctor readiness report without dumping provider configuration", async () => {
+    writeConfig();
+    const output = captureLog();
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "doctor", "--json"], { from: "node" });
+    const report = JSON.parse(output.join("\n"));
+    expect(report).toMatchObject({ schema: 1, status: "degraded", verification: "configuration" });
+    expect(report.environment.node.supported).toBe(true);
+    expect(report.nextSteps).toContain("quorate setup demo");
+    expect(report).not.toHaveProperty("config");
+    expect(process.exitCode).toBeUndefined();
+  });
+
   it("rejects a symlinked review report destination without changing the outside victim", async () => {
     writeConfig();
     writeFileSync(resolve(dir, "change.diff"), "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1,2 @@\n-old\n+new\n", "utf8");

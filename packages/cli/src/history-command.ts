@@ -1,4 +1,5 @@
-import { createReadStream } from "node:fs";
+import { constants, createReadStream } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, open, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -31,6 +32,82 @@ const MAX_TAIL_LINES_MULTIPLIER = 10;
 
 export function historyPath(cwd: string): string {
   return join(HISTORY_ROOT, `${repoHash(cwd)}.jsonl`);
+}
+
+export const FEEDBACK_OUTCOMES = ["confirmed", "false-positive", "accepted-risk", "fixed"] as const;
+export type FeedbackOutcome = (typeof FEEDBACK_OUTCOMES)[number];
+export interface FindingFeedback {
+  schema: 1;
+  feedbackId: string;
+  createdAt: string;
+  reviewId: string;
+  reportGeneratedAt: string;
+  reportHash: string;
+  fingerprint: string;
+  outcome: FeedbackOutcome;
+  reason: string;
+}
+
+/** Human labels are stored separately from history, policies, and suppressions. */
+export function feedbackPath(cwd: string): string {
+  return join(HISTORY_ROOT, `${repoHash(cwd)}.feedback.jsonl`);
+}
+
+export async function recordFindingFeedback(cwd: string, report: CouncilReport, options: {
+  finding?: number;
+  fingerprint?: string;
+  outcome: string;
+  reason: string;
+}): Promise<FindingFeedback> {
+  if (!FEEDBACK_OUTCOMES.includes(options.outcome as FeedbackOutcome)) throw new Error(`Outcome must be one of ${FEEDBACK_OUTCOMES.join(", ")}.`);
+  const reason = options.reason.trim();
+  if (!reason || reason.length > 5000) throw new Error("Feedback requires a reason of 1–5000 characters.");
+  if ((options.finding === undefined) === (options.fingerprint === undefined)) throw new Error("Choose exactly one of --finding or --fingerprint; use feedback targets to list the saved findings.");
+  if (!report.metadata?.reviewId || !Number.isFinite(Date.parse(report.metadata.generatedAt))) throw new Error("The report has no valid review identity. Run a new review first.");
+  let fingerprint = options.fingerprint;
+  if (options.finding !== undefined) {
+    if (!Number.isSafeInteger(options.finding) || options.finding < 1 || options.finding > report.findings.length) throw new Error("Finding number is outside this report; use feedback targets.");
+    fingerprint = report.findings[options.finding - 1].fingerprint;
+  }
+  if (!fingerprint || report.findings.filter((finding) => finding.fingerprint === fingerprint).length !== 1) throw new Error("The finding fingerprint is missing or ambiguous. Run a new review first.");
+  const entry: FindingFeedback = {
+    schema: 1, feedbackId: randomUUID(), createdAt: new Date().toISOString(),
+    reviewId: report.metadata.reviewId, reportGeneratedAt: report.metadata.generatedAt,
+    reportHash: createHash("sha256").update(JSON.stringify(report)).digest("hex"),
+    fingerprint, outcome: options.outcome as FeedbackOutcome, reason
+  };
+  const path = feedbackPath(cwd);
+  await mkdir(dirname(path), { recursive: true, mode: HISTORY_DIR_MODE });
+  const handle = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | constants.O_NOFOLLOW | constants.O_NONBLOCK, HISTORY_FILE_MODE);
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error("Feedback destination must be a regular file.");
+    await handle.chmod(HISTORY_FILE_MODE);
+    await handle.appendFile(`${JSON.stringify(entry)}\n`, "utf8");
+  } finally { await handle.close(); }
+  return entry;
+}
+
+export async function readFindingFeedback(cwd: string): Promise<FindingFeedback[]> {
+  let handle;
+  try { handle = await open(feedbackPath(cwd), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return []; throw error; }
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.size > 8 * 1024 * 1024) throw new Error("Feedback store must be a regular file smaller than 8 MiB.");
+    const lines = (await handle.readFile("utf8")).split(/\r?\n/).filter(Boolean);
+    return lines.map((line, index) => {
+      let row: Partial<FindingFeedback>;
+      try { row = JSON.parse(line) as Partial<FindingFeedback>; }
+      catch { throw new Error(`Invalid feedback record at line ${index + 1}.`); }
+      if (!row || row.schema !== 1 || typeof row.feedbackId !== "string" || !row.feedbackId || typeof row.reviewId !== "string" || !row.reviewId ||
+        typeof row.createdAt !== "string" || !Number.isFinite(Date.parse(row.createdAt)) ||
+        typeof row.reportGeneratedAt !== "string" || !Number.isFinite(Date.parse(row.reportGeneratedAt)) ||
+        typeof row.reportHash !== "string" || !/^[0-9a-f]{64}$/.test(row.reportHash) ||
+        typeof row.fingerprint !== "string" || !row.fingerprint || !FEEDBACK_OUTCOMES.includes(row.outcome as FeedbackOutcome) ||
+        typeof row.reason !== "string" || !row.reason.trim() || row.reason.length > 5000) throw new Error(`Invalid feedback record at line ${index + 1}.`);
+      return row as FindingFeedback;
+    }).reverse();
+  } finally { await handle.close(); }
 }
 
 export async function appendHistoryNow(cwd: string, report: CouncilReport): Promise<void> {
@@ -134,6 +211,10 @@ const CONTROL_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
 function cleanCell(value: string, max = 180): string {
   const cleaned = value.replace(ANSI_RE, "").replace(CONTROL_RE, "").replace(/\s+/g, " ").trim();
   return cleaned.length > max ? `${cleaned.slice(0, max - 3)}...` : cleaned;
+}
+
+export function formatFindingFeedback(entries: FindingFeedback[]): string {
+  return entries.length > 0 ? entries.map((row) => `${cleanCell(row.createdAt)} ${cleanCell(row.outcome)} ${cleanCell(row.fingerprint)}\n  ${cleanCell(row.reason, 500)}`).join("\n") : "No finding feedback recorded.";
 }
 
 const VERDICT_GLYPH: Record<Verdict, string> = { pass: "◆", warn: "▲", fail: "✖" };

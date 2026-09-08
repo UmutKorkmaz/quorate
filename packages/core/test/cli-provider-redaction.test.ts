@@ -26,7 +26,7 @@ describe("provider result redaction", () => {
   it("redacts secrets from rawOutput on ok runs", async () => {
     const result = await runCliProvider(
       cliProvider(
-        "console.log('review complete'); console.error('api_key=sk-ant-api3-AAAAAAAAAAAAAAAAAAAAAAAA');"
+        "console.log('- [info] review complete: fixture finding'); console.error('api_key=sk-ant-api3-AAAAAAAAAAAAAAAAAAAAAAAA');"
       ),
       "maintainer",
       request
@@ -68,7 +68,7 @@ describe("provider result redaction", () => {
     expect(failing.error).toContain("Bearer [redacted]");
 
     const ok = await runCliProvider(
-      cliProvider("console.log('sk-ant-api3-AAAAAAAAAAAAAAAAAAAAAAAA reviewed diff');"),
+      cliProvider("console.log('- [info] sk-ant-api3-AAAAAAAAAAAAAAAAAAAAAAAA reviewed diff: fixture finding');"),
       "maintainer",
       request
     );
@@ -82,7 +82,7 @@ describe("provider result redaction", () => {
   it("redacts provider-configured env values from output", async () => {
     const result = await runCliProvider(
       {
-        ...cliProvider("console.log('token ' + process.env.QUORATE_TEST_TOKEN);"),
+        ...cliProvider("console.log('- [info] Fixture: token ' + process.env.QUORATE_TEST_TOKEN);"),
         env: { QUORATE_TEST_TOKEN: "env-secret-value-123456" }
       },
       "maintainer",

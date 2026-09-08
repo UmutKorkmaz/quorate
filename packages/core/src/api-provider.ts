@@ -1,4 +1,4 @@
-import { parseFindings } from "./cli-provider.js";
+import { parseProviderReview } from "./cli-provider.js";
 import { buildReviewPrompt } from "./prompt.js";
 import { redactSecrets } from "./redact.js";
 import type { CouncilRequest, ProviderConfig, ProviderResult } from "./types.js";
@@ -106,6 +106,7 @@ export async function runApiProvider(
   try {
     const response = await fetch(url, {
       method: "POST",
+      redirect: "error",
       headers,
       body: JSON.stringify({
         model,
@@ -129,10 +130,11 @@ export async function runApiProvider(
     }
 
     const json = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
+      choices?: Array<{ finish_reason?: string | null; message?: { content?: unknown; refusal?: unknown } }>;
     };
 
-    const rawContent = json.choices?.[0]?.message?.content;
+    const choice = json.choices?.[0];
+    const rawContent = choice?.message?.content;
     const text = typeof rawContent === "string" ? rawContent : "";
 
     const originalOutputTruncated = Buffer.byteLength(text) > maxOutputBytes;
@@ -143,15 +145,20 @@ export async function runApiProvider(
       ? Buffer.from(redactedText).subarray(0, maxOutputBytes).toString("utf8")
       : redactedText;
 
-    const findings = parseFindings(output, provider.id, role);
+    const review = parseProviderReview(output, provider.id, role);
+    const incomplete = choice?.finish_reason != null && choice.finish_reason !== "stop";
+    const error = outputTruncated
+      ? `Provider output truncated to ${maxOutputBytes} bytes; the review is incomplete.`
+      : incomplete || choice?.message?.refusal
+        ? "Provider did not complete a valid review (generation stopped early or was refused)."
+        : review.error;
 
     return {
       ...base,
-      status: "ok",
-      summary: outputTruncated
-        ? `Provider output truncated to ${maxOutputBytes} bytes.`
-        : firstMeaningfulLine(output),
-      findings,
+      status: error ? "error" : "ok",
+      summary: error ?? firstMeaningfulLine(output),
+      ...(error ? { error } : {}),
+      findings: review.findings,
       rawOutput: output || undefined,
       durationMs: Date.now() - startedAt
     };

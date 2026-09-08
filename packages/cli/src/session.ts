@@ -4,6 +4,7 @@ import {
   findConfigPath,
   formatSpawnArgv,
   glyphs,
+  isLocalBaseUrl,
   type QuorateConfig,
   type CouncilMode,
   type CouncilReport,
@@ -253,7 +254,11 @@ export function setupText(state: ShellState): string {
   );
 
   const lines = [
-    `Setup wizard ${g.separator} get your council ready`,
+    `Setup guide ${g.separator} get your council ready`,
+    "",
+    "First gate (offline, no provider required)",
+    "   Run quorate setup demo in a terminal: blocked example → corrected diff → passing gate.",
+    "   Evidence is saved in a new temporary directory; your project is not changed.",
     "",
     "1. Config",
     configPath
@@ -292,9 +297,13 @@ export function setupText(state: ShellState): string {
   lines.push(
     "3. Guided flow",
     "   /git                  load git working tree (or /git main HEAD)",
-    "   /use available        enable every runnable agent for this session",
+    runnable.length > 0
+      ? `   /use ${runnable[0].id}              opt in to one reviewer for this session`
+      : "   /providers            find a reviewer to install or configure",
     "   /review               convene the council on the loaded diff",
     "",
+    "   /use available        opt in to all runnable reviewers (more time and usage)",
+    "   Provider readiness checks configuration; authentication is tested by the actual review.",
     "   /doctor               full readiness verdict",
     "   /inspect              session + spawn status"
   );
@@ -427,14 +436,21 @@ export function isRunnableProvider(
   // An api provider is runnable when it's configured — a model plus, if it names
   // an apiKeyEnv, that env var being set. PATH detection does not apply to it.
   if (provider.type === "api") {
-    return Boolean(provider.model) && (!provider.apiKeyEnv || Boolean(process.env[provider.apiKeyEnv]));
+    return Boolean(provider.model) && (!provider.apiKeyEnv || Boolean(process.env[provider.apiKeyEnv]) || isLocalBaseUrl(provider.baseUrl ?? ""));
   }
   return available && (provider.args?.length ?? 0) > 0 && Boolean(provider.inputMode);
 }
 
+/** Resolve the executable each configured provider will actually spawn. */
+function detectConfiguredProviders(config: QuorateConfig): ReturnType<typeof detectAvailableProviders> {
+  return detectAvailableProviders(config.providers
+    .filter((provider) => provider.type === "cli")
+    .map((provider) => ({ id: provider.id, command: provider.command ?? provider.id })));
+}
+
 export function availableProviderIds(
   state: ShellState,
-  detected = detectAvailableProviders()
+  detected = detectConfiguredProviders(state.config)
 ): string[] {
   const available = new Map(detected.map((provider) => [provider.id, provider.available]));
   return state.config.providers
@@ -447,7 +463,7 @@ export function availableProviderIds(
 export function resolveUseProviders(
   state: ShellState,
   requested: string[],
-  detected = detectAvailableProviders()
+  detected = detectConfiguredProviders(state.config)
 ): string[] | undefined {
   if (requested.length === 0 || requested.includes("default")) return undefined;
   if (requested.includes("available")) return availableProviderIds(state, detected);
@@ -469,7 +485,7 @@ export function spawnPreviewText(config: QuorateConfig, request: CouncilRequest)
 
 export function providerRunPreflight(
   config: QuorateConfig,
-  detected = detectAvailableProviders()
+  detected = detectConfiguredProviders(config)
 ): string[] {
   const available = new Map(detected.map((provider) => [provider.id, provider.available]));
   return config.providers
@@ -478,7 +494,7 @@ export function providerRunPreflight(
       if (provider.type === "mock") return [];
       if (provider.type === "api") {
         if (!provider.model) return [`${provider.id} (api) has no model configured.`];
-        if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv]) {
+        if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv] && !isLocalBaseUrl(provider.baseUrl ?? "")) {
           return [`${provider.id} (api) is missing its key — set ${provider.apiKeyEnv}.`];
         }
         return [];
@@ -489,8 +505,7 @@ export function providerRunPreflight(
     });
 }
 
-export function providerSnapshots(state: ShellState): ProviderSnapshot[] {
-  const detected = detectAvailableProviders();
+export function providerSnapshots(state: ShellState, detected = detectConfiguredProviders(state.config)): ProviderSnapshot[] {
   const detectedById = new Map(detected.map((provider) => [provider.id, provider]));
 
   return state.config.providers.map((provider) => {

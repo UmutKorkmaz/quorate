@@ -1,13 +1,57 @@
-import type { QuorateConfig } from "@quorate/core";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { buildSupplyChainReport, renderMarkdownReport, resolvePolicy, serializeConfig, shouldFailForPolicy, type CouncilReport, type QuorateConfig } from "@quorate/core";
 
 /**
- * Onboarding generators: write safe starter files and surface a repo risk
- * report. Pure functions (string in, string/object out) so they're unit-testable;
- * the command layer handles filesystem writes and console output.
+ * Onboarding generators and repository risk reports, plus an explicitly invoked
+ * offline demonstration that writes only into a new directory.
  */
 
 const ACTION_REF = "UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303";
 const VSCODE_EXTENSION_ID = "umutkorkmaz.quorate-vscode";
+
+/** A reproducible, offline first gate. Only a new directory is written. */
+export function runSetupDemo(cwd: string, target?: string): { directory: string; before: CouncilReport; after: CouncilReport } {
+  const directory = target ? resolve(cwd, target) : mkdtempSync(join(tmpdir(), "quorate-demo-"));
+  if (target) mkdirSync(directory, { mode: 0o700 }); // EEXIST protects existing work, including symlinks.
+  const config: QuorateConfig = {
+    councils: ["maintainer"],
+    providers: [{ id: "heuristic", type: "mock", enabled: true, roles: ["maintainer"] }],
+    github: { commentMode: "update", failOn: "medium", runnerMode: "auto" }
+  };
+  const diffFor = (ref: string): string => [
+    "diff --git a/.github/workflows/example.yml b/.github/workflows/example.yml",
+    "new file mode 100644", "--- /dev/null", "+++ b/.github/workflows/example.yml", "@@ -0,0 +1,9 @@",
+    "+name: Example", "+on: pull_request", "+permissions:", "+  contents: read", "+jobs:",
+    "+  test:", "+    runs-on: ubuntu-latest", "+    steps:", `+      - uses: actions/checkout@${ref}`, ""
+  ].join("\n");
+  const beforeDiff = diffFor("v4");
+  // Same immutable checkout reference as this project's CI; the demo checks pinning, not advisory status.
+  const afterDiff = diffFor("11d5960a326750d5838078e36cf38b85af677262");
+  const review = (diff: string): CouncilReport => buildSupplyChainReport({
+    mode: "review", subject: "First gate: pin a workflow action", diff, repoPath: directory, repositoryFiles: []
+  }, config);
+  const before = review(beforeDiff);
+  const after = review(afterDiff);
+  const policy = resolvePolicy(config);
+  if (!shouldFailForPolicy(before, policy) || shouldFailForPolicy(after, policy) || after.findings.length !== 0) {
+    throw new Error(`The demo did not produce the expected blocked-to-passing gate. Inspect ${directory}.`);
+  }
+  const files: Record<string, string> = {
+    ".quorate.yml": serializeConfig(config),
+    "before.diff": beforeDiff,
+    "after.diff": afterDiff,
+    "blocked.json": `${JSON.stringify(before, null, 2)}\n`,
+    "passed.json": `${JSON.stringify(after, null, 2)}\n`,
+    "blocked.md": renderMarkdownReport(before),
+    "passed.md": renderMarkdownReport(after)
+  };
+  for (const [name, content] of Object.entries(files)) {
+    writeFileSync(join(directory, name), content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+  }
+  return { directory, before, after };
+}
 
 /** A starter `.github/workflows/quorate.yml`. Heuristic runs with zero setup; a
  *  `type: api` provider in `.quorate.yml` (+ its key secret) enables real review. */
@@ -25,9 +69,11 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: ${ACTION_REF}
-        # Already pinned to the reviewed v1.2.1 Action bundle commit.
+        # Pinned to a reviewed immutable Action bundle commit.
         # Add a type: api provider to .quorate.yml and pass its key here to get
         # real model review (e.g. OPENROUTER_API_KEY). The heuristic always runs.
         # env:

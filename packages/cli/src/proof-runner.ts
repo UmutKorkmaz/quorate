@@ -1,14 +1,18 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { StringDecoder } from "node:string_decoder";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import type { CouncilRequest } from "@quorate/core";
+import { writeSecureWorkspaceState } from "./secure-state.js";
 
 const PROOF_SCHEMA_VERSION = 1;
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
 const REVIEW_EVIDENCE_MAX_BYTES = 8 * 1024;
+const PROOF_HISTORY_LIMIT = 100;
+const MAX_PROOF_ARTIFACT_BYTES = 16 * 1024 * 1024;
 
 export interface ProofOutput {
   text: string;
@@ -137,16 +141,18 @@ function fallbackFingerprint(root: string): WorktreeFingerprint {
 }
 
 /** Content-derived snapshot of HEAD, tracked changes, and untracked files (excluding ignored proof output). */
-export function getWorktreeFingerprint(cwd: string): WorktreeFingerprint {
+export function getWorktreeFingerprint(cwd: string, excludedState: readonly string[] = []): WorktreeFingerprint {
   const root = resolve(cwd);
   const head = gitText(root, ["rev-parse", "HEAD"]);
-  const diff = gitText(root, ["diff", "--binary", "--no-ext-diff", "HEAD"]);
+  const diff = gitText(root, ["diff", "--binary", "--no-ext-diff", "HEAD",
+    ...(excludedState.length ? ["--", ".", ...excludedState.map((path) => `:(exclude,literal)${path}`)] : [])]);
   const untracked = gitText(root, ["ls-files", "--others", "--exclude-standard", "-z"]);
   if (head === undefined || diff === undefined || untracked === undefined) return fallbackFingerprint(root);
 
   // A proof must not make itself stale in repositories that do not yet ignore
   // `.quorate/proofs/`. Other `.quorate` state remains part of the snapshot.
-  const untrackedFiles = untracked.split("\0").filter((path) => path && !path.startsWith(".quorate/proofs/")).sort().map((path) => {
+  const untrackedFiles = untracked.split("\0").filter((path) => path && !path.startsWith(".quorate/proofs/") &&
+    !excludedState.some((excluded) => path === excluded || path.startsWith(`${excluded}/`))).sort().map((path) => {
     const full = resolve(root, path);
     try {
       const stat = lstatSync(full);
@@ -187,19 +193,33 @@ function secureProofPaths(cwd: string, create: boolean): { dir: string; json: st
   return { dir, json: join(dir, "latest.json"), markdown: join(dir, "latest.md") };
 }
 
+const SECRET_NAME = /(?:token|secret|password|api[-_]?key|authorization|credential|^auth$)/i;
+const SECRET_FLAG = /^--?([^=\s]+)(?:=([\s\S]*))?$/;
+
 export function redactProofText(text: string): string {
   return text
+    .replace(/\b([A-Za-z_][A-Za-z0-9_-]*)(["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|Bearer\s+[^\s,;]+|[^\s'"`,;]+)/gi,
+      (match, name: string, separator: string, value: string) => {
+        if (!SECRET_NAME.test(name)) return match;
+        const quote = value[0] === '"' || value[0] === "'" ? value[0] : "";
+        return `${name}${separator}${/^Bearer\s/i.test(value) ? "Bearer " : quote}[REDACTED]${quote}`;
+      })
+    .replace(/(--?[^=\s]+)\s+("(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?|[^\s]+)/g,
+      (match, flag: string) => SECRET_NAME.test(flag.replace(/^-+/, "")) ? `${flag} [REDACTED]` : match)
     .replace(/\bsk-[A-Za-z0-9_-]{4,}\b/g, "[REDACTED]")
     .replace(/\b(?:ghp|github_pat|xox[baprs])_[A-Za-z0-9_-]{8,}\b/gi, "[REDACTED]")
-    .replace(/\b(bearer|token)\s+[A-Za-z0-9._~+\/-]{8,}\b/gi, "$1 [REDACTED]")
-    .replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:token|secret|password|api[_-]?key)[A-Za-z0-9_]*)\s*([=:])\s*([^\s'"`]+)/gi, "$1$2[REDACTED]");
+    .replace(/\b(bearer|token)\s+[A-Za-z0-9._~+\/-]{8,}\b/gi, "$1 [REDACTED]");
 }
 
 function redactProofCommand(command: string[]): string[] {
-  const secretFlag = /^--?(?:api[-_]?key|token|secret|password|authorization|auth|credential)(?:=|$)/i;
   return command.map((part, index) => {
-    if (index > 0 && secretFlag.test(command[index - 1])) return "[REDACTED]";
-    return redactProofText(part).replace(secretFlag, (flag) => flag.endsWith("=") ? `${flag}[REDACTED]` : flag);
+    const previous = index > 0 ? SECRET_FLAG.exec(command[index - 1]) : null;
+    if (previous && previous[2] === undefined && SECRET_NAME.test(previous[1])) return "[REDACTED]";
+    const flag = SECRET_FLAG.exec(part);
+    if (flag && SECRET_NAME.test(flag[1])) {
+      return flag[2] === undefined ? part : `${part.slice(0, part.indexOf("="))}=[REDACTED]`;
+    }
+    return redactProofText(part);
   });
 }
 
@@ -225,8 +245,10 @@ function appendBounded(capture: BoundedCapture, chunk: Buffer, maxBytes: number)
   capture.bytes += chunk.length;
 }
 
-function boundedText(capture: BoundedCapture): ProofOutput {
-  return { text: redactProofText(Buffer.concat(capture.chunks).toString("utf8")), truncated: capture.truncated };
+function boundedText(capture: BoundedCapture, maxBytes: number): ProofOutput {
+  const redacted = Buffer.from(redactProofText(Buffer.concat(capture.chunks).toString("utf8")));
+  // Drop an incomplete trailing code point instead of expanding it to a replacement character beyond the cap.
+  return { text: new StringDecoder("utf8").write(redacted.subarray(0, maxBytes)), truncated: capture.truncated || redacted.length > maxBytes };
 }
 
 function renderMarkdown(artifact: Omit<ProofArtifact, "markdownHash" | "artifactHash" | "signature">): string {
@@ -279,10 +301,60 @@ function renderMarkdown(artifact: Omit<ProofArtifact, "markdownHash" | "artifact
   return lines.join("\n");
 }
 
-function atomicWrite(path: string, content: string): void {
-  const temp = `${path}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
-  writeFileSync(temp, content, { encoding: "utf8", mode: 0o600 });
-  renameSync(temp, path);
+function publishProof(cwd: string, artifact: ProofArtifact, retain: boolean): void {
+  secureProofPaths(cwd, true);
+  const json = `${JSON.stringify(artifact, null, 2)}\n`;
+  if (retain) {
+    const history = join(cwd, ".quorate", "proofs", "history");
+    writeSecureWorkspaceState(cwd, `.quorate/proofs/history/${artifact.artifactHash}.json`, json);
+    const entries = readdirSync(history).filter((name) => /^[a-f0-9]{64}\.json$/.test(name))
+      .map((name) => ({ name, mtime: lstatSync(join(history, name)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime || a.name.localeCompare(b.name));
+    for (const entry of entries.slice(PROOF_HISTORY_LIMIT)) rmSync(join(history, entry.name), { force: true });
+  }
+  writeSecureWorkspaceState(cwd, ".quorate/proofs/latest.md", markdownForArtifact(artifact));
+  writeSecureWorkspaceState(cwd, ".quorate/proofs/latest.json", json);
+}
+
+/** The most recent retained signed runs, excluding tampered or oversized files. */
+export function readProofHistory(cwd: string): ProofArtifact[] {
+  const artifacts = new Map<string, ProofArtifact>();
+  const history = join(cwd, ".quorate", "proofs", "history");
+  secureProofPaths(cwd, false);
+  if (existsSync(history)) {
+    const directory = lstatSync(history);
+    if (directory.isSymbolicLink() || !directory.isDirectory()) throw new Error("Proof history is not a real directory.");
+    const candidates = readdirSync(history).filter((name) => /^[a-f0-9]{64}\.json$/.test(name))
+      .map((name) => ({ name, info: lstatSync(join(history, name)) }))
+      .filter(({ info }) => info.isFile() && !info.isSymbolicLink() && info.size <= MAX_PROOF_ARTIFACT_BYTES)
+      .sort((a, b) => b.info.mtimeMs - a.info.mtimeMs || a.name.localeCompare(b.name))
+      .slice(0, PROOF_HISTORY_LIMIT);
+    for (const { name, info } of candidates) {
+      let fd: number | undefined;
+      try {
+        fd = openSync(join(history, name), constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+        const current = fstatSync(fd);
+        if (!current.isFile() || current.dev !== info.dev || current.ino !== info.ino || current.size > MAX_PROOF_ARTIFACT_BYTES) continue;
+        const buffer = Buffer.alloc(current.size + 1);
+        let bytes = 0;
+        while (bytes < buffer.length) {
+          const count = readSync(fd, buffer, bytes, buffer.length - bytes, null);
+          if (!count) break;
+          bytes += count;
+        }
+        if (bytes !== current.size) continue;
+        const artifact = JSON.parse(buffer.subarray(0, bytes).toString("utf8")) as ProofArtifact;
+        if (`${artifact.artifactHash}.json` === name && !checkArtifactIntegrity(artifact)) artifacts.set(artifact.artifactHash, artifact);
+      } catch {
+        // A retained run is counted only if its signature and full content verify.
+      } finally {
+        if (fd !== undefined) closeSync(fd);
+      }
+    }
+  }
+  const latest = verifyLatestProof(cwd, { checkFingerprint: false });
+  if (latest.ok && latest.artifact) artifacts.set(latest.artifact.artifactHash, latest.artifact);
+  return [...artifacts.values()].sort((a, b) => b.finishedAt.localeCompare(a.finishedAt)).slice(0, PROOF_HISTORY_LIMIT);
 }
 
 function validateOptions(options: RunProofOptions): void {
@@ -310,7 +382,7 @@ async function runDirect(command: string[], cwd: string, timeoutMs: number, maxO
       if (finished) return;
       finished = true;
       if (timer) clearTimeout(timer);
-      resolveRun({ exitCode, timedOut, stdout: boundedText(stdoutCapture), stderr: boundedText(stderrCapture), cleanup: shutdown });
+      resolveRun({ exitCode, timedOut, stdout: boundedText(stdoutCapture, maxOutputBytes), stderr: boundedText(stderrCapture, maxOutputBytes), cleanup: shutdown });
     };
     const grouped = process.platform !== "win32";
     const child = spawn(command[0], command.slice(1), {
@@ -363,7 +435,7 @@ async function runDirect(command: string[], cwd: string, timeoutMs: number, maxO
   });
 }
 
-export async function runProof(options: RunProofOptions): Promise<RunProofResult> {
+export async function runProof(options: RunProofOptions, retainHistory = true): Promise<RunProofResult> {
   validateOptions(options);
   const cwd = resolve(options.cwd);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -395,9 +467,7 @@ export async function runProof(options: RunProofOptions): Promise<RunProofResult
   const artifactWithoutHash: Omit<ProofArtifact, "artifactHash" | "signature"> = { ...base, markdownHash: sha256(markdown) };
   const artifactWithoutSignature = { ...artifactWithoutHash, artifactHash: proofHash(artifactWithoutHash) };
   const artifact: ProofArtifact = { ...artifactWithoutSignature, signature: signatureFor(artifactWithoutSignature, proofKey()) };
-  const paths = secureProofPaths(cwd, true);
-  atomicWrite(paths.markdown, markdown);
-  atomicWrite(paths.json, `${JSON.stringify(artifact, null, 2)}\n`);
+  publishProof(cwd, artifact, retainHistory);
   return { cwd, exitCode: artifact.exitCode, artifact };
 }
 
@@ -590,7 +660,8 @@ export function showLatestProof(cwd: string): { output: string; verification: Pr
   if (!verification.artifact) return { output: "No proof artifact found.\n", verification };
   const output = markdownForArtifact(verification.artifact);
   try {
-    atomicWrite(secureProofPaths(cwd, true).markdown, output);
+    secureProofPaths(cwd, true);
+    writeSecureWorkspaceState(cwd, ".quorate/proofs/latest.md", output);
   } catch {
     // Signed JSON remains authoritative; a convenience Markdown repair must not
     // make an otherwise valid artifact unusable.
@@ -667,7 +738,7 @@ function combineStepOutputs(steps: DetectedProofStepResult[], pick: (step: Detec
     appendBounded(capture, Buffer.from(output.text, "utf8"), maxBytes);
     if (output.truncated) appendBounded(capture, Buffer.from("\n[output truncated]\n", "utf8"), maxBytes);
   }
-  const combined = boundedText(capture);
+  const combined = boundedText(capture, maxBytes);
   return { ...combined, truncated: combined.truncated || anyTruncated };
 }
 
@@ -710,7 +781,7 @@ export async function runDetectedProofs(cwd: string, only?: string[]): Promise<D
   const detected = detectProofCommands(root).filter((candidate) => only === undefined || only.includes(candidate.name));
   const steps: DetectedProofStepResult[] = [];
   for (const candidate of detected) {
-    const result = await runProof({ cwd: root, name: candidate.name, command: candidate.argv });
+    const result = await runProof({ cwd: root, name: candidate.name, command: candidate.argv }, false);
     steps.push({
       name: candidate.name,
       argv: candidate.argv,
@@ -722,8 +793,6 @@ export async function runDetectedProofs(cwd: string, only?: string[]): Promise<D
   }
   if (steps.length === 0) return { cwd: root, exitCode: 0, steps };
   const combined = combineProofArtifacts(root, steps);
-  const paths = secureProofPaths(root, true);
-  atomicWrite(paths.markdown, markdownForArtifact(combined));
-  atomicWrite(paths.json, `${JSON.stringify(combined, null, 2)}\n`);
+  publishProof(root, combined, true);
   return { cwd: root, exitCode: combined.exitCode, steps, artifact: combined };
 }

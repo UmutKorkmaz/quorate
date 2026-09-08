@@ -414,13 +414,13 @@ describe("compareContracts: request body fields", () => {
     expect(result.verdict).toBe("block");
   });
 
-  it("emits no field findings when a JSON schema is missing", () => {
+  it("warns when the only available schema uses an unsupported media type", () => {
     const result = run(
       { "/a": get({ requestBody: { content: { "application/json": {} } } }) },
       { "/a": get({ requestBody: { content: { "text/plain": { schema: { type: "string" } } } } }) }
     );
-    expect(result.findings).toEqual([]);
-    expect(result.verdict).toBe("pass");
+    expect(rules(result.findings)).toEqual(["schema-coverage-incomplete"]);
+    expect(result.verdict).toBe("warn");
   });
 
   it("blocks a field becoming required through a referenced request body", () => {
@@ -1022,11 +1022,11 @@ describe("compareContracts: $ref resolution and response schemas", () => {
     expect(comparison.findings).toHaveLength(0);
   });
 
-  it("symmetric unresolvable external refs produce no findings", () => {
+  it("qualifies symmetric unresolvable external refs as incomplete coverage", () => {
     const paths = { "/a": get({ ...body({ $ref: "https://example.com/remote.yaml" }) }) };
     const comparison = run(paths, paths);
-    expect(comparison.verdict).toBe("pass");
-    expect(comparison.findings).toHaveLength(0);
+    expect(comparison.verdict).toBe("warn");
+    expect(rules(comparison.findings)).toContain("schema-coverage-incomplete");
   });
 
   it("survives $ref cycles without hanging", () => {
@@ -1039,7 +1039,80 @@ describe("compareContracts: $ref resolution and response schemas", () => {
       before: { source: spec(paths, docs), label: "base" },
       after: { source: spec(paths, docs), label: "head" }
     });
-    expect(comparison.verdict).toBe("pass");
-    expect(comparison.findings).toHaveLength(0);
+    expect(comparison.verdict).toBe("warn");
+    expect(rules(comparison.findings)).toContain("schema-coverage-incomplete");
+  });
+});
+
+describe("compareContracts: array shape and bounded coverage", () => {
+  const response = (schema: Record<string, unknown>) => get({
+    responses: { "200": { description: "ok", content: { "application/json": { schema } } } }
+  });
+  const object = (value: Record<string, unknown>) => ({ type: "object", properties: { value } });
+
+  it.each(["request", "response"])("blocks root and nested array-to-scalar changes in a %s", (direction) => {
+    const operation = direction === "request" ? (schema: Record<string, unknown>) => get(body(schema)) : response;
+    const array = { type: "array", items: { type: "string" } };
+    const scalar = { type: "string" };
+    for (const wrap of [(value: Record<string, unknown>) => value, object]) {
+      const result = run({ "/a": operation(wrap(array)) }, { "/a": operation(wrap(scalar)) });
+      expect(result.verdict).toBe("block");
+      expect(rules(result.findings)).toContain("type-changed");
+    }
+  });
+
+  it("compares nested primitive array items without erasing their container", () => {
+    const array = (type: string) => ({ type: "array", items: { type: "array", items: { type } } });
+    const result = run({ "/a": response(object(array("string"))) }, { "/a": response(object(array("integer"))) });
+    expect(result.verdict).toBe("block");
+    expect(result.findings.some((finding) => finding.body.includes("items"))).toBe(true);
+  });
+
+  it("preserves opposite request and response enum directions for array items", () => {
+    const array = (values: string[]) => ({ type: "array", items: { type: "string", enum: values } });
+    const before = array(["a"]);
+    const after = array(["a", "b"]);
+    expect(run({ "/a": get(body(before)) }, { "/a": get(body(after)) }).verdict).toBe("pass");
+    expect(run({ "/a": response(before) }, { "/a": response(after) }).verdict).toBe("block");
+  });
+
+  it.each(["request", "response"])("does not let a %s array format change hide an incompatible item type", (direction) => {
+    const operation = direction === "request" ? (schema: Record<string, unknown>) => get(body(schema)) : response;
+    const before = { type: "array", format: "original", items: { type: "string" } };
+    const after = { type: "array", format: "updated", items: { type: "number" } };
+    const result = run({ "/a": operation(before) }, { "/a": operation(after) });
+    expect(result.verdict).toBe("block");
+    expect(rules(result.findings)).toContain("type-changed");
+  });
+
+  it("warns about unsupported nullable-array item coverage in OpenAPI 3.1", () => {
+    const source = (type: string) => spec({ "/a": response({ type: ["array", "null"], items: { type } }) }, { openapi: "3.1.0" });
+    const result = compareContracts({ before: { label: "base", source: source("string") }, after: { label: "head", source: source("number") } });
+    expect(result.verdict).toBe("warn");
+    expect(rules(result.findings)).toContain("schema-coverage-incomplete");
+  });
+
+  it.each(["schemas", "requestBodies", "responses", "parameters"])("warns when the last component of a %s reference is missing", (kind) => {
+    const missing = { $ref: `#/components/${kind}/Missing` };
+    const operation = kind === "requestBodies" ? get({ requestBody: missing })
+      : kind === "responses" ? get({ responses: { "200": missing } })
+        : kind === "parameters" ? get({ parameters: [missing] }) : response(missing);
+    const source = spec({ "/a": operation }, { components: { [kind]: {} } });
+    const result = compareContracts({ before: { source, label: "base" }, after: { source, label: "head" } });
+    expect(result.verdict).toBe("warn");
+    expect(rules(result.findings)).toContain("schema-coverage-incomplete");
+  });
+
+  it.each([
+    { oneOf: [{ type: "string" }, { type: "number" }] },
+    object(object(object({ type: "string" }))),
+    { type: "string", pattern: "^[a-z]+$" },
+    { $ref: "#/components/schemas/Missing" }
+  ])("warns when schema coverage cannot be established: %j", (schema) => {
+    const paths = { "/a": response(schema) };
+    const result = run(paths, paths);
+    expect(result.verdict).toBe("warn");
+    expect(rules(result.findings)).toContain("schema-coverage-incomplete");
+    expect(result.findings[0].body).toContain("cannot establish");
   });
 });

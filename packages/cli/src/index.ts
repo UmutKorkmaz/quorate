@@ -12,6 +12,7 @@ import {
   buildSolanaTestPlan,
   buildPullRequestContext,
   createDefaultConfig,
+  createDecisionRecord,
   detectAvailableProviders,
   detectPacks,
   fetchProviderModels,
@@ -57,11 +58,14 @@ import {
   formatStatsReport,
   readHistory
 } from "./history-command.js";
+import { FEEDBACK_OUTCOMES, formatFindingFeedback, readFindingFeedback, recordFindingFeedback } from "./history-command.js";
+import { evaluateManifest, renderEvaluation } from "./evaluation-command.js";
 import { listExpired } from "@quorate/core";
 import {
   buildRiskReport,
   generateGithubActionWorkflow,
   mergeVscodeRecommendations,
+  runSetupDemo,
   type RiskItem
 } from "./setup-command.js";
 import {
@@ -71,12 +75,12 @@ import {
   policyDoctor,
   writeStarterPolicy
 } from "./policy-command.js";
-import { createFixSnapshot, finalizeFix, listFixes, revertFix } from "./fix.js";
+import { createFixSnapshot, finalizeFix, listFixes, resolveBoundFixFinding, revertFix } from "./fix.js";
 import { buildFixPrompt, extractHunk } from "./fix-prompt.js";
 import { runWriteAgent, WRITE_AGENT_PROFILES, writeAgentProfile } from "./fix-agent.js";
 import { readDiff, readPullRequestContext } from "./diff.js";
 import { buildDoctorBundle } from "./doctor-bundle.js";
-import { printDoctor } from "./doctor.js";
+import { buildDoctorReport, renderDoctorReport } from "./doctor.js";
 import { latestSession, loadSession, type PersistedSession } from "./sessions.js";
 import { runCouncilWithJsonStream } from "./json-stream.js";
 import { createLiveSpoolSink, listLiveRuns, teeJsonStreamSink } from "./live-spool.js";
@@ -96,7 +100,7 @@ import {
 } from "./custom-packs.js";
 import { formatProviderTestResult, testProvider } from "./provider-test.js";
 import { readRepositoryFiles, runSupplyChainScan } from "./supply-chain-command.js";
-import { runAuditExport, runAuditVerify } from "./audit-command.js";
+import { captureDecisionSource, runAuditExport, runAuditVerify } from "./audit-command.js";
 import { prepareReviewRequest } from "./review-preparation.js";
 import { attachLatestProofToReview, detectProofCommands, runDetectedProofs, runProof, showLatestProof, verifyLatestProof } from "./proof-runner.js";
 import { runContractCheck } from "./contract-command.js";
@@ -607,16 +611,14 @@ export function buildProgram(): Command {
     .action((options) => {
       const cwd = cwdFrom(program);
       const config = configFrom(program);
-      const detected = detectAvailableProviders();
-
       if (options.risk) {
         const report = buildRiskReport(gatherRiskInput(config, cwd));
+        if (report.items.some((item) => item.level === "risk")) process.exitCode = 1;
         if (options.json) {
           console.log(JSON.stringify(report, null, 2));
           return;
         }
         printRiskReport(report.items);
-        if (report.items.some((item) => item.level === "risk")) process.exitCode = 1;
         return;
       }
 
@@ -631,12 +633,9 @@ export function buildProgram(): Command {
         return;
       }
 
-      if (options.json) {
-        console.log(JSON.stringify({ detected, config }, null, 2));
-        return;
-      }
-
-      printDoctor(config, cwd);
+      const report = buildDoctorReport({ cwd, config, mode: "review", transcript: [] });
+      console.log(options.json ? JSON.stringify(report, null, 2) : renderDoctorReport(report, { color: Boolean(stdout.isTTY) }));
+      if (report.status === "error") process.exitCode = 1;
     });
 
   const solanaCmd = program
@@ -730,6 +729,22 @@ export function buildProgram(): Command {
     .command("setup")
     .helpGroup("Setup:")
     .description("Generate starter files for a target (github-action, vscode) or show next steps.");
+
+  setupCmd
+    .command("demo [directory]")
+    .description("Run an offline blocked → corrected → passing gate in a new directory (default: temporary directory).")
+    .action((directory?: string) => {
+      const demo = runSetupDemo(cwdFrom(program), directory);
+      console.log("1. BLOCKED: actions/checkout@v4 is mutable (the demo policy blocks medium findings).");
+      for (const finding of demo.before.findings) console.log(`   ${finding.file}:${finding.line} — ${finding.title}`);
+      console.log("2. CORRECTED: replace the mutable tag with a full commit SHA.");
+      console.log("3. PASSED: the corrected diff has no supply-chain findings.");
+      console.log(`Evidence and both diffs: ${demo.directory}`);
+      console.log("Replay from that directory:");
+      console.log("  quorate supply-chain scan --diff before.diff --gate  # exit 1");
+      console.log("  quorate supply-chain scan --diff after.diff --gate   # exit 0");
+      console.log("Next, run quorate doctor in your own repository to select an AI reviewer.");
+    });
 
   setupCmd
     .command("github-action")
@@ -1085,6 +1100,7 @@ export function buildProgram(): Command {
     .option("--write-html <path>", "Write a standalone HTML report")
     .option("--write-md <path>", "Write the Markdown report to a file")
     .option("--write-reviewgraph <path>", "Write ReviewGraph agreement evidence as JSON")
+    .option("--write-receipt <path>", "Export the decision receipt (also saved to .quorate/decision.json)")
     .option("--reviewgraph", "Include ReviewGraph agreement evidence in Markdown output")
     .option("--no-pr-context", "Do not include PR title/body/commits when --pr is used")
     .option("--baseline", "Gate only on findings absent from the committed baseline")
@@ -1102,6 +1118,12 @@ export function buildProgram(): Command {
         process.exitCode = 1;
         return;
       }
+      const source = captureDecisionSource(cwd, options);
+      if (readDiff(options, cwd) !== diff) throw new Error("Review input changed while its source identity was captured. Retry the review.");
+      const policy = resolvePolicy(config, {
+        policy: loadPolicyFile(cwd) ?? undefined,
+        failOn: options.failOn as Severity | "never" | undefined
+      });
       const prContext =
         options.pr && options.prContext !== false
           ? buildPullRequestContext(readPullRequestContext(options.pr, cwd) ?? { number: Number(options.pr) })
@@ -1149,7 +1171,10 @@ export function buildProgram(): Command {
         }
         const suppressed = applySuppressionStore(current, cwd, options.suppressPath);
         for (const note of suppressed.notes) console.error(note);
-        return suppressed.report;
+        const finalReport = suppressed.report;
+        return { ...finalReport, metadata: { ...finalReport.metadata,
+          decision: createDecisionRecord(request, config, finalReport, policy, { source, toolVersion: readVersion() })
+        } };
       };
 
       // Every run also feeds the live spool (~/.quorate/live) so `quorate
@@ -1168,9 +1193,11 @@ export function buildProgram(): Command {
                 },
                 liveSpool
               ),
-              transformReport
+              transformReport,
+              { requiredRoles: policy.rolesRequired, minRealProviders: policy.minRealProviders }
             )
-          : transformReport(await runCouncil(request, config, { onEvent: (event) => liveSpool.handleEvent(event) }));
+          : transformReport(await runCouncil(request, config, { onEvent: (event) => liveSpool.handleEvent(event),
+              requiredRoles: policy.rolesRequired, minRealProviders: policy.minRealProviders }));
       } catch (error: unknown) {
         liveSpool.finish("error");
         throw error;
@@ -1192,6 +1219,9 @@ export function buildProgram(): Command {
       writeExport(options.writeHtml, renderHtml(report));
       writeExport(options.writeMd, renderMarkdownReport(report, { includeReviewGraph: Boolean(options.reviewgraph) }));
       writeExport(options.writeReviewgraph, renderReviewGraph(report));
+      const receipt = `${JSON.stringify(report.metadata.decision, null, 2)}\n`;
+      writeSecureWorkspaceState(cwd, ".quorate/decision.json", receipt);
+      writeExport(options.writeReceipt, receipt);
 
       // Persist the RAW report for `quorate fix` and `quorate baseline` (same
       // file the TUI writes) — never the baseline-filtered view, or a follow-up
@@ -1208,10 +1238,6 @@ export function buildProgram(): Command {
 
       // Gate on the resolved policy: a standalone .quorate/policy.yml wins,
       // else the legacy github config; --fail-on overrides the threshold.
-      const policy = resolvePolicy(config, {
-        policy: loadPolicyFile(cwd) ?? undefined,
-        failOn: options.failOn as Severity | "never" | undefined
-      });
       if (shouldFailForPolicy(report, policy)) {
         process.exitCode = 1;
       }
@@ -1376,6 +1402,56 @@ export function buildProgram(): Command {
       }
     });
 
+  const feedbackCmd = program.command("feedback").helpGroup("Review:")
+    .description("Record human finding outcomes locally; feedback never changes the merge gate.");
+
+  feedbackCmd.command("targets")
+    .description("List saved finding numbers and fingerprints as JSON before labeling them.")
+    .option("--report <path>", "Saved report (default .quorate/last-report.json)")
+    .action((options) => {
+      const report = loadLastReport(cwdFrom(program), options.report);
+      if (!report) throw new Error("No saved report. Run quorate review first, or pass --report.");
+      console.log(JSON.stringify({ reviewId: report.metadata.reviewId, generatedAt: report.metadata.generatedAt,
+        findings: report.findings.map((finding, index) => ({ number: index + 1, fingerprint: finding.fingerprint, severity: finding.severity, file: finding.file, line: finding.line, title: finding.title }))
+      }, null, 2));
+    });
+
+  feedbackCmd.command("add")
+    .description("Append a human outcome for one finding from a saved report.")
+    .option("--report <path>", "Saved report (default .quorate/last-report.json)")
+    .option("--finding <n>", "Finding number shown by feedback targets")
+    .option("--fingerprint <fingerprint>", "Stable finding fingerprint (alternative to --finding)")
+    .requiredOption("--outcome <outcome>", FEEDBACK_OUTCOMES.join(" | "))
+    .requiredOption("--reason <text>", "Why this outcome was selected")
+    .option("--json", "Print the recorded feedback as JSON")
+    .action(async (options) => {
+      const cwd = cwdFrom(program);
+      const report = loadLastReport(cwd, options.report);
+      if (!report) throw new Error("No saved report. Run quorate review first, or pass --report.");
+      const entry = await recordFindingFeedback(cwd, report, {
+        finding: options.finding === undefined ? undefined : Number(options.finding),
+        fingerprint: options.fingerprint, outcome: options.outcome, reason: options.reason
+      });
+      console.log(options.json ? JSON.stringify(entry, null, 2) : `${formatFindingFeedback([entry])}\nRecorded locally. Gate policy and suppressions are unchanged.`);
+    });
+
+  feedbackCmd.command("list")
+    .description("Show this repository's feedback history, newest first.")
+    .option("--json", "Print feedback records as JSON")
+    .action(async (options) => {
+      const entries = await readFindingFeedback(cwdFrom(program));
+      console.log(options.json ? JSON.stringify(entries, null, 2) : formatFindingFeedback(entries));
+    });
+
+  program.command("evaluate <manifest>").helpGroup("Review:")
+    .description("Compare paired saved reports with human labels; never calls providers.")
+    .option("--json", "Print the evaluation as JSON")
+    .addHelpText("after", '\nManifest schema: {"schema":1,"cases":[{"id":"case-1","expectedIssueIds":["issue-1"],"runs":[{"variant":"deterministic","report":"blocked.json","labels":{"<finding-fingerprint>":"issue-1"}}]}]}\nUse label null for a false positive; variants are deterministic, single, and council. Report paths are relative to the manifest.\n')
+    .action((manifest: string, options) => {
+      const report = evaluateManifest(resolve(cwdFrom(program), manifest));
+      console.log(options.json ? JSON.stringify(report, null, 2) : renderEvaluation(report));
+    });
+
   program
     .command("history")
     .helpGroup("Review:")
@@ -1408,8 +1484,12 @@ export function buildProgram(): Command {
     .description("Verify approval record hashes, signatures, chain order, and the signed head anchor.")
     .option("--json", "Print machine-readable verification JSON")
     .option("--dir <path>", "Audit directory (default ~/.quorate/audit)")
+    .option("--receipt <path>", "Verify a portable decision receipt instead of the approval ledger")
+    .option("--diff <path>", "With --receipt: require the original reviewed diff")
+    .option("--current", "With --receipt: require the recorded commit or worktree snapshot")
     .action((options) => {
-      const result = runAuditVerify({ dir: options.dir, json: Boolean(options.json) });
+      if ((options.diff || options.current) && !options.receipt) throw new Error("--diff and --current require --receipt.");
+      const result = runAuditVerify({ dir: options.dir, json: Boolean(options.json), cwd: cwdFrom(program), receipt: options.receipt, diff: options.diff, current: Boolean(options.current) });
       process.stdout.write(result.output);
       if (result.exitCode !== 0) process.exitCode = result.exitCode;
     });
@@ -1640,6 +1720,9 @@ export function buildProgram(): Command {
     .description("Delegate a finding to a write-mode agent — snapshotted, watchable, revertible.")
     .option("--list", "List fixable findings from the last report (and past fixes)")
     .option("--finding <n>", "Finding number (1-based) from --list")
+    .option("--report-id <id>", "Require this review identity (with --report-generated-at and --finding-fingerprint)")
+    .option("--report-generated-at <timestamp>", "Require this exact review run timestamp for an editor handoff")
+    .option("--finding-fingerprint <fingerprint>", "Select the finding by stable fingerprint from the bound review")
     .option("--provider <id>", `Write-mode agent: ${WRITE_AGENT_PROFILES.map((p) => p.id).join(", ")}`)
     .option("--report <path>", "Report JSON to fix from (default: .quorate/last-report.json)")
     .option("--revert [fixId]", "Undo a fix — the latest one when no id is given")
@@ -1648,6 +1731,10 @@ export function buildProgram(): Command {
     .action(async (options) => {
       const cwd = cwdFrom(program);
 
+      const hasBinding = options.reportId !== undefined || options.reportGeneratedAt !== undefined || options.findingFingerprint !== undefined;
+      if (hasBinding && (options.finding !== undefined || options.revert !== undefined)) {
+        throw new Error("A bound finding cannot be combined with --finding or --revert.");
+      }
       if (options.revert !== undefined) {
         const fixId = typeof options.revert === "string" ? options.revert : undefined;
         const meta = revertFix(cwd, fixId, { force: options.force });
@@ -1660,13 +1747,14 @@ export function buildProgram(): Command {
         throw new Error(`No report at ${reportPath}. Run \`quorate review\` first (or pass --report <path>).`);
       }
       const report = JSON.parse(readFileSync(reportPath, "utf8")) as CouncilReport;
+      const boundFinding = resolveBoundFixFinding(report, options);
       const findings = report.findings.filter((finding) => finding.file);
       if (findings.length === 0) {
         console.log("No fixable findings (none carry a file location).");
         return;
       }
 
-      if (options.list || !options.finding) {
+      if (options.list || (!options.finding && !boundFinding)) {
         console.log(`Fixable findings (${findings.length}):`);
         for (const [i, finding] of findings.entries()) {
           const loc = `${finding.file}${finding.line ? `:${finding.line}` : ""}`;
@@ -1695,7 +1783,7 @@ export function buildProgram(): Command {
       const rl = createInterface({ input: stdin, output: stdout });
       try {
         // 1. Pick the finding.
-        let index = options.finding ? Number(options.finding) : NaN;
+        let index = boundFinding ? findings.indexOf(boundFinding) + 1 : options.finding ? Number(options.finding) : NaN;
         if (!Number.isInteger(index) || index < 1 || index > findings.length) {
           const answer = (await rl.question(`Finding [1-${findings.length}]: `)).trim();
           index = Number(answer);

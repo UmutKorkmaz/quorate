@@ -138,6 +138,10 @@ const configSchema = z.object({
     })
     .optional(),
   supplyChain: supplyChainSchema,
+  execution: z.object({
+    mode: z.literal("adaptive"),
+    maxParallelProviders: z.number().int().min(1).max(16).default(3)
+  }).optional(),
   merge: z.object({ provider: z.string().min(1) }).optional(),
   roleGuidance: z.record(z.string(), z.string()).optional(),
   integrations: z
@@ -161,6 +165,7 @@ export function parseConfig(source: string): QuorateConfig {
     },
     budget: userConfig.budget,
     supplyChain: userConfig.supplyChain,
+    execution: userConfig.execution,
     merge: userConfig.merge,
     roleGuidance: userConfig.roleGuidance,
     integrations: userConfig.integrations

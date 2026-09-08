@@ -35,8 +35,9 @@ import YAML from "yaml";
  *   analyzed (a media-type key of `application/json; …` is accepted), and only
  *   object `properties` ONE nesting level deep (`body.address.street`).
  *   `allOf`/`anyOf`/`oneOf` are not expanded. Local `#/…` `$ref` pointers are
- *   resolved (cycle- and depth-guarded, `array.items` unwrapped); external
- *   (`http://`/`file`) refs stay unresolved and compare as untyped.
+ *   resolved (cycle- and depth-guarded). Array containers and item facets are
+ *   compared separately. Unresolved refs, depth limits, composition, and other
+ *   unsupported validation facets produce an explicit coverage warning.
  * - Response body fields (every documented status, `application/json` content
  *   or the Swagger 2.0 `schema` shorthand) are compared for type/format/enum
  *   drift only — response field additions, removals, and required-flag flips
@@ -254,6 +255,12 @@ interface SchemaView {
   format?: string;
   /** Enum values as sorted canonical-JSON strings, so comparison is order-insensitive. */
   enumValues?: string[];
+  items?: SchemaView;
+}
+
+interface BodyView {
+  schema?: SchemaView;
+  fields: Map<string, FieldView>;
 }
 
 interface ParameterView extends SchemaView {
@@ -273,9 +280,11 @@ interface OperationView {
   path: string;
   parameters: Map<string, ParameterView>;
   fields: Map<string, FieldView>;
+  requestSchema?: SchemaView;
   /** Response body fields per status code (only statuses present on both sides are compared). */
-  responseFields: Map<string, Map<string, FieldView>>;
+  responseFields: Map<string, BodyView>;
   successResponses: Set<string>;
+  coverage: Set<string>;
 }
 
 function normalizeType(value: unknown): string | undefined {
@@ -300,12 +309,17 @@ function normalizeEnum(value: unknown): string[] | undefined {
  * Read the compared facets from a schema holder. OpenAPI 3 puts them on
  * `schema`; Swagger 2 puts them inline on the parameter — accept both.
  */
-function schemaView(holder: JsonRecord): SchemaView {
-  const schema = isRecord(holder.schema) ? (holder.schema as JsonRecord) : holder;
+function schemaView(holder: JsonRecord, doc: JsonRecord, arrayDepth = 0): SchemaView {
+  const resolved = resolveRef(doc, isRecord(holder.schema) ? holder.schema : holder);
+  if (!isRecord(resolved)) return {};
+  const schema = resolved;
   return {
     type: normalizeType(schema.type),
     format: normalizeFormat(schema.format),
-    enumValues: normalizeEnum(schema.enum)
+    enumValues: normalizeEnum(schema.enum),
+    ...(schema.type === "array" && isRecord(schema.items) && arrayDepth < MAX_ARRAY_UNWRAP
+      ? { items: schemaView(schema.items, doc, arrayDepth + 1) }
+      : {})
   };
 }
 
@@ -327,7 +341,7 @@ function resolveRef(doc: JsonRecord, schema: unknown, seen: Set<string> = new Se
     .map((segment) => segment.replace(/~1/g, "/").replace(/~0/g, "~"));
   let target: unknown = doc;
   for (const segment of segments) {
-    if (!isRecord(target)) return schema;
+    if (!isRecord(target) || !Object.hasOwn(target, segment)) return schema;
     target = target[segment];
   }
   return resolveRef(doc, target, seen);
@@ -349,6 +363,60 @@ function effectiveSchema(doc: JsonRecord, schema: unknown): unknown {
   return current;
 }
 
+const UNSUPPORTED_SCHEMA_FACETS = [
+  "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "const", "nullable",
+  "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+  "minLength", "maxLength", "pattern", "minItems", "maxItems", "uniqueItems",
+  "contains", "prefixItems", "additionalItems", "unevaluatedItems", "minContains", "maxContains",
+  "additionalProperties", "unevaluatedProperties", "patternProperties", "propertyNames",
+  "minProperties", "maxProperties", "dependencies", "dependentRequired", "dependentSchemas",
+  "readOnly", "writeOnly", "discriminator"
+] as const;
+
+/** Report the same traversal bounds used by comparison, without fetching refs. */
+function collectSchemaCoverage(
+  schema: unknown, doc: JsonRecord, location: string, coverage: Set<string>,
+  depth = 0, arrayDepth = 0, ancestors = new Set<unknown>()
+): void {
+  const node = resolveRef(doc, schema);
+  if (node === undefined) return;
+  if (!isRecord(node)) {
+    coverage.add(`${location}: unsupported schema shape`);
+    return;
+  }
+  if (typeof node.$ref === "string") {
+    coverage.add(`${location}: unresolved or cyclic reference`);
+    return;
+  }
+  if (ancestors.has(node)) {
+    coverage.add(`${location}: cyclic schema`);
+    return;
+  }
+  const next = new Set(ancestors).add(node);
+  for (const facet of UNSUPPORTED_SCHEMA_FACETS) {
+    if (Object.hasOwn(node, facet)) coverage.add(`${location}: unsupported ${facet}`);
+  }
+  if (Array.isArray(node.type) && node.type.includes("array")) {
+    coverage.add(`${location}: array union items are not compared`);
+  }
+  if (node.type === "array") {
+    if (!isRecord(node.items) || arrayDepth >= MAX_ARRAY_UNWRAP) {
+      coverage.add(`${location}: array items unavailable or beyond depth ${MAX_ARRAY_UNWRAP}`);
+    } else {
+      collectSchemaCoverage(node.items, doc, `${location} items`, coverage, depth, arrayDepth + 1, next);
+    }
+  }
+  if (isRecord(node.properties) && Object.keys(node.properties).length > 0) {
+    if (depth > MAX_FIELD_DEPTH) {
+      coverage.add(`${location}: object fields beyond depth ${MAX_FIELD_DEPTH}`);
+    } else {
+      for (const name of Object.keys(node.properties).sort(compareStrings)) {
+        collectSchemaCoverage(node.properties[name], doc, `${location}.${name}`, coverage, depth + 1, 0, next);
+      }
+    }
+  }
+}
+
 function collectFields(schema: unknown, prefix: string, depth: number, out: Map<string, FieldView>, doc: JsonRecord): void {
   const effective = effectiveSchema(doc, schema);
   if (!isRecord(effective) || !isRecord(effective.properties) || depth > MAX_FIELD_DEPTH) return;
@@ -359,65 +427,74 @@ function collectFields(schema: unknown, prefix: string, depth: number, out: Map<
   );
   const properties = effective.properties as JsonRecord;
   for (const name of Object.keys(properties).sort(compareStrings)) {
-    const node = effectiveSchema(doc, properties[name]);
+    const node = resolveRef(doc, properties[name]);
     if (!isRecord(node)) continue;
-    out.set(`${prefix}${name}`, { ...schemaView(node), required: required.has(name) });
-    if (depth < MAX_FIELD_DEPTH && isRecord(node.properties)) {
+    out.set(`${prefix}${name}`, { ...schemaView(node, doc), required: required.has(name) });
+    const child = effectiveSchema(doc, node);
+    if (depth < MAX_FIELD_DEPTH && isRecord(child) && isRecord(child.properties)) {
       collectFields(node, `${prefix}${name}.`, depth + 1, out, doc);
     }
   }
 }
 
-function collectRequestFields(requestBody: unknown, doc: JsonRecord): Map<string, FieldView> {
+function collectBody(schema: unknown, doc: JsonRecord, location: string, coverage: Set<string>): BodyView {
+  collectSchemaCoverage(schema, doc, location, coverage);
+  const resolved = resolveRef(doc, schema);
   const fields = new Map<string, FieldView>();
-  const resolvedRequestBody = resolveRef(doc, requestBody);
-  if (!isRecord(resolvedRequestBody) || !isRecord(resolvedRequestBody.content)) return fields;
-  const content = resolvedRequestBody.content as JsonRecord;
+  collectFields(resolved, "", 0, fields, doc);
+  return { ...(isRecord(resolved) ? { schema: schemaView(resolved, doc) } : {}), fields };
+}
+
+function jsonContentSchema(content: JsonRecord, location: string, coverage: Set<string>): unknown {
   const sortedKeys = Object.keys(content).sort(compareStrings);
   const mediaKey = sortedKeys.includes("application/json")
     ? "application/json"
     : sortedKeys.find((key) => key.startsWith("application/json;"));
-  if (mediaKey === undefined) return fields;
-  const media = content[mediaKey];
-  if (!isRecord(media)) return fields;
-  collectFields(media.schema, "", 0, fields, doc);
-  return fields;
+  if (sortedKeys.some((key) => key !== mediaKey)) coverage.add(`${location}: unexamined media types`);
+  return mediaKey !== undefined && isRecord(content[mediaKey]) ? content[mediaKey].schema : undefined;
+}
+
+function collectRequestFields(requestBody: unknown, doc: JsonRecord, coverage: Set<string>): BodyView {
+  const resolvedRequestBody = resolveRef(doc, requestBody);
+  if (isRecord(resolvedRequestBody) && typeof resolvedRequestBody.$ref === "string") coverage.add("Request body: unresolved reference");
+  const schema = isRecord(resolvedRequestBody) && isRecord(resolvedRequestBody.content)
+    ? jsonContentSchema(resolvedRequestBody.content, "Request body", coverage)
+    : undefined;
+  return collectBody(schema, doc, "Request body", coverage);
 }
 
 /** Response body fields per status code — resolved through `#/components/responses/…` refs. */
-function collectResponseFields(responses: unknown, doc: JsonRecord): Map<string, Map<string, FieldView>> {
-  const byStatus = new Map<string, Map<string, FieldView>>();
+function collectResponseFields(responses: unknown, doc: JsonRecord, coverage: Set<string>): Map<string, BodyView> {
+  const byStatus = new Map<string, BodyView>();
   if (!isRecord(responses)) return byStatus;
   for (const status of Object.keys(responses).sort(compareStrings)) {
     const response = resolveRef(doc, responses[status]);
     if (!isRecord(response)) continue;
-    const fields = new Map<string, FieldView>();
+    if (typeof response.$ref === "string") coverage.add(`Response ${status}: unresolved reference`);
     let schema: unknown;
     if (isRecord(response.content)) {
-      const content = response.content as JsonRecord;
-      const sortedKeys = Object.keys(content).sort(compareStrings);
-      const mediaKey = sortedKeys.includes("application/json")
-        ? "application/json"
-        : sortedKeys.find((key) => key.startsWith("application/json;"));
-      if (mediaKey !== undefined && isRecord(content[mediaKey])) schema = (content[mediaKey] as JsonRecord).schema;
+      schema = jsonContentSchema(response.content, `Response ${status} body`, coverage);
     } else {
       schema = response.schema; // Swagger 2.0 shorthand
     }
-    collectFields(schema, "", 0, fields, doc);
-    if (fields.size > 0) byStatus.set(status, fields);
+    byStatus.set(status, collectBody(schema, doc, `Response ${status} body`, coverage));
   }
   return byStatus;
 }
 
-function parseParameters(raw: unknown, doc: JsonRecord): ParameterView[] {
+function parseParameters(raw: unknown, doc: JsonRecord, coverage: Set<string>): ParameterView[] {
   if (!Array.isArray(raw)) return [];
   const views: ParameterView[] = [];
-  for (const entry of raw) {
+  for (const rawEntry of raw) {
+    const entry = resolveRef(doc, rawEntry);
+    if (isRecord(entry) && typeof entry.$ref === "string") coverage.add("Parameter: unresolved reference");
     if (!isRecord(entry) || typeof entry.name !== "string" || typeof entry.in !== "string") continue;
     // OAS 3 non-body parameters may point their schema at a shared component.
     const holder: JsonRecord = isRecord(entry.schema) ? { ...entry, schema: resolveRef(doc, entry.schema) } : entry;
+    collectSchemaCoverage(entry.schema ?? entry, doc, `Parameter ${entry.in}:${entry.name}`, coverage);
+    if (entry.in === "body") coverage.add(`Parameter body:${entry.name}: Swagger body fields are not compared`);
     views.push({
-      ...schemaView(holder),
+      ...schemaView(holder, doc),
       key: `${entry.in}:${entry.name}`,
       in: entry.in,
       name: entry.name,
@@ -444,24 +521,29 @@ function collectOperations(doc: unknown): Map<string, OperationView> {
   const document = doc as JsonRecord;
   const paths = isRecord(document.paths) ? (document.paths as JsonRecord) : {};
   for (const path of Object.keys(paths)) {
-    const pathItem = paths[path];
+    const pathItem = resolveRef(document, paths[path]);
     if (!isRecord(pathItem)) continue;
-    const pathLevelParameters = parseParameters(pathItem.parameters, document);
     for (const method of HTTP_METHODS) {
       const operation = pathItem[method];
       if (!isRecord(operation)) continue;
+      const coverage = new Set<string>();
       const parameters = new Map<string, ParameterView>();
+      const pathLevelParameters = parseParameters(pathItem.parameters, document, coverage);
       for (const parameter of pathLevelParameters) parameters.set(parameter.key, parameter);
       // Operation-level parameters override same in:name path-level ones.
-      for (const parameter of parseParameters(operation.parameters, document)) parameters.set(parameter.key, parameter);
+      for (const parameter of parseParameters(operation.parameters, document, coverage)) parameters.set(parameter.key, parameter);
       const upper = method.toUpperCase();
+      const requestBody = collectRequestFields(operation.requestBody, document, coverage);
+      const responseFields = collectResponseFields(operation.responses, document, coverage);
       operations.set(JSON.stringify([upper, path]), {
         method: upper,
         path,
         parameters,
-        fields: collectRequestFields(operation.requestBody, document),
-        responseFields: collectResponseFields(operation.responses, document),
-        successResponses: collectSuccessResponses(operation.responses)
+        fields: requestBody.fields,
+        requestSchema: requestBody.schema,
+        responseFields,
+        successResponses: collectSuccessResponses(operation.responses),
+        coverage
       });
     }
   }
@@ -580,9 +662,12 @@ function compareTypeFormatEnum(
       `${detailKey} format ${before.format ?? "none"}->${after.format ?? "none"}`,
       scope
     );
-    return;
+  } else {
+    compareEnums(findings, scope, label, detailKey, before.enumValues, after.enumValues, direction);
   }
-  compareEnums(findings, scope, label, detailKey, before.enumValues, after.enumValues, direction);
+  if (before.type === "array" && after.type === "array" && before.items && after.items) {
+    compareTypeFormatEnum(findings, scope, `${label} items`, `${detailKey} items`, before.items, after.items, direction);
+  }
 }
 
 function compareParameters(
@@ -771,12 +856,17 @@ function compareResponses(
 function compareResponseFields(
   findings: ContractFinding[],
   scope: { method: string; path: string },
-  before: Map<string, Map<string, FieldView>>,
-  after: Map<string, Map<string, FieldView>>
+  before: Map<string, BodyView>,
+  after: Map<string, BodyView>
 ): void {
   for (const status of [...before.keys()].filter((value) => after.has(value)).sort(compareStrings)) {
-    const beforeFields = before.get(status)!;
-    const afterFields = after.get(status)!;
+    const beforeBody = before.get(status)!;
+    const afterBody = after.get(status)!;
+    if (beforeBody.schema && afterBody.schema) {
+      compareTypeFormatEnum(findings, scope, `Response ${status} body`, `response ${status} body`, beforeBody.schema, afterBody.schema, "response");
+    }
+    const beforeFields = beforeBody.fields;
+    const afterFields = afterBody.fields;
     for (const name of [...new Set([...beforeFields.keys(), ...afterFields.keys()])].sort(compareStrings)) {
       const beforeField = beforeFields.get(name);
       const afterField = afterFields.get(name);
@@ -828,7 +918,16 @@ function compareOperations(
     }
     if (beforeOperation === undefined || afterOperation === undefined) continue;
     const scope = { method: afterOperation.method, path: afterOperation.path };
+    const coverage = [...new Set([...beforeOperation.coverage, ...afterOperation.coverage])].sort(compareStrings);
+    if (coverage.length > 0) {
+      pushFinding(findings, "ambiguous", "schema-coverage-incomplete", "Contract schema coverage is incomplete",
+        `ContractCourt cannot establish full compatibility for this operation: ${coverage.join("; ")}.`,
+        `coverage ${canonicalJson(coverage)}`, scope);
+    }
     compareParameters(findings, scope, beforeOperation.parameters, afterOperation.parameters);
+    if (beforeOperation.requestSchema && afterOperation.requestSchema) {
+      compareTypeFormatEnum(findings, scope, "Request body", "request body", beforeOperation.requestSchema, afterOperation.requestSchema, "request");
+    }
     compareRequestFields(findings, scope, beforeOperation.fields, afterOperation.fields);
     compareResponseFields(findings, scope, beforeOperation.responseFields, afterOperation.responseFields);
     compareResponses(findings, scope, beforeOperation.successResponses, afterOperation.successResponses);

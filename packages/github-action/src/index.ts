@@ -7,6 +7,7 @@ import {
   applySuppressions,
   buildPullRequestContext,
   createDefaultConfig,
+  createDecisionRecord,
   DEFAULT_BASELINE_PATH,
   DEFAULT_POLICY_PATH,
   DEFAULT_SUPPRESSION_PATH,
@@ -30,6 +31,7 @@ import {
   summarizeDiff,
   type BaselineStore,
   type CouncilReport,
+  type CouncilRequest,
   type CustomPackDefinition,
   type QuorateConfig,
   type QuoratePolicy,
@@ -37,8 +39,9 @@ import {
   type SuppressionStore
 } from "@quorate/core";
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 // esbuild inlines this JSON at build time, so the Action's SARIF carries the
 // same tool version the CLI records.
 import pkg from "../package.json";
@@ -579,7 +582,34 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     deps.setFailed(budget.diff.trim().length === 0 ? "No reviewable changes remain after filtering." : "Quorate review budget exceeded.");
     return;
   }
-  const rawReport = await runCouncil(
+  // Resolve the merge policy: a standalone .quorate/policy.yml from the BASE ref
+  // wins, else the legacy github config. A MALFORMED committed policy is a broken
+  // gate contract — fail CLOSED: the review still runs (the comment is useful) but
+  // the check is failed, because the intended strictness (required roles, provider
+  // floor, agreement gate) is unknown and must not silently relax to the weaker
+  // github-config default. (Contrast with the baseline, where fail-open is strictly
+  // safer because it gates on MORE findings.)
+  const failOnOverride = input("fail-on");
+  let gatePolicy: QuoratePolicy;
+  let policyLoadFailed = false;
+  try {
+    const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
+    gatePolicy = tightenPolicy(
+      resolvePolicy(config, { policy: basePolicy ?? undefined }),
+      failOnOverride
+    );
+    if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : String(error);
+    deps.warning?.(
+      `Could not load the committed merge policy (${reason}). The check will fail — the policy's intended strictness is unknown and must not silently relax. Fix the policy file on the base branch.`
+    );
+    // Still derive a gate so the review/comment runs, but force the check to fail below.
+    gatePolicy = tightenPolicy(resolvePolicy(config), failOnOverride);
+    policyLoadFailed = true;
+  }
+
+  const request: CouncilRequest =
     {
       mode: "review",
       subject: `PR #${pullNumber}: ${pullRequest.title ?? "Untitled pull request"}`,
@@ -594,9 +624,8 @@ export async function runAction(deps: ActionDeps): Promise<void> {
         title: pullRequest.title,
         url: pullRequest.html_url
       }
-    },
-    config
-  );
+    };
+  const rawReport = await runCouncil(request, config, { requiredRoles: gatePolicy.rolesRequired, minRealProviders: gatePolicy.minRealProviders });
 
   // A canonical committed baseline is automatic and read from the BASE ref, so a
   // PR cannot enable, redirect, or edit away its own findings. Malformed, stale,
@@ -644,6 +673,19 @@ export async function runAction(deps: ActionDeps): Promise<void> {
       `Could not apply the suppression store (${error instanceof Error ? error.message : String(error)}) — gating on all findings.`
     );
   }
+
+  const receipt = createDecisionRecord(request, config, report, gatePolicy, {
+    toolVersion: pkg.version,
+    policyUnavailable: policyLoadFailed,
+    source: { kind: "pull-request",
+      baseSha: /^[a-f0-9]{40,64}$/.test(baseRef) ? baseRef : undefined,
+      headSha: pullRequest.head?.sha && /^[a-f0-9]{40,64}$/.test(pullRequest.head.sha) ? pullRequest.head.sha : undefined }
+  });
+  report = { ...report, metadata: { ...report.metadata, decision: receipt } };
+  const receiptDirectory = await mkdtemp(join(deps.env?.RUNNER_TEMP ?? tmpdir(), "quorate-decision-"));
+  const receiptPath = join(receiptDirectory, "decision.json");
+  await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+  deps.setOutput("receipt-path", receiptPath);
 
   const summary = summarizeDiff(budget.diff);
   const includeReviewGraph = parseBoolean(input("reviewgraph"), false);
@@ -716,33 +758,6 @@ export async function runAction(deps: ActionDeps): Promise<void> {
     }
   }
 
-  // Resolve the merge policy: a standalone .quorate/policy.yml from the BASE ref
-  // wins, else the legacy github config. A MALFORMED committed policy is a broken
-  // gate contract — fail CLOSED: the review still runs (the comment is useful) but
-  // the check is failed, because the intended strictness (required roles, provider
-  // floor, agreement gate) is unknown and must not silently relax to the weaker
-  // github-config default. (Contrast with the baseline, where fail-open is strictly
-  // safer because it gates on MORE findings.)
-  const failOnOverride = input("fail-on");
-  let gatePolicy: QuoratePolicy;
-  let policyLoadFailed = false;
-  try {
-    const basePolicy = await loadBasePolicy(client, { owner, repo, ref: baseRef, path: policyPath });
-    gatePolicy = tightenPolicy(
-      resolvePolicy(config, { policy: basePolicy ?? undefined }),
-      failOnOverride
-    );
-    if (basePolicy) deps.info?.(`Loaded VerdictGate policy from ${policyPath} (base ref).`);
-  } catch (error: unknown) {
-    const reason = error instanceof Error ? error.message : String(error);
-    deps.warning?.(
-      `Could not load the committed merge policy (${reason}). The check will fail — the policy's intended strictness is unknown and must not silently relax. Fix the policy file on the base branch.`
-    );
-    // Still derive a gate so the review/comment runs, but force the check to fail below.
-    gatePolicy = tightenPolicy(resolvePolicy(config), failOnOverride);
-    policyLoadFailed = true;
-  }
-
   if (!policyLoadFailed && !gatePolicy.enabled) {
     deps.warning?.(
       "VerdictGate merge blocking is disabled by policy (merge_gate.enabled: false) — no verdict can fail this check."
@@ -774,9 +789,10 @@ export async function run(): Promise<void> {
   });
 }
 
-// Only auto-run the action entrypoint inside a real GitHub Actions runner.
-// Importing these helpers elsewhere (the GitHub App, tests) must NOT execute it.
-if (!process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
+// GitHub launches the bundled CommonJS file directly. Imports from the App or
+// tests must remain inert even when they happen inside an Actions runner.
+if (typeof require !== "undefined" && typeof module !== "undefined" && require.main === module &&
+    !process.env.VITEST && process.env.GITHUB_ACTIONS === "true") {
   run().catch((error: unknown) => {
     core.setFailed(error instanceof Error ? error.message : String(error));
   });

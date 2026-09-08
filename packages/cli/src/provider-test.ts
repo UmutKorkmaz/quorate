@@ -10,6 +10,7 @@ export interface ProviderTestResult {
   providerId: string;
   type: ProviderConfig["type"];
   status: "ok" | "warn" | "error";
+  verification: "configuration";
   checks: Array<{ name: string; status: "ok" | "warn" | "error"; detail: string }>;
   models?: string[];
 }
@@ -26,7 +27,7 @@ export async function testProvider(provider: ProviderConfig): Promise<ProviderTe
 
   if (provider.type === "mock") {
     checks.push({ name: "provider", status: "ok", detail: "Built-in heuristic provider is available." });
-    return { providerId: provider.id, type: provider.type, status: "ok", checks };
+    return { providerId: provider.id, type: provider.type, status: "ok", verification: "configuration", checks };
   }
 
   if (provider.type === "cli") {
@@ -42,7 +43,10 @@ export async function testProvider(provider: ProviderConfig): Promise<ProviderTe
         ? { name: "headless args", status: "ok", detail: formatSpawnArgv(provider, provider.roles?.[0] ?? "maintainer", { mode: "review", subject: "Provider test", diff: "", repoPath: process.cwd() }) }
         : { name: "headless args", status: "error", detail: "No headless args configured; provider may open an interactive session." }
     );
-    return { providerId: provider.id, type: provider.type, status: worstStatus(checks), checks };
+    checks.push(provider.inputMode
+      ? { name: "input mode", status: "ok", detail: provider.inputMode }
+      : { name: "input mode", status: "error", detail: "No input mode configured; choose stdin, prompt-file, or none." });
+    return { providerId: provider.id, type: provider.type, status: worstStatus(checks), verification: "configuration", checks };
   }
 
   if (!provider.model) {
@@ -65,7 +69,7 @@ export async function testProvider(provider: ProviderConfig): Promise<ProviderTe
       : { name: "models", status: "warn", detail: `No models returned from ${provider.baseUrl ?? "default endpoint"}/models.` }
   );
 
-  return { providerId: provider.id, type: provider.type, status: worstStatus(checks), checks, models };
+  return { providerId: provider.id, type: provider.type, status: worstStatus(checks), verification: "configuration", checks, models };
 }
 
 export function formatProviderTestResult(result: ProviderTestResult): string {
@@ -73,6 +77,7 @@ export function formatProviderTestResult(result: ProviderTestResult): string {
   for (const check of result.checks) {
     lines.push(`  ${check.status.toUpperCase().padEnd(5)} ${check.name}: ${check.detail}`);
   }
+  lines.push("  Configuration checks only; no review was executed and CLI authentication was not tested.");
   if (result.models && result.models.length > 0) {
     lines.push(`  Models: ${result.models.slice(0, 10).join(", ")}${result.models.length > 10 ? " ..." : ""}`);
   }

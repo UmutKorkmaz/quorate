@@ -1,9 +1,11 @@
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { createDecisionRecord, createDefaultConfig, resolvePolicy, runCouncil } from "@quorate/core";
 import { describe, expect, it, vi } from "vitest";
 import { appendApprovalAuditRecord, auditKeyPath, auditLedgerPath, auditLockPath } from "../src/trust-ledger.js";
-import { runAuditExport, runAuditVerify } from "../src/audit-command.js";
+import { captureDecisionSource, runAuditExport, runAuditVerify } from "../src/audit-command.js";
 import { buildProgram } from "../src/index.js";
 
 function tempAuditDir(): string {
@@ -26,6 +28,47 @@ function seed(dir: string): void {
 }
 
 describe("audit commands", () => {
+  it("keeps unborn-repository reviews available with explicit diff-only identity", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "quorate-unborn-receipt-"));
+    try {
+      execFileSync("git", ["init", "-q"], { cwd });
+      writeFileSync(join(cwd, "file.txt"), "first change\n");
+      execFileSync("git", ["add", "file.txt"], { cwd });
+      expect(captureDecisionSource(cwd, {})).toEqual({ kind: "diff" });
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+
+  it("verifies a portable receipt and rejects input drift without counting its own runtime artifacts", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "quorate-receipt-"));
+    try {
+      execFileSync("git", ["init", "-q"], { cwd });
+      execFileSync("git", ["config", "user.name", "Receipt Test"], { cwd });
+      execFileSync("git", ["config", "user.email", "receipt@example.test"], { cwd });
+      writeFileSync(join(cwd, "file.txt"), "before\n");
+      execFileSync("git", ["add", "."], { cwd });
+      execFileSync("git", ["commit", "-qm", "before"], { cwd });
+      writeFileSync(join(cwd, "file.txt"), "after\n");
+      const config = createDefaultConfig();
+      const request = { mode: "review" as const, subject: "receipt", diff: "+after" };
+      const source = captureDecisionSource(cwd, {});
+      const report = await runCouncil(request, config);
+      const record = createDecisionRecord(request, config, report, resolvePolicy(config), { source });
+      mkdirSync(join(cwd, ".quorate"));
+      writeFileSync(join(cwd, ".quorate/last-report.json"), JSON.stringify(report));
+      writeFileSync(join(cwd, ".quorate/decision.json"), JSON.stringify(record));
+      const options = { cwd, receipt: ".quorate/decision.json", current: true, json: true };
+      expect(runAuditVerify(options).exitCode).toBe(0);
+      writeFileSync(join(cwd, "file.txt"), "changed after review\n");
+      expect(runAuditVerify(options).exitCode).toBe(1);
+      writeFileSync(join(cwd, "input.diff"), "+after");
+      expect(runAuditVerify({ ...options, current: false, diff: "input.diff" }).exitCode).toBe(0);
+      writeFileSync(join(cwd, "input.diff"), "+other");
+      expect(runAuditVerify({ ...options, current: false, diff: "input.diff" }).exitCode).toBe(1);
+      writeFileSync(join(cwd, ".quorate/decision.json"), JSON.stringify({ ...record, result: { verdict: "pass", degraded: false } }));
+      expect(runAuditVerify(options).exitCode).toBe(1);
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
+
   it("registers the exact `quorate audit verify` and `quorate audit export` command names", () => {
     const audit = buildProgram().commands.find((command) => command.name() === "audit");
 

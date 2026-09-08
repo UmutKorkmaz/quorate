@@ -11,7 +11,7 @@ as an editor diagnostic with the single **PASS / WARN / FAIL** verdict in the st
 npm install -g quorate     # the extension shells out to this CLI
 ```
 
-Requires **Node ≥ 22** and a git repository with a base branch to diff against.
+Requires **Node ≥ 22.22.0** and a git repository. Use the current Quorate CLI for report-bound fixes.
 
 ## Use
 
@@ -20,6 +20,7 @@ Requires **Node ≥ 22** and a git repository with a base branch to diff against
 - Findings appear in the **Problems** panel and as squiggles on the offending lines;
   the status bar shows the verdict (`$(check)` PASS / `$(warning)` WARN / `$(error)` FAIL).
 - **Quorate: Clear Findings** removes them.
+- **Fix Finding with Agent** starts a fresh terminal with both the reviewed workspace and explicit `--cwd`, plus the report timestamp and finding fingerprint. The CLI refuses a stale report instead of fixing a different finding. Provider status accepts both the current safe `doctor --json` format and older CLI reports.
 
 ## Settings
 

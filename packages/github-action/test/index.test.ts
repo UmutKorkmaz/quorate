@@ -1,8 +1,8 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createDefaultConfig, fingerprintFinding, reportCommentMarker } from "@quorate/core";
+import { createDefaultConfig, fingerprintFinding, reportCommentMarker, validateDecisionRecord } from "@quorate/core";
 import {
   applyOverrides,
   loadBaseRepositoryLockfiles,
@@ -13,6 +13,9 @@ import {
   type ActionContext,
   type ActionDeps
 } from "../src/index.js";
+
+const receiptDirectories: string[] = [];
+afterEach(() => { for (const directory of receiptDirectories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 
 /** Build a deps object with sensible defaults that individual tests can override. */
 function makeDeps(overrides: Partial<ActionDeps> = {}): {
@@ -51,6 +54,7 @@ function makeDeps(overrides: Partial<ActionDeps> = {}): {
     getInput: (name) => inputs[name],
     setOutput: (name, value) => {
       outputs[name] = value;
+      if (name === "receipt-path") receiptDirectories.push(dirname(value));
     },
     setFailed: (message) => {
       failed.push(message);
@@ -312,6 +316,11 @@ describe("runAction", () => {
 
     expect(outputs.verdict).toBeDefined();
     expect(outputs.findings).toBeDefined();
+    const receipt = JSON.parse(readFileSync(outputs["receipt-path"], "utf8"));
+    expect(validateDecisionRecord(receipt)).toBe(true);
+    expect(receipt.result.verdict).toBe(outputs.verdict);
+    expect(receipt.source.kind).toBe("pull-request");
+    expect(receipt.integrity.attestation).toBe("none");
     expect(Number.isNaN(Number(outputs.findings))).toBe(false);
     expect(summaryRaw.length).toBe(1);
     expect(summaryRaw[0]).toContain(reportCommentMarker);

@@ -3,7 +3,8 @@ import { runApiProvider } from "./api-provider.js";
 import { runCliProvider } from "./cli-provider.js";
 import { runHeuristicReview } from "./heuristics.js";
 import { computeReviewId, fingerprintFinding } from "./identity.js";
-import { createDefaultConfig } from "./providers.js";
+import { createDefaultConfig, defaultCouncils } from "./providers.js";
+import { PACKS } from "./packs.js";
 import { mergeWithMaster } from "./merge.js";
 import { areSameFinding } from "./similarity.js";
 import { runSupplyChainReview, supplyChainReviewEnabled } from "./supply-chain.js";
@@ -101,7 +102,7 @@ export function clusterFindings(findings: Finding[]): Finding[] {
     const agreedBy = [
       ...new Set(
         cluster
-          .map((member) => member.providerId)
+          .flatMap((member) => [member.providerId, ...(member.agreedBy ?? [])])
           .filter((id): id is string => Boolean(id))
       )
     ].sort();
@@ -303,11 +304,111 @@ function supplyChainFailureResult(
   };
 }
 
+type ProviderLane = ReturnType<typeof buildPlannedLanes>[number];
+type Routing = NonNullable<CouncilReport["metadata"]["routing"]>;
+const KNOWN_ROLES = new Set([...defaultCouncils, ...Object.values(PACKS).flatMap((pack) => pack.councils)]);
+
+function routeAdaptiveLanes(
+  lanes: ProviderLane[], request: CouncilRequest, deterministic: ProviderResult[],
+  options: RunCouncilOptions | undefined, maxParallelProviders: number
+): { selected: Set<ProviderLane>; routing: Routing } {
+  const diff = request.fullDiff ?? request.diff ?? "";
+  const headers = diff.split(/\r?\n/).filter((line) => line.startsWith("diff --git "));
+  const paths = headers.flatMap((line) => {
+    const match = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
+    return match ? [match[1], match[2]] : [];
+  });
+  const completePaths = request.mode === "review" && paths.length > 0 && paths.length === headers.length * 2;
+  const highRisk = deterministic.some((result) => result.status !== "ok" || activeFindings(result.findings).some((finding) =>
+    finding.severity === "high" || finding.severity === "critical")) ||
+    paths.some((path) => /(?:^|\/)(?:\.github|migrations?|auth|security|payments?|contracts?)(?:\/|\.)|(?:^|\/)(?:Dockerfile|package\.json|SECURITY\.md)$|\.(?:sol|tf)$/i.test(path)) ||
+    /\[(?:diff|patch)[^\]]*(?:omitted|truncated)|(?:GIT binary patch|Binary files .* differ)/i.test(diff);
+  const docsOnly = completePaths && paths.every((path) => /\.(?:md|rst|txt)$/i.test(path));
+  const testsOnly = completePaths && paths.every((path) => /(?:^|\/)(?:__tests__|tests?|specs?)\/|\.(?:test|spec)\.[^/]+$/i.test(path));
+  const risk: Routing["risk"] = highRisk ? "high" : docsOnly || testsOnly ? "low" : "standard";
+  const required = new Set(options?.requiredRoles ?? []);
+  const reasons = new Map<ProviderLane, string>();
+  for (const lane of lanes) {
+    const role = lane.role;
+    const reason = required.has(role) ? "Required by policy"
+      : risk !== "low" ? (risk === "high" ? "Escalated by deterministic evidence or sensitive paths" : "Full review for mixed, code, or unknown input")
+        : role === "maintainer" || role === "architect" ? "General review retained"
+          : !KNOWN_ROLES.has(role) ? "Custom role retained conservatively"
+            : testsOnly && role === "qa" ? "Test changes require QA review"
+              : undefined;
+    if (reason) reasons.set(lane, reason);
+  }
+  const realIds = new Set([...reasons.keys()].filter((lane) => providerTypeOf(lane.provider) !== "mock").map((lane) => lane.provider.id));
+  const floor = Math.max(1, options?.minRealProviders ?? 0);
+  for (const lane of lanes) {
+    if (realIds.size >= floor) break;
+    if (providerTypeOf(lane.provider) === "mock" || realIds.has(lane.provider.id)) continue;
+    reasons.set(lane, "Retained to meet the real-provider floor");
+    realIds.add(lane.provider.id);
+  }
+  const selected = new Set(reasons.keys());
+  const entry = (lane: ProviderLane, reason: string) => ({ providerId: lane.provider.id, role: lane.role, reason });
+  return {
+    selected,
+    routing: {
+      mode: "adaptive", risk, maxParallelProviders,
+      selected: lanes.filter((lane) => selected.has(lane)).map((lane) => entry(lane, reasons.get(lane)!)),
+      skipped: lanes.filter((lane) => !selected.has(lane)).map((lane) => entry(lane,
+        docsOnly ? "Documentation-only changes do not select this specialist" : "Test-only changes do not select this specialist"))
+    }
+  };
+}
+
+function unrunLane(lane: ProviderLane, status: "skipped" | "interrupted", summary: string, ctx: RunContext): ProviderResult {
+  const result: ProviderResult = {
+    providerId: lane.provider.id, role: lane.role, providerType: providerTypeOf(lane.provider),
+    status, summary, findings: [], durationMs: 0
+  };
+  ctx.emit({ type: "provider/done", councilRunId: ctx.councilRunId, providerId: lane.provider.id, role: lane.role, result });
+  return result;
+}
+
+async function runLanes(lanes: ProviderLane[], request: CouncilRequest, ctx: RunContext, limit?: number): Promise<ProviderResult[]> {
+  const run = async (lane: ProviderLane): Promise<ProviderResult> => {
+    try {
+      return await runProviderWithEvents(lane.provider, lane.role, request, ctx);
+    } catch (error) {
+      return {
+        providerId: lane.provider.id, role: lane.role, providerType: providerTypeOf(lane.provider), status: "error",
+        summary: "Provider run rejected unexpectedly.", findings: [],
+        error: error instanceof Error ? error.message : String(error), durationMs: 0
+      };
+    }
+  };
+  if (limit === undefined) return Promise.all(lanes.map(run));
+  const results = new Array<ProviderResult>(lanes.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, lanes.length) }, async () => {
+    while (next < lanes.length) {
+      const index = next++;
+      const lane = lanes[index];
+      results[index] = ctx.signal?.aborted
+        ? unrunLane(lane, "interrupted", "Provider run interrupted before it started.", ctx)
+        : await run(lane);
+    }
+  }));
+  return results;
+}
+
 export async function runCouncil(
   request: CouncilRequest,
   config: QuorateConfig = createDefaultConfig(),
   options?: RunCouncilOptions
 ): Promise<CouncilReport> {
+  const startedAt = Date.now();
+  const adaptive = config.execution?.mode === "adaptive";
+  const maxParallelProviders = config.execution?.maxParallelProviders ?? 3;
+  if (adaptive && (!Number.isInteger(maxParallelProviders) || maxParallelProviders < 1 || maxParallelProviders > 16)) {
+    throw new Error("execution.maxParallelProviders must be an integer from 1 to 16.");
+  }
+  if (adaptive && options?.minRealProviders !== undefined && (!Number.isInteger(options.minRealProviders) || options.minRealProviders < 0)) {
+    throw new Error("minRealProviders must be a nonnegative integer.");
+  }
   const councilRunId = randomUUID();
   const signal = options?.signal;
   const onEvent = options?.onEvent;
@@ -323,6 +424,9 @@ export async function runCouncil(
 
   const ctx: RunContext = { councilRunId, emit, signal };
   const lanes = buildPlannedLanes(config);
+  if (adaptive && !lanes.some((lane) => lane.provider.id === "heuristic")) {
+    lanes.unshift({ provider: { id: "heuristic", type: "mock" }, role: "maintainer" });
+  }
   const includeSupplyChain = supplyChainReviewEnabled(request, config);
   const includeWeb3Dd = web3DdReviewEnabled(config, request);
   const supplyChainProviderType: ProviderType = "mock";
@@ -367,65 +471,70 @@ export async function runCouncil(
     customHeuristics: config.customHeuristics ?? request.customHeuristics
   };
 
-  const settled = await Promise.allSettled(
-    lanes.map((lane) => runProviderWithEvents(lane.provider, lane.role, reviewRequest, ctx))
-  );
+  const providerResults: ProviderResult[] = [];
+  let routing: Routing | undefined;
+  const runSupplyChainLane = (): void => {
+    if (includeSupplyChain) {
+      emit({
+        type: "provider/started",
+        councilRunId,
+        providerId: "supply-chain",
+        role: "supply-chain",
+        providerType: supplyChainProviderType,
+        at: new Date().toISOString()
+      });
 
-  const providerResults: ProviderResult[] = settled.map((outcome, index) => {
-    if (outcome.status === "fulfilled") return outcome.value;
-    const lane = lanes[index];
-    return {
-      providerId: lane.provider.id,
-      role: lane.role,
-      providerType: providerTypeOf(lane.provider),
-      status: "error",
-      summary: "Provider run rejected unexpectedly.",
-      findings: [],
-      error: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
-      durationMs: 0
-    };
-  });
-  if (includeSupplyChain) {
-    emit({
-      type: "provider/started",
-      councilRunId,
-      providerId: "supply-chain",
-      role: "supply-chain",
-      providerType: supplyChainProviderType,
-      at: new Date().toISOString()
-    });
-
-    let supplyChainResult: ProviderResult;
-    if (signal?.aborted) {
-      supplyChainResult = supplyChainFailureResult(
-        "interrupted",
-        "SupplyChainGate review was interrupted before it started."
-      );
-    } else {
-      try {
-        supplyChainResult =
-          runSupplyChainReview(reviewRequest, config) ??
-          supplyChainFailureResult(
-            "error",
-            "SupplyChainGate was planned but did not produce a result."
-          );
-      } catch (error) {
+      let supplyChainResult: ProviderResult;
+      if (signal?.aborted) {
         supplyChainResult = supplyChainFailureResult(
-          "error",
-          "SupplyChainGate review threw before producing a result.",
-          error instanceof Error ? error.message : String(error)
+          "interrupted",
+          "SupplyChainGate review was interrupted before it started."
         );
+      } else {
+        try {
+          supplyChainResult =
+            runSupplyChainReview(reviewRequest, config) ??
+            supplyChainFailureResult(
+              "error",
+              "SupplyChainGate was planned but did not produce a result."
+            );
+        } catch (error) {
+          supplyChainResult = supplyChainFailureResult(
+            "error",
+            "SupplyChainGate review threw before producing a result.",
+            error instanceof Error ? error.message : String(error)
+          );
+        }
       }
-    }
 
-    providerResults.push(supplyChainResult);
-    emit({
-      type: "provider/done",
-      councilRunId,
-      providerId: "supply-chain",
-      role: "supply-chain",
-      result: supplyChainResult
-    });
+      providerResults.push(supplyChainResult);
+      emit({
+        type: "provider/done",
+        councilRunId,
+        providerId: "supply-chain",
+        role: "supply-chain",
+        result: supplyChainResult
+      });
+    }
+  };
+
+  if (adaptive) {
+    const deterministic = lanes.filter((lane) => providerTypeOf(lane.provider) === "mock");
+    providerResults.push(...await runLanes(deterministic, reviewRequest, ctx, 1));
+    runSupplyChainLane();
+    const models = lanes.filter((lane) => providerTypeOf(lane.provider) !== "mock");
+    const decision = routeAdaptiveLanes(models, reviewRequest, providerResults, options, maxParallelProviders);
+    routing = decision.routing;
+    routing.selected.unshift(...providerResults.map((result) => ({ providerId: result.providerId, role: result.role, reason: "Deterministic preflight" })));
+    if (includeWeb3Dd) routing.selected.push({ providerId: "web3-dd", role: "web3-due-diligence", reason: "Configured external evidence lane retained" });
+    const selected = models.filter((lane) => decision.selected.has(lane));
+    const results = await runLanes(selected, reviewRequest, ctx, maxParallelProviders);
+    const byLane = new Map(selected.map((lane, index) => [lane, results[index]]));
+    providerResults.push(...models.map((lane) => byLane.get(lane) ?? unrunLane(lane, "skipped",
+      routing!.skipped.find((entry) => entry.providerId === lane.provider.id && entry.role === lane.role)!.reason, ctx)));
+  } else {
+    providerResults.push(...await runLanes(lanes, reviewRequest, ctx));
+    runSupplyChainLane();
   }
   if (includeWeb3Dd && !signal?.aborted) {
     try {
@@ -500,6 +609,8 @@ export async function runCouncil(
     providerResults,
     metadata: {
       generatedAt: new Date().toISOString(),
+      durationMs: Date.now() - startedAt,
+      ...(routing ? { routing } : {}),
       mode: request.mode,
       subject: request.subject,
       providers: ranProviders,

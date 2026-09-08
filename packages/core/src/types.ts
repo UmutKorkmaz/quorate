@@ -178,6 +178,8 @@ export interface QuorateConfig {
   github: GithubConfig;
   /** Optional review-budget guardrails. */
   budget?: QuorateBudgetConfig;
+  /** Opt-in deterministic preflight, conservative role routing, and bounded provider concurrency. */
+  execution?: { mode: "adaptive"; maxParallelProviders?: number };
   /** Optional deterministic supply-chain review lane. */
   supplyChain?: SupplyChainGateConfig;
   /** Optional master agent that semantically merges duplicate findings. */
@@ -282,6 +284,10 @@ export interface CouncilReport {
   providerResults: ProviderResult[];
   metadata: {
     generatedAt: string;
+    /** Wall-clock council duration, including orchestration and adjudication. */
+    durationMs?: number;
+    /** Portable content-integrity record for the final policy-evaluated report. */
+    decision?: import("./decision.js").DecisionRecord;
     mode: CouncilMode;
     subject: string;
     providers: string[];
@@ -309,6 +315,14 @@ export interface CouncilReport {
     suppressedFindings?: number;
     /** Optional review-budget summary for this run. */
     budget?: ReviewBudgetSummary;
+    /** Explicit accounting for every lane retained or omitted by adaptive execution. */
+    routing?: {
+      mode: "adaptive";
+      risk: "low" | "standard" | "high";
+      maxParallelProviders: number;
+      selected: Array<{ providerId: string; role: string; reason: string }>;
+      skipped: Array<{ providerId: string; role: string; reason: string }>;
+    };
   };
 }
 
@@ -363,6 +377,9 @@ export type CouncilEvent =
 export interface RunCouncilOptions {
   onEvent?: (event: CouncilEvent) => void;
   signal?: AbortSignal;
+  /** Policy constraints that adaptive routing must retain; final policy still verifies successful execution. */
+  requiredRoles?: string[];
+  minRealProviders?: number;
   /** Marks this run as a nested subagent council of a parent run's lane. */
   parent?: { runId: string; lane: string };
 }

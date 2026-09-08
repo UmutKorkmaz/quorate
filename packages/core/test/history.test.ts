@@ -34,6 +34,17 @@ function report(
 }
 
 describe("toHistoryEntry", () => {
+  it("persists measured duration and independent corroboration, keeping unknowns absent", () => {
+    const entry = toHistoryEntry(report([
+      finding({ agreedBy: ["a", "b"] }), finding({ agreedBy: ["a", "a"] })
+    ], { metadata: { durationMs: 1234 } }));
+    expect(entry).toMatchObject({ schemaVersion: 2, durationMs: 1234, agreement: 0.5 });
+    expect(toHistoryEntry(report([])).durationMs).toBeUndefined();
+    expect(toHistoryEntry(report([])).agreement).toBeUndefined();
+    expect(isHistoryEntry({ ...entry, durationMs: -1 })).toBe(false);
+    expect(isHistoryEntry({ ...entry, agreement: 1.5 })).toBe(false);
+  });
+
   it("projects a report to a compact, reviewId-keyed history entry", () => {
     const r = report([finding({ severity: "high", file: "src/a.ts" }), finding({ severity: "medium", title: "Perf", file: "src/b.ts" })]);
     const entry = toHistoryEntry(r);

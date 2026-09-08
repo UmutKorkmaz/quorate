@@ -7,6 +7,7 @@ export * from "./config.js";
 export * from "./contract.js";
 export * from "./council.js";
 export * from "./custom-packs.js";
+export * from "./decision.js";
 export * from "./export.js";
 export * from "./heuristics.js";
 export * from "./history.js";

@@ -1,4 +1,4 @@
-import type { CouncilEvent, CouncilReport, CouncilRequest, QuorateConfig } from "@quorate/core";
+import type { CouncilEvent, CouncilReport, CouncilRequest, QuorateConfig, RunCouncilOptions } from "@quorate/core";
 import { runCouncil } from "@quorate/core";
 
 /** Human-readable progress for stderr while stdout carries NDJSON only. */
@@ -75,11 +75,13 @@ export async function runCouncilWithJsonStream(
   request: CouncilRequest,
   config: QuorateConfig,
   sink: JsonStreamSink,
-  transformReport?: (report: CouncilReport) => CouncilReport
+  transformReport?: (report: CouncilReport) => CouncilReport,
+  constraints: Pick<RunCouncilOptions, "requiredRoles" | "minRealProviders"> = {}
 ): Promise<CouncilReport> {
   // Opt-in chunk passthrough for streaming UIs (e.g. the VS Code extension).
   const includeChunks = ["1", "true", "yes"].includes((process.env.QUORATE_JSON_CHUNKS ?? "").toLowerCase());
   const raw = await runCouncil(request, config, {
+    ...constraints,
     onEvent: (event) => handleCouncilEvent(event, sink, includeChunks)
   });
   // The per-lane events above are the raw run; the authoritative final report

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import YAML from "yaml";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 interface ActionMetadata {
@@ -13,6 +14,19 @@ const root = process.cwd();
 const metadata = YAML.parse(readFileSync(resolve(root, "action.yml"), "utf8")) as ActionMetadata;
 
 describe("GitHub Action release contract", () => {
+  it("runs the built Action only as the direct entrypoint, including on Actions hosts", () => {
+    const entry = resolve(root, metadata.runs.main);
+    const env = { ...process.env, GITHUB_ACTIONS: "true", GITHUB_TOKEN: "", "INPUT_GITHUB-TOKEN": "" };
+    delete env.VITEST;
+    const imported = spawnSync(process.execPath, ["-e", `require(${JSON.stringify(entry)}); console.log('inert import');`], { env, encoding: "utf8", timeout: 10_000 });
+    expect(imported.status).toBe(0);
+    expect(imported.stdout).toContain("inert import");
+    expect(imported.stdout).not.toContain("::error");
+    const direct = spawnSync(process.execPath, [entry], { env, encoding: "utf8", timeout: 10_000 });
+    expect(direct.status).toBe(1);
+    expect(direct.stdout).toContain("github-token");
+  });
+
   it("ships the runtime bundle declared by action.yml", () => {
     expect(existsSync(resolve(root, metadata.runs.main))).toBe(true);
   });

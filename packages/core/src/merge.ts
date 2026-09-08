@@ -109,7 +109,7 @@ export function parseMergeResult(text: string, findings: Finding[]): Finding[] |
             : base.severity)
         : base.severity;
     const agreedBy = [
-      ...new Set(members.map((member) => member.providerId).filter((id): id is string => Boolean(id)))
+      ...new Set(members.flatMap((member) => [member.providerId, ...(member.agreedBy ?? [])]).filter((id): id is string => Boolean(id)))
     ].sort();
 
     merged.push({
@@ -148,6 +148,7 @@ async function callApi(provider: ProviderConfig, prompt: string, signal?: AbortS
   try {
     const response = await fetch(url, {
       method: "POST",
+      redirect: "error",
       headers,
       signal: controller.signal,
       body: JSON.stringify({

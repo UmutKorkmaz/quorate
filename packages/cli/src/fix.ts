@@ -2,7 +2,25 @@ import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
-import type { Finding } from "@quorate/core";
+import type { CouncilReport, Finding } from "@quorate/core";
+
+/** Bind an editor handoff to the reviewed run and finding before any write agent can start. */
+export function resolveBoundFixFinding(report: CouncilReport, binding: {
+  reportId?: string;
+  reportGeneratedAt?: string;
+  findingFingerprint?: string;
+}): Finding | undefined {
+  if (binding.reportId === undefined && binding.reportGeneratedAt === undefined && binding.findingFingerprint === undefined) return undefined;
+  if (!binding.reportId || !binding.reportGeneratedAt || !binding.findingFingerprint) {
+    throw new Error("Pass --report-id, --report-generated-at, and --finding-fingerprint together.");
+  }
+  if (report.metadata?.reviewId !== binding.reportId || report.metadata?.generatedAt !== binding.reportGeneratedAt) {
+    throw new Error("The saved review changed since this finding was selected. Review again and select the finding from the new report.");
+  }
+  const matches = report.findings.filter((finding) => finding.file && finding.fingerprint === binding.findingFingerprint);
+  if (matches.length !== 1) throw new Error("The selected finding is missing or ambiguous in the saved report. Review again before fixing.");
+  return matches[0];
+}
 
 /**
  * Fix snapshot/revert engine. Before a write-mode agent touches the tree we pin

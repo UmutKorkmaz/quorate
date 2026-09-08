@@ -40,6 +40,14 @@ Requires **Node ≥ 22.22.0**. Running `quorate` with no arguments opens the int
 
 ## Quick start
 
+The v1.4 candidate includes an offline first-run demo. It creates a disposable
+repository and demonstrates a failing dependency gate, the correction, and a
+passing gate without calling an AI provider:
+
+```bash
+quorate setup demo
+```
+
 ```bash
 quorate                                   # open the shell
 quorate doctor                            # see which AI CLIs are installed
@@ -52,7 +60,7 @@ quorate plan "migrate auth to passkeys"   # evaluate a plan instead of a diff
 In the shell, type `/` to open the command palette:
 
 ```text
-/setup                guided setup wizard (/git → /use → /review)
+/setup                show setup actions; /setup use <id> selects one reviewer
 /inspect              session diagnostics: config, agents, roles, spawn status
 /resume [id]          list or restore a saved session
 /providers            list agents and local availability
@@ -108,6 +116,10 @@ Every subcommand respects the global `-c, --config <path>` and `--cwd <path>` fl
 | `quorate provider remove <id>` / `presets` | Remove a provider; list API presets. | — |
 | `quorate pack scaffold <id>` | Create a custom pack template in `.quorate/packs/<id>.yml`. | `--force` |
 | `quorate init` | Write a starter `.quorate.yml` (real providers disabled). | `-f, --force` |
+| `quorate setup demo [directory]` | Run the offline fail → fix → pass journey in a new directory. | — |
+| `quorate feedback add` | Record a human finding outcome without changing policy. | `--finding <n>`, `--outcome <outcome>`, `--reason <text>` |
+| `quorate evaluate <manifest>` | Compare labeled, saved deterministic/single/council reports offline. | `--json` |
+| `quorate audit verify` | Verify the approval ledger or a portable decision receipt. | `--receipt <path>`, `--diff <path>`, `--current`, `--json` |
 
 `--diff`, `--base/--head`, and `--pr` select the diff source. For `quorate review`,
 `--json` streams NDJSON events with the final report as the last line; for
@@ -178,6 +190,79 @@ quorate contract check --before v1.0.0.yml --after v1.1.0.yml --gate
 ```
 
 Writes artifacts to `.quorate/contract/latest.json` and `latest.md` with deterministic hashes. The `quorate metrics` command aggregates local run evidence (verdict distribution, duration, finding counts, council agreement, proof pass rate, contract verdicts) — purely local, never transmitted.
+
+Contract checks preserve array containers and item types. Unresolved references,
+unsupported composition, media types, or depth are reported as coverage warnings;
+the current gate blocks breaking changes, so a warning requires human assessment.
+
+### Decision receipts and finding outcomes (v1.4 candidate)
+
+One-shot reviews save `.quorate/decision.json` and include the same record in the
+report. The record binds the reviewed input, available revision/worktree identity,
+configuration and resolved policy hashes, provider runs, finding provenance, and
+the final merge decision. Export it explicitly with `--write-receipt <path>`:
+
+```bash
+quorate review --diff changes.diff --write-receipt /tmp/decision.json
+quorate audit verify --receipt /tmp/decision.json --diff changes.diff
+quorate feedback targets
+quorate feedback add --finding 1 --outcome confirmed --reason "Reproduced with a missing permission"
+quorate feedback list --json
+```
+
+For a working-tree review, `audit verify --receipt .quorate/decision.json --current`
+also checks that the reviewed snapshot is still current. Receipt verification
+checks content integrity; it does not authenticate the producer or attest test
+execution. ProofRunner signatures remain local to their signing key.
+
+Feedback supports `confirmed`, `false-positive`, `accepted-risk`, and `fixed`.
+It is stored separately under `~/.quorate` with report/finding identity and a
+reason, and never changes a gate or suppression rule. Metrics retain measured
+council duration, provider agreement, and up to 100 signed proof outcomes; older
+history without a measurement remains unknown.
+
+### Adaptive execution (opt-in, v1.4 candidate)
+
+```yaml
+execution:
+  mode: adaptive
+  maxParallelProviders: 3
+```
+
+Adaptive mode runs deterministic checks first and bounds concurrent provider
+calls. Low-risk documentation/test changes can omit unrelated specialist roles;
+code changes and uncertain/high-risk inputs keep the full council. Required
+policy roles, custom roles, generalists, and the real-provider minimum are
+preserved. Routing decisions are recorded in report metadata and receipts.
+This is a conservative scheduling rule, not a calibrated confidence score.
+
+### Offline evaluation
+
+`quorate evaluate manifest.json --json` compares saved reports using explicit human
+labels. Report paths are relative to the manifest. Each case must contain the
+same variants; repeat the case with held-out changes to compare defect classes.
+
+```json
+{
+  "schema": 1,
+  "cases": [{
+    "id": "missing-permission",
+    "expectedIssueIds": ["authz-1"],
+    "runs": [
+      { "variant": "deterministic", "report": "deterministic.json", "labels": {} },
+      { "variant": "single", "report": "single.json", "labels": { "0123456789abcdef": "authz-1" } },
+      { "variant": "council", "report": "council.json", "labels": { "fedcba9876543210": "authz-1" } }
+    ]
+  }]
+}
+```
+
+Replace example fingerprints with the actual report finding IDs. Label every
+finding with its known issue ID, or `null` for a false positive. Missing truth or
+labels produce unknown precision/recall. Duplicate findings are counted separately
+and reduce precision. Missing timing/pricing stays unknown; input-cost estimates
+are not total billed cost. The manifest author must establish equivalent inputs,
+pin provider/tool versions, and keep tuning examples separate from evaluation.
 
 ### Specialized blockchain packs
 
@@ -522,6 +607,8 @@ full CI provider guide.
 **Outputs:** `verdict` (the final verdict — lowercase `pass`, `warn`, or `fail`) and
 `findings` (the finding count), plus `sarif-path` / `reviewgraph-path` when those
 sidecar files are enabled — use them to gate later steps.
+The v1.4 candidate also exposes `receipt-path`, the decision JSON written in the
+runner temporary directory for artifact archival and content-integrity checks.
 
 **Security:** the Action loads `.quorate.yml` from the pull request's **base
 branch**, never from the PR head — a pull request cannot supply the config that

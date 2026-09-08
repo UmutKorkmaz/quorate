@@ -4,7 +4,7 @@ import { runCliProvider } from "../src/cli-provider.js";
 describe("runCliProvider streaming", () => {
   it("invokes onChunk with stdout text as it arrives", async () => {
     // Print two distinct lines so we get at least one stdout chunk.
-    const script = "process.stdout.write('chunk-alpha\\n');process.stdout.write('chunk-beta\\n')";
+    const script = "process.stdout.write('- [info] chunk-alpha: first finding\\n');process.stdout.write('- [info] chunk-beta: second finding\\n')";
     const chunks: Array<{ stream: "stdout" | "stderr"; text: string }> = [];
 
     const result = await runCliProvider(

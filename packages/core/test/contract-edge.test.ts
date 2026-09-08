@@ -209,12 +209,12 @@ describe("contract edge: swagger 2.0 documents", () => {
     }
   });
 
-  it("identical swagger 2.0 docs compare to pass with zero findings, no throw", () => {
+  it("identical swagger 2.0 docs report unsupported body coverage without throwing", () => {
     const src = JSON.stringify(swagger2);
     expect(() => cmpRaw(src, src)).not.toThrow();
     const r = cmpRaw(src, src);
-    expect(r.verdict).toBe("pass");
-    expect(r.findings).toHaveLength(0);
+    expect(r.verdict).toBe("warn");
+    expect(r.findings.some((finding) => finding.rule === "schema-coverage-incomplete")).toBe(true);
   });
 
   it("swagger 2.0 with a removed operation compares without crashing and yields a valid verdict", () => {
