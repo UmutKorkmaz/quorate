@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Portable ProofRunner statements with explicit Ed25519 public-key trust, plus a
+  main-only GitHub proof workflow and OIDC/SLSA verification pinned to repository,
+  workflow, branch, source/signer commit, and hosted runner identity.
 - Portable decision receipts for one-shot CLI, Action, and App reviews, with
   input/revision, policy/configuration, provider and finding provenance, final
   gate reasons, coverage limitations, and explicit content-integrity verification.
@@ -29,8 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Foreign-agent ingest + hook installer** — `quorate monitor setup`
   installs Quorate hook-report entries in foreign AI CLIs so the monitor can
   observe them. Claude Code gets the rich surface (lanes, subagents, and live
-  approve/deny for `PermissionRequest` prompts). The Codex notify shim remains
-  unimplemented; its existing notify configuration is preserved. Other CLIs
+  approve/deny for `PermissionRequest` prompts). Codex turn-completion notifications
+  are supported through an argv bridge; existing notify configuration and TOML
+  formatting are preserved, with renewable setup locks and backups. Other CLIs
   (gemini, qwen, kimi, opencode, crush, goose) are observed by process scan.
   See `docs/MONITOR-HOOKS.md` for the honest capability matrix.
 - **`quorate hook-report --source <s> --event <E>`** — the foreign-CLI hook

@@ -213,7 +213,10 @@ quorate feedback list --json
 For a working-tree review, `audit verify --receipt .quorate/decision.json --current`
 also checks that the reviewed snapshot is still current. Receipt verification
 checks content integrity; it does not authenticate the producer or attest test
-execution. ProofRunner signatures remain local to their signing key.
+execution. Local ProofRunner signatures remain local to their signing key.
+For authenticated cross-machine proof, use the separate
+[portable proof modes](docs/PORTABLE-PROOFS.md): explicitly trusted Ed25519 signers
+or GitHub-hosted provenance bound to the expected workflow and source commit.
 
 Feedback supports `confirmed`, `false-positive`, `accepted-risk`, and `fixed`.
 It is stored separately under `~/.quorate` with report/finding identity and a
