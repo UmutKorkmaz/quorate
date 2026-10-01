@@ -6,7 +6,7 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import type { CouncilRequest } from "@quorate/core";
 import { readGitHubProof, type GitHubProofPolicy } from "./github-proof.js";
-import { readPortableProof } from "./portable-proof.js";
+import { readPortableProof, readBoundedProofFile } from "./portable-proof.js";
 import { writeSecureWorkspaceState } from "./secure-state.js";
 
 const PROOF_SCHEMA_VERSION = 1;
@@ -574,11 +574,9 @@ type ProofArtifactLoad =
 function loadProofArtifactDetailed(path: string, trustedKeyPath?: string | GitHubProofPolicy): ProofArtifactLoad {
   let raw: string;
   try {
-    const stat = lstatSync(resolve(path));
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_PROOF_ARTIFACT_BYTES) return { status: "tampered" };
-    raw = readFileSync(resolve(path), "utf8");
-  } catch {
-    return { status: "missing" };
+    raw = readBoundedProofFile(resolve(path)).toString("utf8");
+  } catch (error) {
+    return { status: (error as NodeJS.ErrnoException).code === "ENOENT" ? "missing" : "tampered" };
   }
   let parsed: unknown;
   try {
