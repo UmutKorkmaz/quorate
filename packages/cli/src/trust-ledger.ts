@@ -596,7 +596,7 @@ function createProvisionalKey(dir: string, fault?: (point: AuditFaultPoint) => v
   try {
     fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW | CLOEXEC, FILE_MODE);
     const initial = fstatSync(fd);
-    if (!initial.isFile() || (initial.mode & 0o777) !== FILE_MODE) {
+    if (!initial.isFile() || (process.platform !== "win32" && (initial.mode & 0o777) !== FILE_MODE)) {
       throw new Error("Audit provisional signing key candidate is not an owner-only regular file.");
     }
     fault?.("after-init-key-temp-create");
@@ -606,7 +606,7 @@ function createProvisionalKey(dir: string, fault?: (point: AuditFaultPoint) => v
     writeAll(fd, key.subarray(split));
     fsyncSync(fd);
     const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size !== 32 || (stat.mode & 0o777) !== FILE_MODE) {
+    if (!stat.isFile() || stat.size !== 32 || (process.platform !== "win32" && (stat.mode & 0o777) !== FILE_MODE)) {
       throw new Error("Audit provisional signing key was not durably created as an owner-only 32-byte file.");
     }
     fault?.("after-init-key-temp-fsync");
@@ -815,7 +815,8 @@ function releaseAuditLock(lock: OpenedLock): void {
 
 function assertAuditLockOwned(lock: OpenedLock): void {
   const held = fstatSync(lock.fd);
-  if (!held.isFile() || held.dev !== lock.dev || held.ino !== lock.ino || (held.mode & 0o777) !== FILE_MODE) {
+  if (!held.isFile() || held.dev !== lock.dev || held.ino !== lock.ino ||
+      (process.platform !== "win32" && (held.mode & 0o777) !== FILE_MODE)) {
     throw new Error("Audit lock ownership was lost.");
   }
   const current = readBoundedFile(lock.path, MAX_SMALL_FILE_BYTES);
@@ -983,7 +984,9 @@ export function appendApprovalAuditRecord(input: ApprovalAuditInput, options: Ap
     );
     try {
       const stat = fstatSync(ledgerFd);
-      if (!stat.isFile() || (stat.mode & 0o777) !== FILE_MODE) throw new Error("Audit ledger must be a 0600 regular file.");
+      if (!stat.isFile() || (process.platform !== "win32" && (stat.mode & 0o777) !== FILE_MODE)) {
+        throw new Error("Audit ledger must be a regular file with private platform permissions.");
+      }
       const line = `${canonicalJson(record)}\n`;
       if (Buffer.byteLength(line) > MAX_AUDIT_LINE_BYTES) throw new Error("Audit record exceeds the line limit.");
       if (stat.size + Buffer.byteLength(line) > MAX_AUDIT_LEDGER_BYTES || record.sequence > MAX_AUDIT_RECORDS) {

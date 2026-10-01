@@ -3,6 +3,7 @@ import {
   constants,
   existsSync,
   fstatSync,
+  ftruncateSync,
   fsyncSync,
   lstatSync,
   mkdirSync,
@@ -138,12 +139,37 @@ function isPidAlive(pid: number): boolean {
 const FILE_MODE = 0o600;
 const DIR_MODE = 0o700;
 
-/** Refuse to traverse a pre-planted symlink at a spool path: every create or
- *  append open carries O_NOFOLLOW, so a planted link fails with ELOOP instead
- *  of redirecting agent output to an attacker-chosen file. */
+/** O_NOFOLLOW is supplemented by path/descriptor identity checks because
+ * Windows does not provide that flag. Never truncate before checking identity. */
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
-const APPEND_FLAGS = constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | NOFOLLOW;
-const TRUNCATE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW;
+
+function openSpoolFile(path: string, truncate = false): number {
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, FILE_MODE);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const before = lstatSync(path);
+    if (!before.isFile() || before.isSymbolicLink()) throw new Error("Spool path must be a regular file, not a symlink.");
+    fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | NOFOLLOW);
+    try {
+      const opened = fstatSync(fd);
+      if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) {
+        throw new Error("Spool path changed while opening.");
+      }
+    } catch (error: unknown) {
+      closeSync(fd);
+      throw error;
+    }
+  }
+  try {
+    if (truncate) ftruncateSync(fd, 0);
+    return fd;
+  } catch (error: unknown) {
+    closeSync(fd);
+    throw error;
+  }
+}
 
 /** Atomic single-file write: temp + rename, cleaning the temp on failure. */
 function writeFileAtomic(path: string, content: string): void {
@@ -194,7 +220,7 @@ export function appendRunEventLine(runId: string, line: string, dir: string = de
   assertSafeRunId(runId);
   const path = liveRunFilePath(runId, dir);
   mkdirSync(dir, { recursive: true, mode: DIR_MODE });
-  const fd = openSync(path, APPEND_FLAGS, FILE_MODE);
+  const fd = openSpoolFile(path);
   try {
     writeSync(fd, `${line}\n`);
   } finally {
@@ -400,8 +426,7 @@ export function createLiveSpoolSink(options: LiveSpoolOptions = {}): LiveSpool {
     guard(() => {
       mkdirSync(dir, { recursive: true, mode: DIR_MODE });
       const path = liveRunFilePath(current.runId, dir);
-      closeSync(openSync(path, TRUNCATE_FLAGS, FILE_MODE)); // truncate any stale file, never through a symlink
-      fd = openSync(path, APPEND_FLAGS, FILE_MODE); // O_APPEND: every write lands at EOF atomically
+      fd = openSpoolFile(path, true); // validate before truncating; subsequent writes use O_APPEND
       writeMeta(dir, current);
       pruneLiveDir(dir);
     });
