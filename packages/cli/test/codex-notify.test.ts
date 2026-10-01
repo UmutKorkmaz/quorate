@@ -1,0 +1,63 @@
+import { describe, expect, it } from "vitest";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parse } from "smol-toml";
+import { mergeCodexNotify, stripCodexNotify, updateCodexNotify } from "../src/codex-notify.js";
+import { dispatchHook, parseHookPayload, foreignRunId } from "../src/hook-report.js";
+
+describe("Codex turn-completion integration", () => {
+  it("roundtrips comments and tables while treating a binary path as argv data", () => {
+    const original = '# keep\nmodel = "test"\n[projects."/tmp/repo"]\ntrust_level = "trusted"\n';
+    const binary = '/path with spaces/"$`quorate';
+    const merged = mergeCodexNotify(original, binary);
+    expect(parse(merged).notify).toEqual([binary, "hook-report", "--source", "codex", "--event", "notify"]);
+    expect(mergeCodexNotify(merged, "other")).toBe(merged);
+    expect(stripCodexNotify(merged)).toBe(original);
+  });
+  it.each(['notify = []\n', '"notify" = [\n "other",\n "arg"\n]\n'])('preserves an existing notification: %s', (original) => {
+    expect(mergeCodexNotify(original, "quorate")).toBe(original);
+    expect(stripCodexNotify(original)).toBe(original);
+  });
+  it("refuses malformed TOML and rechecks a newly occupied slot at apply time", () => {
+    expect(() => mergeCodexNotify('notify = [', 'quorate')).toThrow();
+    const file = join(mkdtempSync(join(tmpdir(), "q-notify-")), "config.toml");
+    writeFileSync(file, 'notify = ["existing"]\n');
+    updateCodexNotify(file, "quorate");
+    expect(readFileSync(file, "utf8")).toBe('notify = ["existing"]\n');
+  });
+  it("maps the actual Codex payload into a visible spool run", () => {
+    const dir = mkdtempSync(join(tmpdir(), "q-notify-"));
+    const payload = parseHookPayload(JSON.stringify({ type: "agent-turn-complete", "thread-id": "thread-42", "last-assistant-message": "Finished tests", cwd: "/repo" }));
+    dispatchHook("codex", "notify", payload, { dir, cwd: "/repo", pid: 123 });
+    expect(JSON.parse(readFileSync(join(dir, "codex-thread-42.meta.json"), "utf8"))).toMatchObject({ source: "codex", status: "done" });
+    expect(readFileSync(join(dir, "codex-thread-42.ndjson"), "utf8")).toContain("Finished tests");
+  });
+});
+
+it("preserves BOM and refuses orphan markers or concurrent setup", () => {
+  const original = '\uFEFFmodel = "test"\n';
+  expect(stripCodexNotify(mergeCodexNotify(original, "quorate"))).toBe(original);
+  expect(() => mergeCodexNotify("# quorate-managed-notify-v1\n", "quorate")).toThrow();
+  const dir = mkdtempSync(join(tmpdir(), "q-notify-lock-"));
+  const path = join(dir, "config.toml");
+  writeFileSync(path, original);
+  mkdirSync(`${path}.quorate-notify.lock`);
+  expect(() => updateCodexNotify(path, "quorate")).toThrow();
+  expect(readFileSync(path, "utf8")).toBe(original);
+});
+
+it("sanitizes hostile notification IDs before spool paths", () => {
+  expect(foreignRunId("codex", "../../escape")).toBe("codex-..-..-escape");
+});
+
+it("recovers a lease abandoned by a crashed setup", () => {
+  const dir = mkdtempSync(join(tmpdir(), "q-notify-stale-"));
+  const path = join(dir, "config.toml"), lock = `${path}.quorate-notify.lock`;
+  writeFileSync(path, 'model = "test"\n');
+  mkdirSync(lock);
+  const expired = new Date(Date.now() - 60_000);
+  utimesSync(lock, expired, expired);
+  expect(updateCodexNotify(path, "quorate")).toContain("installed");
+  expect(parse(readFileSync(path, "utf8")).notify).toBeDefined();
+});

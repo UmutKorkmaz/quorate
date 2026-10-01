@@ -102,7 +102,8 @@ import { formatProviderTestResult, testProvider } from "./provider-test.js";
 import { readRepositoryFiles, runSupplyChainScan } from "./supply-chain-command.js";
 import { captureDecisionSource, runAuditExport, runAuditVerify } from "./audit-command.js";
 import { prepareReviewRequest } from "./review-preparation.js";
-import { attachLatestProofToReview, detectProofCommands, runDetectedProofs, runProof, showLatestProof, verifyLatestProof } from "./proof-runner.js";
+import { exportPortableProof, generateProofKeyPair } from "./portable-proof.js";
+import { attachLatestProofToReview, detectProofCommands, runDetectedProofs, runProof, showLatestProof, verifyLatestProof, verifyPortableProof, verifyGitHubProof, getWorktreeFingerprint } from "./proof-runner.js";
 import { runContractCheck } from "./contract-command.js";
 import { runMetrics } from "./metrics-command.js";
 import { writeSecureWorkspaceState } from "./secure-state.js";
@@ -1107,6 +1108,10 @@ export function buildProgram(): Command {
     .option("--baseline-path <path>", "Baseline file to gate against (default .quorate.baseline.json)")
     .option("--suppress-path <path>", "Suppression store to apply (default .quorate/suppressions.json)")
     .option("--fail-on <severity>", "Override the gate threshold (critical…info, or never)")
+    .option("--proof-github-repo <owner/repo>", "Verify GitHub-hosted provenance for --proof")
+    .option("--proof-github-workflow <path>", "Expected .github/workflows/file.yml signer")
+    .option("--proof-github-ref <ref>", "Expected signer branch ref", "refs/heads/main")
+    .option("--proof-key <path>", "Explicit trusted Ed25519 public key for a portable --proof attestation")
     .option("--proof <path>", "Attach an explicit proof artifact (signed; a stale worktree attaches with a note)")
     .action(async (options) => {
       const cwd = cwdFrom(program);
@@ -1138,7 +1143,10 @@ export function buildProgram(): Command {
         context: prContext,
         pullRequest: options.pr ? { number: Number(options.pr) } : undefined
       };
-      const proofAttachment = attachLatestProofToReview(request, options.proof);
+      if (options.proofKey && !options.proof) throw new Error("--proof-key requires an explicit --proof artifact.");
+      if (Boolean(options.proofGithubRepo) !== Boolean(options.proofGithubWorkflow) || (options.proofGithubRepo && (!options.proof || options.proofKey))) throw new Error("GitHub proof requires --proof, --proof-github-repo and --proof-github-workflow, without --proof-key.");
+      const trust = options.proofGithubRepo ? { repo: options.proofGithubRepo, workflow: options.proofGithubWorkflow, ref: options.proofGithubRef, sourceDigest: getWorktreeFingerprint(cwd).gitHead ?? "" } : options.proofKey;
+      const proofAttachment = attachLatestProofToReview(request, options.proof, trust);
       request = proofAttachment.request;
       if (proofAttachment.note) console.error(proofAttachment.note);
       try {
@@ -1557,13 +1565,47 @@ export function buildProgram(): Command {
 
   proofCmd
     .command("verify")
-    .description("Verify the latest proof hash, Markdown digest, and current worktree fingerprint.")
+    .description("Verify proof content and current worktree fingerprint.")
+    .option("--artifact <path>", "Portable proof envelope (requires --trusted-key)")
+    .option("--trusted-key <path>", "Explicitly trusted signer public key")
     .option("--json", "Print machine-readable verification JSON")
     .action((options) => {
-      const result = verifyLatestProof(cwdFrom(program));
+      if (Boolean(options.artifact) !== Boolean(options.trustedKey)) throw new Error("Pass --artifact and --trusted-key together.");
+      const result = options.artifact ? verifyPortableProof(cwdFrom(program), options.artifact, options.trustedKey) : verifyLatestProof(cwdFrom(program));
       if (options.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       else console.log(result.ok ? "Proof verification PASSED." : `Proof verification FAILED: ${result.reason} — ${result.detail ?? "not verified"}`);
       if (!result.ok) process.exitCode = 1;
+    });
+
+  proofCmd.command("verify-github")
+    .description("Verify hosted GitHub provenance, proof content, and this exact checkout.")
+    .argument("<artifact>", "Downloaded raw proof JSON")
+    .requiredOption("--repo <owner/repo>", "Expected source repository")
+    .requiredOption("--workflow <path>", "Expected .github/workflows/file.yml signer")
+    .option("--ref <ref>", "Expected source branch ref", "refs/heads/main")
+    .option("--json", "Print machine-readable verification")
+    .action((artifact: string, options) => {
+      const cwd = cwdFrom(program);
+      const result = verifyGitHubProof(cwd, artifact, { repo: options.repo, workflow: options.workflow, ref: options.ref, sourceDigest: getWorktreeFingerprint(cwd).gitHead ?? "" });
+      console.log(options.json ? JSON.stringify(result, null, 2) : result.ok ? "GitHub proof verification PASSED." : `GitHub proof verification FAILED: ${result.detail}`);
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  proofCmd.command("keygen")
+    .description("Create an Ed25519 proof signing key pair without overwriting files.")
+    .requiredOption("--private-key <path>", "Private key output, outside the reviewed repository")
+    .requiredOption("--public-key <path>", "Public key output for out-of-band distribution")
+    .action((options) => { generateProofKeyPair(options.privateKey, options.publicKey); console.log("Proof key pair created; share only the public key through a trusted channel."); });
+
+  proofCmd.command("export")
+    .description("Sign a verified local proof for another machine with an explicitly trusted signer.")
+    .requiredOption("--signing-key <path>", "Owner-readable Ed25519 private key")
+    .requiredOption("--output <path>", "New portable envelope path")
+    .action((options) => {
+      const result = verifyLatestProof(cwdFrom(program));
+      if (!result.ok || !result.artifact) throw new Error(`Cannot export unverified proof: ${result.reason}`);
+      exportPortableProof(result.artifact, options.signingKey, options.output);
+      console.log("Portable proof exported. Recipient must explicitly trust your public key.");
     });
 
   const contractCmd = program
@@ -2038,8 +2080,9 @@ export function buildProgram(): Command {
     .description("Bridge hook for foreign AI CLIs (invoked by their hook events; not for direct use).")
     .requiredOption("--source <source>", "Foreign CLI source (claude, codex)")
     .requiredOption("--event <event>", "Hook event name")
-    .action(async (options) => {
-      await runHookReportCli({ source: options.source, event: options.event });
+    .argument("[payload]", "Codex notification JSON appended as one argument")
+    .action(async (payload: string | undefined, options) => {
+      await runHookReportCli({ source: options.source, event: options.event, payload });
     });
 
   program
