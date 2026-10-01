@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { generateProofKeyPair, exportPortableProof, readPortableProof } from "../src/portable-proof.js";
-import { runProof, verifyPortableProof, verifyLatestProof, proofAttachmentFor } from "../src/proof-runner.js";
+import { runProof, verifyPortableProof, verifyLatestProof, proofAttachmentFor, attachLatestProofToReview } from "../src/proof-runner.js";
 
 const dirs: string[] = [];
 const oldKeyDir = process.env.QUORATE_PROOF_KEY_DIR;
@@ -35,6 +35,8 @@ describe("portable trusted-signer proofs", () => {
     expect(verifyPortableProof(consumer, f.envelope, f.publicKey).ok).toBe(true);
     expect(proofAttachmentFor(consumer, f.envelope, f.publicKey)?.artifact?.exitCode).toBe(0);
     expect(proofAttachmentFor(consumer, f.envelope)?.artifact).toBeUndefined();
+    const attached = attachLatestProofToReview({ mode: "review", subject: "fixture", repoPath: consumer }, f.envelope, f.publicKey);
+    expect(attached.request.proof?.content).toContain("explicitly trusted signer");
     writeFileSync(join(consumer, "changed.txt"), "changed");
     expect(verifyPortableProof(consumer, f.envelope, f.publicKey).reason).toBe("stale");
   });

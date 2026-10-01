@@ -533,8 +533,9 @@ export function verifyLatestProof(cwd: string, options: { checkFingerprint?: boo
   return { ok: true, reason: "verified", artifact };
 }
 
-function compactProofEvidence(artifact: ProofArtifact): { content: string; truncated: boolean } {
+function compactProofEvidence(artifact: ProofArtifact, note?: string): { content: string; truncated: boolean } {
   const text = [
+    ...(note ? [note] : []),
     `Status: ${artifact.exitCode === 0 && !artifact.timedOut ? "passed" : "failed"}; exit=${artifact.exitCode}; duration=${artifact.durationMs}ms.`,
     `Command: ${artifact.command.map((part) => JSON.stringify(part)).join(" ")}`,
     "stdout:",
@@ -644,7 +645,7 @@ export function proofAttachmentFor(cwd: string, explicitPath?: string, trustedKe
   return undefined;
 }
 
-/** Attach only a current, self-verifying proof. The value is explicitly untrusted provider input. */
+/** Attach verified evidence with its trust/staleness qualification; provider input remains untrusted. */
 export function attachLatestProofToReview(
   request: CouncilRequest,
   explicitPath?: string,
@@ -653,7 +654,7 @@ export function attachLatestProofToReview(
   if (request.mode !== "review" || !request.repoPath) return { request };
   const attachment = proofAttachmentFor(request.repoPath, explicitPath, trustedKeyPath);
   if (attachment?.artifact) {
-    const evidence = compactProofEvidence(attachment.artifact);
+    const evidence = compactProofEvidence(attachment.artifact, attachment.note);
     const attached = { request: { ...request, proof: { name: attachment.artifact.name, ...evidence } } };
     return attachment.note === undefined ? attached : { ...attached, note: attachment.note };
   }
