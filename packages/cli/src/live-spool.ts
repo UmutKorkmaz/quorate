@@ -145,13 +145,16 @@ const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
 
 function openSpoolFile(path: string, truncate = false): number {
   let fd: number;
+  // Windows append-only handles cannot be truncated. Reopen in append mode
+  // after the validated truncate, checking the path again before any write.
+  const access = constants.O_WRONLY | (truncate ? 0 : constants.O_APPEND);
   try {
-    fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, FILE_MODE);
+    fd = openSync(path, access | constants.O_CREAT | constants.O_EXCL | NOFOLLOW, FILE_MODE);
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     const before = lstatSync(path);
     if (!before.isFile() || before.isSymbolicLink()) throw new Error("Spool path must be a regular file, not a symlink.");
-    fd = openSync(path, constants.O_WRONLY | constants.O_APPEND | NOFOLLOW);
+    fd = openSync(path, access | NOFOLLOW);
     try {
       const opened = fstatSync(fd);
       if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) {
@@ -164,11 +167,13 @@ function openSpoolFile(path: string, truncate = false): number {
   }
   try {
     if (truncate) ftruncateSync(fd, 0);
-    return fd;
   } catch (error: unknown) {
     closeSync(fd);
     throw error;
   }
+  if (!truncate) return fd;
+  closeSync(fd);
+  return openSpoolFile(path);
 }
 
 /** Atomic single-file write: temp + rename, cleaning the temp on failure. */

@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -12,7 +12,7 @@ import {
   type HookReportDeps
 } from "../src/hook-report.js";
 import { auditDirForLiveDir } from "../src/live-spool.js";
-import { exportApprovalAuditRecords } from "../src/trust-ledger.js";
+import { auditKeyPath, exportApprovalAuditRecords } from "../src/trust-ledger.js";
 import { listPendingApprovals, readMonitorDiscovery, writeMonitorDiscovery, writeApprovalDecision, type ApprovalRequest } from "../src/live-spool.js";
 
 function tempDir(): string {
@@ -281,7 +281,7 @@ describe("runPermissionRoundtrip", () => {
     const dir = tempDir();
     attach(dir);
     mkdirSync(auditDirForLiveDir(dir), { recursive: true, mode: 0o700 });
-    chmodSync(auditDirForLiveDir(dir), 0o755);
+    writeFileSync(auditKeyPath(auditDirForLiveDir(dir)), "corrupt-key", { mode: 0o600 });
     const times = [0, 56_000];
     let tick = 0;
 

@@ -3,10 +3,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 
-const flushes = vi.hoisted(() => ({ files: 0, windowsModes: false }));
+const flushes = vi.hoisted(() => ({ files: 0, windowsModes: false, appendHandles: new Set<number>() }));
 vi.mock("node:fs", async (importOriginal) => {
   const fs = await importOriginal<typeof import("node:fs")>();
-  return { ...fs, constants: { ...fs.constants, O_NOFOLLOW: 0 }, fstatSync(fd: number) {
+  return { ...fs, constants: { ...fs.constants, O_NOFOLLOW: 0 }, openSync(...args: Parameters<typeof fs.openSync>) {
+    const fd = fs.openSync(...args);
+    if (typeof args[1] === "number" && (args[1] & fs.constants.O_APPEND)) flushes.appendHandles.add(fd);
+    else flushes.appendHandles.delete(fd);
+    return fd;
+  }, ftruncateSync(fd: number, length?: number) {
+    if (flushes.appendHandles.has(fd)) throw new Error("Windows cannot truncate an append-only handle");
+    fs.ftruncateSync(fd, length);
+  }, fstatSync(fd: number) {
     const stat = fs.fstatSync(fd);
     if (flushes.windowsModes) stat.mode = (stat.mode & ~0o777) | 0o666;
     return stat;
@@ -17,7 +25,7 @@ vi.mock("node:fs", async (importOriginal) => {
   } };
 });
 import { appendApprovalAuditRecord, verifyApprovalAuditLedger } from "../src/trust-ledger.js";
-import { appendRunEventLine, listPendingApprovals, writeApprovalRequest } from "../src/live-spool.js";
+import { appendRunEventLine, createLiveSpoolSink, listPendingApprovals, writeApprovalRequest } from "../src/live-spool.js";
 
 const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
 const roots: string[] = [];
@@ -31,6 +39,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   flushes.files = 0;
   flushes.windowsModes = false;
+  flushes.appendHandles.clear();
 });
 function append(dir: string) {
   return appendApprovalAuditRecord({ requestId: "platform-test", runId: "run", source: "claude", tool: "Bash",
@@ -51,6 +60,20 @@ it("rejects symlinked spool writes even when O_NOFOLLOW is unavailable", () => {
   symlinkSync(target, join(dir, "run.ndjson"));
   expect(() => appendRunEventLine("run", "new content", dir)).toThrow(/symlink/);
   expect(readFileSync(target, "utf8")).toBe("unchanged");
+});
+it("truncates a stale spool without using an append-only handle", () => {
+  const dir = directory();
+  const path = join(dir, "run.ndjson");
+  writeFileSync(path, "stale contents");
+  const sink = createLiveSpoolSink({ dir, cwd: dir, pid: process.pid });
+  try {
+    sink.handleEvent({ type: "council/started", councilRunId: "run", mode: "review", subject: "test", planned: [], at: "2026-10-01T00:00:00.000Z" });
+    expect(sink.lastError).toBeUndefined();
+    expect(readFileSync(path, "utf8")).not.toContain("stale contents");
+    expect(readFileSync(path, "utf8")).toContain("council/started");
+  } finally {
+    sink.finish("done");
+  }
 });
 it.skipIf(process.platform === "win32")("does not swallow a POSIX directory fsync permission failure", () => {
   expect(() => append(join(directory(), "audit"))).toThrow("directory flush unsupported");

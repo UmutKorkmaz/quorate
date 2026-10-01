@@ -26,6 +26,9 @@ now includes `setup demo`, report-bound feedback, and offline paired-report
 evaluation. These are preparation tools; publication and partner evidence below
 remain unfinished.
 
+The concrete first-gate checklist, session record, held-out evaluation protocol,
+and hosted-App acceptance steps are in [PARTNER-VALIDATION.md](./PARTNER-VALIDATION.md).
+
 ## Design-partner sprint
 
 ### Week 1 — Release and demo

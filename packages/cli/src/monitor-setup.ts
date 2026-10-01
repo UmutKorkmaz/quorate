@@ -197,8 +197,8 @@ export function computeSetupPlan(options: {
     codex: {
       path: codexPath,
       notifyOccupied: codexNotifyOccupied,
-      action: codexNotifyOccupied ? "skip" : "shim",
-      note: codexNotifyOccupied ? "notify slot occupied — skipping (not clobbering)" : "notify slot empty — would install guarded shim"
+      action: codexNotifyOccupied ? "skip" : "none",
+      note: codexNotifyOccupied ? "notify slot occupied — skipping (not clobbering)" : "notify slot empty — left unchanged; shim not yet implemented"
     },
     dryRun: options.dryRun
   };

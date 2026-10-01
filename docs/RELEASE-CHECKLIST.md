@@ -1,6 +1,6 @@
 # Quorate Release Checklist
 
-Use this checklist for the v1.2.1 candidate and later releases. The order is
+Use this checklist for the v1.4.0 candidate and later releases. The order is
 deliberate: npm publication is the final distribution step, not the first proof.
 
 ## Automated entry point
@@ -8,7 +8,7 @@ deliberate: npm publication is the final distribution step, not the first proof.
 Run the release helper from the merged, clean `main` branch:
 
 ```bash
-npm run release:verify -- 1.2.1
+npm run release:verify -- 1.4.0
 ```
 
 Verification is the default and has no release side effects. It reproduces
@@ -20,8 +20,13 @@ checks, finalize the changelog date and run the publishing mode with an exact
 version confirmation:
 
 ```bash
-CONFIRM_RELEASE=v1.2.1 npm run release:publish -- 1.2.1
+gh workflow run release.yml --ref main -f version=1.4.0
 ```
+
+The manual workflow requires successful push CI for the exact main revision and
+valid npm authentication before invoking the release helper. It uses the
+repository's `NPM_TOKEN` secret and GitHub Actions provenance. Check the run's
+result; dispatch alone is not publication.
 
 Publishing enforces this order: annotated Git tag → GitHub Release → `quorate`.
 The CLI bundles the workspace core, so `@quorate/core` is package-smoked but is
@@ -56,6 +61,7 @@ npm run build --workspace @quorate/github-app
 npm run build:website
 npm run package:vscode
 npm test
+node scripts/verify-contract-fixtures.mjs
 ```
 
 The Action build must recreate `packages/github-action/dist/index.js`. Build it a

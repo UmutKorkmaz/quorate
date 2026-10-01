@@ -13,6 +13,7 @@ import { appendApprovalAuditRecord, type ApprovalAuditDecision } from "../src/tr
 import { collectMetrics, renderMetrics, runMetrics, type MetricsReport } from "../src/metrics-command.js";
 
 const originalHome = process.env.HOME;
+const originalUserProfile = process.env.USERPROFILE;
 const originalProofKeyDir = process.env.QUORATE_PROOF_KEY_DIR;
 const proofKeyDir = mkdtempSync(join(tmpdir(), "quorate-metrics-key-"));
 process.env.QUORATE_PROOF_KEY_DIR = proofKeyDir;
@@ -24,6 +25,7 @@ const bundleDirs: string[] = [];
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), "quorate-metrics-home-"));
   process.env.HOME = home;
+  process.env.USERPROFILE = home;
 });
 
 afterEach(() => {
@@ -33,7 +35,10 @@ afterEach(() => {
   }
   for (const dir of bundleDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
   rmSync(home, { recursive: true, force: true });
-  process.env.HOME = originalHome;
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = originalUserProfile;
 });
 
 afterAll(() => {

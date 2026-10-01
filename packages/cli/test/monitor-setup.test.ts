@@ -207,8 +207,9 @@ describe("computeSetupPlan codex handling", () => {
     expect(plan.codex.note).toContain("occupied");
   });
 
-  it("plans a shim when the notify slot is empty", () => {
+  it("does not promise an unimplemented shim when the notify slot is empty", () => {
     const plan = computeSetupPlan({ claudePath: "/none", codexPath: "/none", codexNotifyOccupied: false, dryRun: true });
-    expect(plan.codex.action).toBe("shim");
+    expect(plan.codex.action).toBe("none");
+    expect(plan.codex.note).toContain("not yet implemented");
   });
 });
