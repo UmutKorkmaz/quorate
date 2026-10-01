@@ -635,7 +635,7 @@ quorate monitor --serve          # headless: prints one {url,token,pid} line, se
 | Foreign CLI | lanes | subagents | approve/deny | notes |
 |-------------|:-----:|:---------:|:------------:|-------|
 | claude      | ✅    | ✅        | ✅           | Only rich surface today. |
-| codex       | —     | —         | —            | Notify shim only if the slot is empty. |
+| codex       | —     | —         | —            | Turn-completion shim only when the notify key is absent. |
 | gemini/qwen/kimi/opencode/crush/goose | — | — | — | Process-scan only. |
 
 See `docs/MONITOR-HOOKS.md` for the full capability matrix, the safe

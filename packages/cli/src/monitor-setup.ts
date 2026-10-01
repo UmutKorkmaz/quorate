@@ -1,3 +1,5 @@
+import { parse as parseToml } from "smol-toml";
+import { readCodexConfig, updateCodexNotify } from "./codex-notify.js";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -6,8 +8,8 @@ import { spawnSync } from "node:child_process";
 /**
  * `quorate monitor setup [--remove] [--dry-run] [--yes]` — installs (or
  * removes) Quorate hook-report entries in foreign AI CLIs so `quorate monitor`
- * can observe them. Today the installer writes Claude Code hooks only;
- * a guarded Codex notify shim remains a follow-up.
+ * can observe them. The installer writes Claude Code hooks and a guarded
+ * Codex turn-completion notification command.
  *
  * Safety contract:
  * - parse → modify → atomic write, PRESERVING every other key in the file;
@@ -160,7 +162,7 @@ export function detectCliCapabilities(executables: Record<string, boolean>): Cli
       return { kind, name: "claude", installed, hookSupport: installed ? "full" : "full", note: installed ? "Rich hooks: lanes, subagents, approve/deny" : "Install Claude Code for rich hooks" };
     }
     if (kind === "codex") {
-      return { kind, name: "codex", installed, hookSupport: "scan-only", note: "Process-scan only; notify shim not yet implemented" };
+      return { kind, name: "codex", installed, hookSupport: "shim", note: "Turn-completion notify; existing notify commands are preserved" };
     }
     return { kind, name: kind, installed, hookSupport: "scan-only" as const, note: "Process-scan only (no hook surface)" };
   });
@@ -197,8 +199,8 @@ export function computeSetupPlan(options: {
     codex: {
       path: codexPath,
       notifyOccupied: codexNotifyOccupied,
-      action: codexNotifyOccupied ? "skip" : "none",
-      note: codexNotifyOccupied ? "notify slot occupied — skipping (not clobbering)" : "notify slot empty — left unchanged; shim not yet implemented"
+      action: codexNotifyOccupied ? "skip" : "shim",
+      note: codexNotifyOccupied ? "notify slot occupied — skipping (not clobbering)" : "notify slot absent — install turn-completion shim"
     },
     dryRun: options.dryRun
   };
@@ -239,11 +241,9 @@ export function readClaudeSettings(path: string = claudeSettingsPath()): ClaudeS
 
 export function codexNotifySlotOccupied(path: string = codexConfigPath()): boolean {
   try {
-    const text = readFileSync(path, "utf8");
-    const match = text.match(/^notify\s*=\s*\[(.+?)\]/m);
-    return Boolean(match && match[1] && match[1].trim().length > 0);
+    return Object.hasOwn(parseToml(readCodexConfig(path)), "notify");
   } catch {
-    return false;
+    return true; // Unreadable or invalid config must never be overwritten.
   }
 }
 
@@ -276,17 +276,13 @@ export function applySetup(plan: SetupPlan, quorateBinary?: string): { applied: 
     const temp = `${plan.claude.path}.${process.pid}.tmp`;
     writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
     renameSync(temp, plan.claude.path);
-    // Be honest about Codex: a guarded notify shim is a planned follow-up
-    // (today the installer only writes Claude's rich hooks; Codex is skipped
-    // when occupied, and not yet written when empty). State this explicitly.
-    const codexNote =
-      plan.codex.action === "skip"
-        ? ` Codex notify slot occupied — skipped (not clobbered).`
-        : ` Codex notify shim is not yet implemented (planned follow-up); ${plan.codex.note}.`;
+    const codexNote = plan.codex.action === "skip"
+      ? " Codex notify slot occupied or unreadable — preserved."
+      : ` ${updateCodexNotify(plan.codex.path, binary)}`;
     return { applied: true, backup, message: `Claude Code hooks installed at ${plan.claude.path}.${codexNote}` };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { applied: false, backup, message: `failed to install Claude hooks: ${message}` };
+    return { applied: false, backup, message: `setup incomplete (Claude hooks may already be installed): ${message}` };
   }
 }
 
@@ -295,10 +291,8 @@ export function applyRemove(plan: SetupPlan): { applied: boolean; backup?: strin
   if (plan.dryRun) {
     return { applied: false, message: "dry-run: no changes made" };
   }
-  if (!plan.claude.exists) {
-    return { applied: false, message: `no settings file at ${plan.claude.path}` };
-  }
   try {
+    if (!plan.claude.exists) return { applied: true, message: updateCodexNotify(plan.codex.path) };
     const before = readClaudeSettings(plan.claude.path);
     const after = stripClaudeHooks(before);
     const backup = `${plan.claude.path}.quorate-backup-${isoTimestamp()}.json`;
@@ -306,10 +300,10 @@ export function applyRemove(plan: SetupPlan): { applied: boolean; backup?: strin
     const temp = `${plan.claude.path}.${process.pid}.tmp`;
     writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
     renameSync(temp, plan.claude.path);
-    return { applied: true, backup, message: `Quorate hooks removed from ${plan.claude.path}` };
+    return { applied: true, backup, message: `Quorate hooks removed from ${plan.claude.path}. ${updateCodexNotify(plan.codex.path)}` };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { applied: false, message: `failed to remove Claude hooks: ${message}` };
+    return { applied: false, message: `removal incomplete (Claude hooks may already be removed): ${message}` };
   }
 }
 

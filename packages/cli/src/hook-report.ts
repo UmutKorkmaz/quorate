@@ -121,9 +121,11 @@ export function parseHookPayload(raw: string): ParsedHookPayload | undefined {
   const sessionId =
     typeof record.session_id === "string"
       ? record.session_id
-      : typeof record.sessionId === "string"
-        ? record.sessionId
-        : undefined;
+      : typeof record["thread-id"] === "string"
+        ? record["thread-id"]
+        : typeof record.sessionId === "string"
+          ? record.sessionId
+          : undefined;
   const prompt =
     typeof record.prompt === "string"
       ? record.prompt
@@ -140,9 +142,11 @@ export function parseHookPayload(raw: string): ParsedHookPayload | undefined {
   const message =
     typeof record.message === "string"
       ? record.message
-      : typeof record.text === "string"
-        ? record.text
-        : undefined;
+      : typeof record["last-assistant-message"] === "string"
+        ? record["last-assistant-message"]
+        : typeof record.text === "string"
+          ? record.text
+          : undefined;
   const subagentId =
     typeof record.subagent_id === "string"
       ? record.subagent_id
@@ -310,7 +314,18 @@ export function dispatchHook(
     case "notify": {
       const text = payload?.message;
       if (runId && text) {
+        if (event === "notify") {
+          ensureExternalRun(runId, source, "Codex turn completed", deps);
+          startLane(runId, source, SESSION_LANE_ROLE, nowIso(deps.now?.()), deps);
+        }
         appendEvent(runId, { type: "provider/chunk", councilRunId: runId, providerId: source, role: SESSION_LANE_ROLE, stream: "stdout", text: `${truncate(text, SUMMARY_MAX)}\n` }, deps);
+        if (event === "notify") {
+          appendEvent(runId, { type: "provider/done", councilRunId: runId, providerId: source, role: SESSION_LANE_ROLE, result: { status: "ok", findings: [] } }, deps);
+          const entry = readRunMeta(runId, deps.dir);
+          if (entry) {
+            try { writeRunMeta({ ...entry, status: "done", updatedAt: nowIso(deps.now?.()) }, deps.dir); } catch { /* best-effort observation */ }
+          }
+        }
       }
       return { action: "defer" };
     }
@@ -490,16 +505,19 @@ export function newApprovalId(now: Date = new Date()): string {
  * PermissionRequest runs the blocking round-trip and prints the decision JSON.
  * Never throws — every failure path is a silent exit 0.
  */
-export async function runHookReportCli(argv: { source: string; event: string }): Promise<void> {
+export async function runHookReportCli(argv: { source: string; event: string; payload?: string }): Promise<void> {
   const source = parseSource(argv.source);
   const event = parseEvent(argv.event);
   if (!source || !event) return; // Unknown source/event — defer.
 
   let raw = "";
   try {
-    raw = readFileSync(0, "utf8");
+    raw = argv.payload ?? readFileSync(0, "utf8");
   } catch {
     return; // No STDIN — defer.
+  }
+  if (source === "codex" && event === "notify") {
+    try { if (JSON.parse(raw)?.type !== "agent-turn-complete") return; } catch { return; }
   }
   const payload = parseHookPayload(raw);
   const deps: HookReportDeps = { cwd: process.cwd(), pid: process.pid };

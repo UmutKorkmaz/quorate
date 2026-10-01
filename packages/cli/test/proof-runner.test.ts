@@ -234,7 +234,7 @@ describe("ProofRunner Lite", () => {
 
   it("registers proof run, show, and verify commands", () => {
     const proof = buildProgram().commands.find((command) => command.name() === "proof");
-    expect(proof?.commands.map((command) => command.name())).toEqual(["run", "show", "verify"]);
+    expect(proof?.commands.map((command) => command.name())).toEqual(["run", "show", "verify", "keygen", "export"]);
   });
 
   it.skipIf(process.platform === "win32")("the proof run CLI preserves a failing child exit status", async () => {

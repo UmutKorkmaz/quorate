@@ -120,13 +120,13 @@ describe("buildClaudeHookCommand", () => {
 });
 
 describe("detectCliCapabilities + renderCapabilityTable", () => {
-  it("classifies claude as full and unimplemented integrations as scan-only", () => {
+  it("classifies Claude hooks, Codex shim, and scan-only integrations", () => {
     const caps = detectCliCapabilities({ claude: true, codex: true, gemini: false, qwen: false, kimi: false, opencode: false, crush: false, goose: false });
     const claude = caps.find((c) => c.kind === "claude");
     const codex = caps.find((c) => c.kind === "codex");
     const gemini = caps.find((c) => c.kind === "gemini");
     expect(claude?.hookSupport).toBe("full");
-    expect(codex?.hookSupport).toBe("scan-only");
+    expect(codex?.hookSupport).toBe("shim");
     expect(gemini?.hookSupport).toBe("scan-only");
   });
 
@@ -207,9 +207,9 @@ describe("computeSetupPlan codex handling", () => {
     expect(plan.codex.note).toContain("occupied");
   });
 
-  it("does not promise an unimplemented shim when the notify slot is empty", () => {
+  it("plans a shim when the notify key is absent", () => {
     const plan = computeSetupPlan({ claudePath: "/none", codexPath: "/none", codexNotifyOccupied: false, dryRun: true });
-    expect(plan.codex.action).toBe("none");
-    expect(plan.codex.note).toContain("not yet implemented");
+    expect(plan.codex.action).toBe("shim");
+    expect(plan.codex.note).toContain("install");
   });
 });

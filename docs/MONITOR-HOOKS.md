@@ -16,7 +16,7 @@ quorate monitor setup --yes      # skip the confirmation prompt
 | CLI        | hook support  | lanes | subagents | approve/deny | notes |
 |------------|---------------|:-----:|:---------:|:------------:|-------|
 | claude     | **full**      | ✅    | ✅        | ✅           | The only CLI with a rich hook surface today. |
-| codex      | scan-only     | —     | —         | —            | The notify shim is not implemented. Setup detects an occupied `notify` slot and leaves it untouched; an empty slot is also left unchanged. |
+| codex      | notify shim   | —     | —         | —            | Turn-completion messages appear in the monitor. Any existing `notify` key is preserved, including an explicit empty array. |
 | gemini     | scan-only     | —     | —         | —            | No hook surface; appears in the monitor's detected-processes strip when running. |
 | qwen       | scan-only     | —     | —         | —            | Process scan only. |
 | kimi       | scan-only     | —     | —         | —            | Process scan only. |
@@ -41,7 +41,7 @@ each of these events in `~/.claude/settings.json`:
 - `PermissionRequest` — **the blocking one.** Writes an approval card that
   `quorate monitor` surfaces; the agent waits until you approve or deny.
 
-Every hook command is existence-guarded and always exits 0, so Quorate being
+Every Claude hook command is existence-guarded and always exits 0, so Quorate being
 uninstalled or moved never breaks the foreign CLI:
 
 ```
@@ -67,3 +67,16 @@ defers (exit 0) so the agent is never wedged.
   `hook-report --source claude`. `setup --remove` strips only tagged entries;
   everything else (Vibe Island, Orca, your own) is left untouched.
 - Codex's `notify` slot is detected and respected — never overwritten.
+
+## Codex notifications
+
+When the root `notify` key is absent, setup prepends a marker and an argv array
+invoking `quorate hook-report --source codex --event notify`. Codex appends its
+JSON payload as one argument. The bridge accepts `agent-turn-complete`, maps
+`thread-id` and `last-assistant-message`, and does not request approvals.
+This follows the [Codex notification format](https://developers.openai.com/codex/config-advanced).
+
+TOML is parsed before writing; malformed, unreadable, or occupied configs are
+preserved. Comments and tables retain their original text. Removal only removes
+the exact Quorate-owned prefix. Changed files are backed up. This command uses
+an absolute binary path: remove/reinstall the shim if you move the CLI.

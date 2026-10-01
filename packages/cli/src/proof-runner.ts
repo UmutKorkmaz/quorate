@@ -5,6 +5,7 @@ import { StringDecoder } from "node:string_decoder";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import type { CouncilRequest } from "@quorate/core";
+import { readPortableProof } from "./portable-proof.js";
 import { writeSecureWorkspaceState } from "./secure-state.js";
 
 const PROOF_SCHEMA_VERSION = 1;
@@ -492,12 +493,12 @@ function hasArtifactShape(value: ProofArtifact): boolean {
 }
 
 /** Shared hash/signature/shape verification for any proof artifact. */
-function checkArtifactIntegrity(artifact: ProofArtifact): { reason: "tampered"; detail: string } | undefined {
+function checkArtifactIntegrity(artifact: ProofArtifact, trustedSigner = false): { reason: "tampered"; detail: string } | undefined {
   if (!hasArtifactShape(artifact)) return { reason: "tampered", detail: "Proof artifact has an invalid schema." };
   const { signature, artifactHash, ...withoutHash } = artifact;
   if (proofHash(withoutHash) !== artifactHash) return { reason: "tampered", detail: "Proof artifact hash does not match." };
   try {
-    if (!signaturesMatch(signature, signatureFor({ ...withoutHash, artifactHash }, proofKey()))) {
+    if (!trustedSigner && !signaturesMatch(signature, signatureFor({ ...withoutHash, artifactHash }, proofKey()))) {
       return { reason: "tampered", detail: "Proof artifact signature does not match." };
     }
   } catch (error: unknown) {
@@ -568,22 +569,25 @@ type ProofArtifactLoad =
   | { status: "missing" }
   | { status: "tampered" };
 
-function loadProofArtifactDetailed(path: string): ProofArtifactLoad {
+function loadProofArtifactDetailed(path: string, trustedKeyPath?: string): ProofArtifactLoad {
   let raw: string;
   try {
+    const stat = lstatSync(resolve(path));
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_PROOF_ARTIFACT_BYTES) return { status: "tampered" };
     raw = readFileSync(resolve(path), "utf8");
   } catch {
     return { status: "missing" };
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = trustedKeyPath ? readPortableProof(path, trustedKeyPath) : JSON.parse(raw);
   } catch {
     return { status: "tampered" };
   }
   if (typeof parsed !== "object" || parsed === null) return { status: "tampered" };
   const artifact = parsed as ProofArtifact;
-  const integrity = checkArtifactIntegrity(artifact);
+  let integrity;
+  try { integrity = checkArtifactIntegrity(artifact, trustedKeyPath !== undefined); } catch { return { status: "tampered" }; }
   if (integrity) return { status: "tampered" };
   const root = worktreeRootForArtifact(path);
   return { status: "ok", artifact, stale: root !== undefined && gitWorktreeStaleness(root, artifact.fingerprint) };
@@ -613,11 +617,11 @@ export interface ProofAttachment {
  * latest.json attachment must be fully current; stale or tampered artifacts
  * are ignored with an explicit note.
  */
-export function proofAttachmentFor(cwd: string, explicitPath?: string): ProofAttachment | undefined {
+export function proofAttachmentFor(cwd: string, explicitPath?: string, trustedKeyPath?: string): ProofAttachment | undefined {
   const root = resolve(cwd);
   if (explicitPath !== undefined) {
     // Resolve against the reviewed workspace, matching every other path option.
-    const loaded = loadProofArtifactDetailed(resolve(root, explicitPath));
+    const loaded = loadProofArtifactDetailed(resolve(root, explicitPath), trustedKeyPath);
     if (loaded.status === "missing") return undefined;
     if (loaded.status === "tampered") {
       return { note: `Proof not attached: tampered (explicit proof artifact at ${explicitPath} failed integrity verification).` };
@@ -628,7 +632,7 @@ export function proofAttachmentFor(cwd: string, explicitPath?: string): ProofAtt
         note: "Proof attached from an explicit path with a stale worktree fingerprint: the reviewed workspace changed after this proof ran."
       };
     }
-    return { artifact: loaded.artifact };
+    return { artifact: loaded.artifact, ...(trustedKeyPath ? { note: "Proof attached as a verified statement from an explicitly trusted signer; not independent execution attestation." } : {}) };
   }
   const verification = verifyLatestProof(root);
   if (verification.ok && verification.artifact) return { artifact: verification.artifact };
@@ -641,10 +645,11 @@ export function proofAttachmentFor(cwd: string, explicitPath?: string): ProofAtt
 /** Attach only a current, self-verifying proof. The value is explicitly untrusted provider input. */
 export function attachLatestProofToReview(
   request: CouncilRequest,
-  explicitPath?: string
+  explicitPath?: string,
+  trustedKeyPath?: string
 ): { request: CouncilRequest; note?: string } {
   if (request.mode !== "review" || !request.repoPath) return { request };
-  const attachment = proofAttachmentFor(request.repoPath, explicitPath);
+  const attachment = proofAttachmentFor(request.repoPath, explicitPath, trustedKeyPath);
   if (attachment?.artifact) {
     const evidence = compactProofEvidence(attachment.artifact);
     const attached = { request: { ...request, proof: { name: attachment.artifact.name, ...evidence } } };
@@ -795,4 +800,12 @@ export async function runDetectedProofs(cwd: string, only?: string[]): Promise<D
   const combined = combineProofArtifacts(root, steps);
   publishProof(root, combined, true);
   return { cwd: root, exitCode: combined.exitCode, steps, artifact: combined };
+}
+
+/** Verify an explicitly trusted remote signer and bind its evidence to this checkout. */
+export function verifyPortableProof(cwd: string, path: string, trustedKeyPath: string): ProofVerification {
+  const loaded = loadProofArtifactDetailed(resolve(cwd, path), trustedKeyPath);
+  if (loaded.status !== "ok") return { ok: false, reason: loaded.status, detail: "Portable proof failed trusted-key or content verification." };
+  if (fingerprintIsStale(cwd, loaded.artifact.fingerprint)) return { ok: false, reason: "stale", artifact: loaded.artifact, detail: "Proof fingerprint does not match this checkout." };
+  return { ok: true, reason: "verified", artifact: loaded.artifact, detail: "Verified statement from the explicitly trusted signer; not independent execution attestation." };
 }

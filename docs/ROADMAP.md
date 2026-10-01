@@ -14,7 +14,7 @@ and VS Code surfaces.
 ## Active sequence
 
 1. **Phase 0 — SupplyChainGate v1.1 stabilization** — done (v1.1.0)
-2. **Phase 1 — ProofRunner Lite** — merged; local proof verified, cross-machine attestation remains open
+2. **Phase 1 — ProofRunner Lite** — local proof plus explicit trusted-signer portability implemented; hosted execution attestation remains open
 3. **Phase 2 — ContractCourt MVP** — merged; 14 fixture verdicts and exit codes verified on all three CI operating systems
 4. **Phase 3 — CI adoption hardening** — merged; container, CLI, editor review and remote CI checks verified; live installed-App acceptance remains open
 5. **Phase 4 — Design-partner validation** — measurement tools and onboarding protocol available; partner validation pending
@@ -100,11 +100,13 @@ the local proof signature is not a cross-machine execution attestation.
 - [ ] The council includes that evidence without trusting arbitrary artifact
   claims.
 
-The local fixture proof verifies with its signing key. A separate container
-without that key rejects the same artifact; portability of execution trust is
-therefore not established. Portable decision records prove content integrity,
-not execution. These boxes remain open until an explicit cross-machine trust
-model and its acceptance test are implemented.
+The local fixture proof verifies with its signing key. The optional
+[portable proof statement](./PORTABLE-PROOFS.md) is verified in an independent
+checkout and an offline Linux container using only an explicitly supplied public
+key. Wrong signers, tampered payloads and stale checkouts fail. This closes the
+portable trusted-signer statement path. The broader exit gate above remains open
+for a real fixture PR with hosted runner identity and independent execution
+attestation; a signer assertion must not be presented as that stronger guarantee.
 
 ## Phase 2 — ContractCourt MVP
 
@@ -137,12 +139,14 @@ readiness, portable decision records, report-bound editor fixes, trusted hosted
 configuration/policy, durable webhook jobs, and App/Docker CI checks. Container
 health and valid/invalid signed webhook pings pass. A real VS Code extension host
 activates, completes Doctor, reviews a fixture, creates a diagnostic, opens the
-correct file/line, and opens the verdict panel. Live installed-App delivery and
-the interactive editor Fix/Revert journey still need acceptance evidence.
+correct file/line, and opens the verdict panel. The interactive editor Fix/Revert journey passed in a real extension host with a
+deterministic fixture agent and native confirmation dialog; pre-existing dirty
+content survived and the agent-created file was removed. Live installed-App
+delivery still needs acceptance evidence.
 
 Windows audit and spool behavior is tested on the Windows runner; ProofRunner
 execution intentionally fails closed there. See [SECURITY.md](../SECURITY.md).
-Codex monitor observation is scan-only: its notify shim remains unimplemented.
+Codex turn-completion notify setup is implemented and preserves existing notify keys.
 
 - Generate and validate GitHub Action setup.
 - Add contract-drift checks for Action metadata and public docs.
@@ -190,7 +194,7 @@ evidence to prioritize the next build without relying on feature-count ambition.
 | PlanCourt gate workflow | Done |
 | Custom pack format | Done |
 | Live monitor, approvals, trust ledger | Done (v1.4.0) |
-| ProofRunner Lite | Merged; local execution verified, cross-machine trust open |
+| ProofRunner Lite | Local execution and explicit trusted-signer portability verified |
 
 ## Release order
 
