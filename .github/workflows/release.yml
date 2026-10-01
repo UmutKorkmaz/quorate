@@ -9,9 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: write
-  id-token: write
-  actions: read
+  contents: read
 
 concurrency:
   group: quorate-release
@@ -21,6 +19,10 @@ jobs:
   release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the verified tag and GitHub Release
+      id-token: write # npm provenance
+      actions: read # exact-revision CI gate
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

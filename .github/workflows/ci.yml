@@ -54,6 +54,9 @@ jobs:
       - name: Test
         run: npx vitest run
 
+      - name: Verify bundled ContractCourt fixture verdicts and exit codes
+        run: node scripts/verify-contract-fixtures.mjs
+
       - name: Build and smoke-test GitHub App container
         if: runner.os == 'Linux'
         shell: bash

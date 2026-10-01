@@ -4,6 +4,7 @@ import {
   existsSync,
   fstatSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
@@ -692,9 +693,14 @@ function exactObjectKeys(value: Record<string, unknown>, expected: string[]): bo
 function readBoundedApprovalJson(path: string): Record<string, unknown> | undefined {
   let fd: number | undefined;
   try {
+    const before = lstatSync(path);
+    if (!before.isFile() || before.isSymbolicLink()) return undefined;
     fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
     const stat = fstatSync(fd);
-    if (!stat.isFile() || stat.size <= 0 || stat.size > APPROVAL_FILE_MAX || (stat.mode & 0o777) !== FILE_MODE) return undefined;
+    if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.size <= 0 || stat.size > APPROVAL_FILE_MAX) return undefined;
+    // Windows mode bits cannot express owner-only ACLs. Preserve identity,
+    // symlink, size, schema and signed-ledger checks on every platform.
+    if (process.platform !== "win32" && (stat.mode & 0o777) !== FILE_MODE) return undefined;
     const bytes = Buffer.alloc(stat.size);
     let offset = 0;
     while (offset < stat.size) {

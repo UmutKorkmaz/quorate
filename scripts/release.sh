@@ -92,6 +92,7 @@ run npm run ci
 run npm run typecheck --workspace @quorate/github-app
 run npm run build --workspace @quorate/github-app
 run npm run build:website
+run node scripts/verify-contract-fixtures.mjs
 
 ACTION_BUNDLE="packages/github-action/dist/index.js"
 ACTION_HASH_ONE="$(shasum -a 256 "$ACTION_BUNDLE" | awk '{print $1}')"

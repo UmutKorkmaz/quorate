@@ -84,7 +84,7 @@ describe("writeSecureWorkspaceState", () => {
     expect(existsSync(destination)).toBe(false);
   });
 
-  it("zeros a moved temporary file when its parent is replaced after fsync", () => {
+  it.skipIf(platform() === "win32")("zeros a moved temporary file when its parent is replaced after fsync", () => {
     const stateDir = join(workspace, ".quorate");
     const movedStateDir = join(workspace, ".quorate-moved");
 

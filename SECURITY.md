@@ -44,6 +44,16 @@ part of its design:
   bundles pass through secret redaction — known key formats, provider-configured
   env values, and URL credentials — before anything is written or shared.
 
+### Platform limits
+
+On Windows, Node's POSIX mode bits do not establish owner-only access; keep the
+Quorate state directory in an account-private location with appropriate Windows
+ACLs. Audit files are flushed, but Node cannot flush directory handles on
+Windows, so directory-entry durability across power loss is not guaranteed.
+Signature, hash-chain, file-type and identity checks still apply. ProofRunner
+refuses execution on Windows because portable Node cannot guarantee containment
+of the complete child process tree.
+
 ### GitHub Action
 
 The Action loads `.quorate.yml` from the pull request's **base branch**, never

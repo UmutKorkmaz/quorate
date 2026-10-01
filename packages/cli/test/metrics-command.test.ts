@@ -143,7 +143,7 @@ describe("quorate metrics", () => {
     expect(metrics.history.medianDurationMs).toEqual(expect.any(Number));
   });
 
-  it("retains verified proof outcomes across successive runs without trusting tampered archives", async () => {
+  it.skipIf(process.platform === "win32")("retains verified proof outcomes across successive runs without trusting tampered archives", async () => {
     const cwd = workspace();
     const passed = await runProof({ cwd, name: "first", command: [process.execPath, "-e", ""] });
     await runProof({ cwd, name: "second", command: [process.execPath, "-e", "process.exit(3)"] });
@@ -252,7 +252,7 @@ describe("quorate metrics", () => {
     expect(report.history.medianCouncilAgreement).toBeCloseTo(0.6);
   });
 
-  it("aggregates the proof pass rate from signed artifacts", async () => {
+  it.skipIf(process.platform === "win32")("aggregates the proof pass rate from signed artifacts", async () => {
     const passing = workspace();
     await runProof({ cwd: passing, name: "metrics-pass", command: [process.execPath, "-e", ""] });
     const report = await collectMetrics({ cwd: passing });
@@ -362,7 +362,7 @@ describe("quorate metrics", () => {
     expect(renderMetrics(report)).toContain("ledger unverified");
   });
 
-  it("round-trips the JSON output", async () => {
+  it.skipIf(process.platform === "win32")("round-trips the JSON output", async () => {
     const cwd = workspace();
     writeHistory(cwd, [historyEntry({ verdict: "fail", durationMs: 1500, agreement: 0.5, findingCounts: { high: 1 } })]);
     await writeValidContract(cwd);
@@ -376,7 +376,7 @@ describe("quorate metrics", () => {
     expect(parsed).toEqual(stripGeneratedAt(report));
   });
 
-  it("renders a terse human summary across every section", async () => {
+  it.skipIf(process.platform === "win32")("renders a terse human summary across every section", async () => {
     const cwd = workspace();
     writeHistory(cwd, [
       historyEntry({

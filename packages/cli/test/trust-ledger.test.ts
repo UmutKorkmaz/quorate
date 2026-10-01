@@ -40,7 +40,7 @@ function append(dir: string, id: string, decision: "allow" | "deny" | "timeout" 
 }
 
 describe("approval trust ledger", () => {
-  it("creates an owner-only directory, key, ledger, signed head, and lock", () => {
+  it.skipIf(process.platform === "win32")("creates an owner-only directory, key, ledger, signed head, and lock", () => {
     const dir = tempAuditDir();
 
     append(dir, "ap-1");
@@ -291,7 +291,7 @@ describe("approval trust ledger", () => {
     expect(JSON.parse(json)[0].requestId).toBe("ap-2");
   });
 
-  it.each([
+  it.skipIf(process.platform === "win32").each([
     ["directory", (dir: string) => dir],
     ["key", auditKeyPath],
     ["ledger", auditLedgerPath],
@@ -310,7 +310,7 @@ describe("approval trust ledger", () => {
     expect(statSync(path).mode & 0o777).toBe(before);
   });
 
-  it("reports a widened live lock mode without repairing or removing it", () => {
+  it.skipIf(process.platform === "win32")("reports a widened live lock mode without repairing or removing it", () => {
     const dir = tempAuditDir();
     append(dir, "ap-1");
     writeFileSync(auditLockPath(dir), `${JSON.stringify({
@@ -399,7 +399,7 @@ describe("approval trust ledger", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors.join(" ")).toMatch(/symlink|real directory/i);
-    expect(statSync(target).mode & 0o777).toBe(0o755);
+    if (process.platform !== "win32") expect(statSync(target).mode & 0o777).toBe(0o755);
   });
 
   it("rejects oversized ledgers before unbounded parsing", () => {

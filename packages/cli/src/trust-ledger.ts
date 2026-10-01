@@ -581,6 +581,9 @@ function writeAll(fd: number, bytes: Buffer | string): void {
 }
 
 function fsyncDirectory(dir: string): void {
+  // Node cannot flush directory handles on Windows. File contents are still
+  // fsynced; rename durability across power loss has the platform limitation.
+  if (process.platform === "win32") return;
   const fd = openSync(dir, constants.O_RDONLY | DIRECTORY | NOFOLLOW | CLOEXEC);
   try { fsyncSync(fd); } finally { closeSync(fd); }
 }

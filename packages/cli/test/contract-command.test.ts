@@ -504,7 +504,7 @@ describe("contract artifact determinism and permissions", () => {
     expect(typeof secondCreated).toBe("string");
   });
 
-  it("creates the artifact directory 0700 and files 0600 (creation-time modes)", async () => {
+  it.skipIf(process.platform === "win32")("creates the artifact directory 0700 and files 0600 (creation-time modes)", async () => {
     writeFileModeFixtures();
 
     await runContractCheck({ cwd: dir, before: "before.yaml", after: "after.yaml" });
