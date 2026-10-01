@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { parse } from "smol-toml";
@@ -7,23 +7,28 @@ const MARKER = "# quorate-managed-notify-v1";
 
 /** Only add a root key when absent. Preserve existing TOML byte for byte. */
 export function mergeCodexNotify(text: string, binary: string): string {
-  const config = parse(text);
+  const bom = text.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const body = text.slice(bom.length);
+  const config = parse(body);
   // Even an explicit empty array belongs to the user.
   if (Object.hasOwn(config, "notify")) return text;
+  if (body.startsWith(MARKER)) throw new Error("Incomplete managed notify prefix; restore the config backup before setup.");
   const argv = [binary, "hook-report", "--source", "codex", "--event", "notify"];
-  return `${MARKER}\nnotify = ${JSON.stringify(argv)}\n${text}`;
+  return `${bom}${MARKER}\nnotify = ${JSON.stringify(argv)}\n${body}`;
 }
 
 export function stripCodexNotify(text: string): string {
-  const lines = text.split("\n");
+  const bom = text.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const body = text.slice(bom.length);
+  const lines = body.split("\n");
   if (lines[0] !== MARKER || !lines[1]?.startsWith("notify = ")) return text;
-  const config = parse(text);
+  const config = parse(body);
   const command = config.notify;
   if (!Array.isArray(command) || command.length !== 6 ||
       JSON.stringify(command.slice(1)) !== JSON.stringify(["hook-report", "--source", "codex", "--event", "notify"])) return text;
   const remaining = lines.slice(2).join("\n");
   parse(remaining);
-  return remaining;
+  return bom + remaining;
 }
 
 export function readCodexConfig(path: string): string {
@@ -38,16 +43,26 @@ export function readCodexConfig(path: string): string {
 }
 
 export function updateCodexNotify(path: string, binary?: string): string {
-  const before = readCodexConfig(path);
-  const after = binary === undefined ? stripCodexNotify(before) : mergeCodexNotify(before, binary);
-  if (after === before) return "Codex config unchanged (existing notify preserved).";
   mkdirSync(dirname(path), { recursive: true });
-  const suffix = randomUUID();
-  if (before) writeFileSync(`${path}.quorate-backup-${suffix}.toml`, before, { mode: 0o600, flag: "wx" });
-  const temp = `${path}.${suffix}.tmp`;
-  writeFileSync(temp, after, { mode: 0o600, flag: "wx" });
-  // Refuse a concurrent configuration edit rather than overwriting it.
-  if (readCodexConfig(path) !== before) throw new Error(`Codex config changed during setup; preserved backup and ${temp}.`);
-  renameSync(temp, path);
-  return binary === undefined ? "Quorate Codex notify removed." : "Codex turn-completion notify installed.";
+  const lock = `${path}.quorate-notify.lock`;
+  const fd = openSync(lock, "wx", 0o600);
+  let temp: string | undefined;
+  try {
+    const before = readCodexConfig(path);
+    const after = binary === undefined ? stripCodexNotify(before) : mergeCodexNotify(before, binary);
+    if (after === before) return "Codex config unchanged; no Quorate notify edit needed.";
+    const suffix = randomUUID();
+    if (before) writeFileSync(`${path}.quorate-backup-${suffix}.toml`, before, { mode: 0o600, flag: "wx" });
+    temp = `${path}.${suffix}.tmp`;
+    writeFileSync(temp, after, { mode: 0o600, flag: "wx" });
+    // The lock serializes Quorate writers. Detect observed external edits too;
+    // another editor that ignores this lock can still race the final rename.
+    if (readCodexConfig(path) !== before) throw new Error("Codex config changed during setup; edit aborted.");
+    renameSync(temp, path);
+    return binary === undefined ? "Quorate Codex notify removed." : "Codex turn-completion notify installed.";
+  } finally {
+    closeSync(fd);
+    if (temp) rmSync(temp, { force: true });
+    rmSync(lock, { force: true });
+  }
 }

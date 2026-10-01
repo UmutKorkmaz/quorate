@@ -315,7 +315,7 @@ export function dispatchHook(
       const text = payload?.message;
       if (runId && text) {
         if (event === "notify") {
-          ensureExternalRun(runId, source, "Codex turn completed", deps);
+          ensureExternalRun(runId, source, `${source} turn completed`, deps);
           startLane(runId, source, SESSION_LANE_ROLE, nowIso(deps.now?.()), deps);
         }
         appendEvent(runId, { type: "provider/chunk", councilRunId: runId, providerId: source, role: SESSION_LANE_ROLE, stream: "stdout", text: `${truncate(text, SUMMARY_MAX)}\n` }, deps);

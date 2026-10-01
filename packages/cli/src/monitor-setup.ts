@@ -200,7 +200,7 @@ export function computeSetupPlan(options: {
       path: codexPath,
       notifyOccupied: codexNotifyOccupied,
       action: codexNotifyOccupied ? "skip" : "shim",
-      note: codexNotifyOccupied ? "notify slot occupied — skipping (not clobbering)" : "notify slot absent — install turn-completion shim"
+      note: codexNotifyOccupied ? "notify slot occupied or config unreadable — skipping (not clobbering)" : "notify slot absent — install turn-completion shim"
     },
     dryRun: options.dryRun
   };
@@ -241,7 +241,7 @@ export function readClaudeSettings(path: string = claudeSettingsPath()): ClaudeS
 
 export function codexNotifySlotOccupied(path: string = codexConfigPath()): boolean {
   try {
-    return Object.hasOwn(parseToml(readCodexConfig(path)), "notify");
+    return Object.hasOwn(parseToml(readCodexConfig(path).replace(/^\uFEFF/, "")), "notify");
   } catch {
     return true; // Unreadable or invalid config must never be overwritten.
   }

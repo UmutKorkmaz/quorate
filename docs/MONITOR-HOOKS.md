@@ -80,3 +80,8 @@ TOML is parsed before writing; malformed, unreadable, or occupied configs are
 preserved. Comments and tables retain their original text. Removal only removes
 the exact Quorate-owned prefix. Changed files are backed up. This command uses
 an absolute binary path: remove/reinstall the shim if you move the CLI.
+
+Quorate setup calls serialize using a lock file. Avoid editing the same config in
+another application during setup: unrelated editors do not honor that lock.
+Codex's notification payload is supplied as an OS process argument, as specified
+by Codex, so its text can be visible to local process inspection.
