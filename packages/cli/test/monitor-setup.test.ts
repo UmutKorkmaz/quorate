@@ -213,3 +213,15 @@ describe("computeSetupPlan codex handling", () => {
     expect(plan.codex.note).toContain("install");
   });
 });
+
+it("reports partial setup when Claude succeeds but Codex configuration fails", () => {
+  const dir = tempDir();
+  const claudePath = join(dir, "settings.json"), codexPath = join(dir, "config.toml");
+  writeFileSync(codexPath, "notify = [");
+  const result = applySetup(computeSetupPlan({ claudePath, codexPath, codexNotifyOccupied: false, dryRun: false }), "/abs/quorate");
+  expect(result.applied).toBe(false);
+  expect(result.partial).toBe(true);
+  expect(result.message).toContain("Claude hooks installed; Codex setup failed");
+  expect(readClaudeSettings(claudePath).hooks).toBeDefined();
+  expect(readFileSync(codexPath,"utf8")).toBe("notify = [");
+});

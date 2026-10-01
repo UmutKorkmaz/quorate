@@ -252,12 +252,13 @@ function isoTimestamp(): string {
 }
 
 /** Apply the setup plan (write files). Returns a summary for the user. */
-export function applySetup(plan: SetupPlan, quorateBinary?: string): { applied: boolean; backup?: string; message: string } {
+export function applySetup(plan: SetupPlan, quorateBinary?: string): { applied: boolean; partial?: boolean; backup?: string; message: string } {
   if (plan.dryRun) {
     return { applied: false, message: "dry-run: no changes made" };
   }
   const binary = quorateBinary ?? resolveQuorateBinary();
   let backup: string | undefined;
+  let claudeApplied = false;
   // Claude — parse → merge → backup → atomic write.
   try {
     const before = readClaudeSettings(plan.claude.path);
@@ -276,21 +277,23 @@ export function applySetup(plan: SetupPlan, quorateBinary?: string): { applied: 
     const temp = `${plan.claude.path}.${process.pid}.tmp`;
     writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
     renameSync(temp, plan.claude.path);
+    claudeApplied = true;
     const codexNote = plan.codex.action === "skip"
       ? " Codex notify slot occupied or unreadable — preserved."
       : ` ${updateCodexNotify(plan.codex.path, binary)}`;
     return { applied: true, backup, message: `Claude Code hooks installed at ${plan.claude.path}.${codexNote}` };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { applied: false, backup, message: `setup incomplete (Claude hooks may already be installed): ${message}` };
+    return { applied: false, partial: claudeApplied, backup, message: claudeApplied ? `Claude hooks installed; Codex setup failed: ${message}` : `failed to install Claude hooks: ${message}` };
   }
 }
 
 /** Apply removal (write the stripped settings back). */
-export function applyRemove(plan: SetupPlan): { applied: boolean; backup?: string; message: string } {
+export function applyRemove(plan: SetupPlan): { applied: boolean; partial?: boolean; backup?: string; message: string } {
   if (plan.dryRun) {
     return { applied: false, message: "dry-run: no changes made" };
   }
+  let claudeRemoved = false;
   try {
     if (!plan.claude.exists) return { applied: true, message: updateCodexNotify(plan.codex.path) };
     const before = readClaudeSettings(plan.claude.path);
@@ -300,10 +303,11 @@ export function applyRemove(plan: SetupPlan): { applied: boolean; backup?: strin
     const temp = `${plan.claude.path}.${process.pid}.tmp`;
     writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
     renameSync(temp, plan.claude.path);
+    claudeRemoved = true;
     return { applied: true, backup, message: `Quorate hooks removed from ${plan.claude.path}. ${updateCodexNotify(plan.codex.path)}` };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { applied: false, message: `removal incomplete (Claude hooks may already be removed): ${message}` };
+    return { applied: false, partial: claudeRemoved, message: claudeRemoved ? `Claude hooks removed; Codex removal failed: ${message}` : `failed to remove hooks: ${message}` };
   }
 }
 

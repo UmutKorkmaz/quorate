@@ -509,6 +509,7 @@ export async function runHookReportCli(argv: { source: string; event: string; pa
   const source = parseSource(argv.source);
   const event = parseEvent(argv.event);
   if (!source || !event) return; // Unknown source/event — defer.
+  if (source === "codex" && event === "notify" && argv.payload === undefined) return; // Codex supplies argv, never wait on STDIN.
 
   let raw = "";
   try {
