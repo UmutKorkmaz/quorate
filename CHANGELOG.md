@@ -5,17 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-## [1.4.0] - 2026-07-20
+## [1.4.0] - Unreleased
 
 ### Added
 
+- Portable decision receipts for one-shot CLI, Action, and App reviews, with
+  input/revision, policy/configuration, provider and finding provenance, final
+  gate reasons, coverage limitations, and explicit content-integrity verification.
+- Offline `setup demo` fail → fix → pass journey, report-bound finding feedback,
+  and paired saved-report evaluation with explicit human labels and unknown metrics.
+- Opt-in adaptive execution with deterministic preflight, bounded provider
+  concurrency, policy-preserving role selection, and recorded routing reasons.
+- Versioned history duration/agreement measurements and bounded signed proof history.
+- Hosted App durable job recovery, delivery deduplication, per-PR serialization,
+  bounded admission, stale-revision checks, and graceful shutdown.
+- **`quorate contract check` (ContractCourt MVP)** — OpenAPI JSON/YAML drift
+  detection with PASS/WARN/BLOCK rules, git-ref or before/after inputs,
+  persisted `.quorate/contract/latest.{json,md}` artifacts, and a `--gate`
+  exit code.
+- **`quorate metrics`** — local-only aggregation over past runs: verdict counts,
+  durations, findings, agreement, approvals, proof pass rate, and contract
+  verdicts, with `--json` for machine output.
 - **Foreign-agent ingest + hook installer** — `quorate monitor setup`
   installs Quorate hook-report entries in foreign AI CLIs so the monitor can
   observe them. Claude Code gets the rich surface (lanes, subagents, and live
-  approve/deny for `PermissionRequest` prompts); Codex gets a guarded notify
-  shim only when its notify slot is empty (never clobbered). Other CLIs
+  approve/deny for `PermissionRequest` prompts). The Codex notify shim remains
+  unimplemented; its existing notify configuration is preserved. Other CLIs
   (gemini, qwen, kimi, opencode, crush, goose) are observed by process scan.
   See `docs/MONITOR-HOOKS.md` for the honest capability matrix.
 - **`quorate hook-report --source <s> --event <E>`** — the foreign-CLI hook
@@ -24,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   approve/deny card (defers silently when no monitor is attached — zero
   overhead when nobody is watching).
 - **`quorate monitor --serve`** — a headless server mode that prints one
-  `{url, token, pid}` JSON line and serves the SSE feed for the native app.
+  `{url, token, pid}` JSON line and serves the SSE feed.
   Writes a `~/.quorate/live/monitor.json` discovery file with a 2s heartbeat
   on listen and removes it on close; this is what makes foreign
   `PermissionRequest` hooks block for an answer.
@@ -36,17 +51,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   external badge, per-run Jump, and a stats footer. `j` in the TUI (and the
   web's Jump button) focuses the run's terminal via tmux → iTerm2 →
   Terminal.app (macOS).
-- **monitor native macOS app** — a thin menu-bar/notch renderer over
-  the monitor server (Swift, macOS 14+, read-only over the SSE feed). Lives
-  under `native/monitor/`; `bash native/monitor/scripts/bundle.sh`
-  produces an ad-hoc-signed `dist/monitor.app` (bundle id
-  `app.quorate.monitor`, version 1.4.0, `LSUIElement`). It finds or spawns
-  `quorate monitor --serve`, renders approvals + runs + subagents + verdicts,
-  and never writes the spool directly.
-- **`quorate monitor install-companion`** — installs monitor. Default
-  path downloads `monitor-<arch>.zip` + `.sha256` from a GitHub Release
-  and verifies the checksum; `--from-local` builds from the in-tree SwiftPM
-  package (the working path today, no signed release assets yet). macOS only.
+- **ProofRunner attach** — reviews can attach explicit `--proof <path>` evidence,
+  and proof commands are discovered from package.json scripts.
+- **`examples/contract/`** — fixture corpus for contract drift checking.
+- Website docs page covering contract checks and metrics.
+
+### Security
+
+- Provider raw output, errors, summaries, and findings are redacted before they
+  are persisted or exported — broader secret patterns (AKIA/AIza/xox/JWT/PEM
+  blocks), provider-configured env values, and URL-credential masking in
+  diagnostics bundles.
+- The dangerous-flag denylist now matches by boundary-prefix, so compound flags
+  like `--dangerously-skip-permissions` are rejected, not just exact tokens.
+- Workspace packs under `.quorate/packs/` are gated behind
+  `QUORATE_TRUST_WORKSPACE`, matching the existing gate on `.quorate/commands/`.
+- Pack-supplied regex rules skip diff lines over 8,000 characters (ReDoS guard);
+  built-in audited rules still run on any line length.
+- Sessions, reports, and proof artifacts are written owner-only (0600 files,
+  0700 directories) with symlink-safe (O_NOFOLLOW) key creation.
+- The review workflow is pinned to the immutable v1.3.0 release commit with
+  SHA-pinned `actions/*` steps, and `ci.yml` runs with least-privilege
+  `contents: read` permissions.
+- Reviewer prompts frame the PR subject and diff as untrusted content to
+  analyze, never instructions to follow.
+- VS Code finding hovers restrict trusted markdown to a command allowlist, and
+  the webview nonce is generated from the CSPRNG.
+
+### Fixed
+
+- Invalid, empty, refused, or truncated provider responses fail their lane instead
+  of satisfying a real-provider coverage gate. Explicit valid empty findings remain valid.
+- Preserve corroborating provider identities through merge and reclustering.
+- Preserve contract array/item shape and disclose unsupported schema coverage.
+- Redact complete proof argument/output credentials before persistence and retain
+  byte caps across replacement and Unicode boundaries.
+- Apply hosted provider restrictions and canonical base policy/baseline/suppression
+  loading after configuration resolution; disallow provider credential redirects.
+- Bind VS Code fixes to their repository, report identity, and finding fingerprint.
+- Align custom executable readiness across doctor, provider tests, and shell setup;
+  JSON doctor formatting preserves its human-output exit status.
+- Include GitHub App build/typecheck and Docker smoke coverage in CI; retain
+  development build tools only in the image builder.
+- Update vulnerable transitive runtime/build dependencies while preserving the
+  existing Undici updates; regenerate the tracked Action bundle.
+- Pre-existing typecheck error in the live-spool truncate path.
+- The monitor web page now serves a strict Content-Security-Policy
+  (`default-src 'none'`, same-origin connects only) on top of its existing
+  markup escaping.
 
 ## [1.3.0] - 2026-07-20
 

@@ -6,6 +6,7 @@ import { isGateLane, runControl } from "../monitor-controls.js";
 import { writeApprovalDecision } from "../live-spool.js";
 import { jumpToRun } from "../terminal-jump.js";
 import { LaneStream, ProvidersGrid, RunRowView, truncateLine } from "./views.js";
+import { StatusLine } from "./app.js";
 import {
   type MonitorLane,
   blurLane,
@@ -246,7 +247,7 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
       if (approval) {
         try {
           writeApprovalDecision(
-            { id: approval.id, decision: input === "y" ? "allow" : "deny", decidedAt: new Date().toISOString() },
+            { id: approval.id, decision: input === "y" ? "allow" : "deny", decisionSurface: "monitor-tui", decidedAt: new Date().toISOString() },
             props.dir
           );
           setNotice(`${input === "y" ? "Approved" : "Denied"} ${approval.toolName}.`);
@@ -359,6 +360,24 @@ export function MonitorApp(props: MonitorAppProps): React.ReactElement {
       ) : null}
 
       <ExternalStrip agents={state.external} />
+
+      {selected ? (
+        <StatusLine
+          mode={selected.entry.mode === "plan" ? "plan" : "review"}
+          activeAgents={[...new Set(selected.lanes.map((lane) => lane.providerId))].join("+") || selected.entry.source || "waiting"}
+          detectedCount={selected.lanes.length}
+          diffLabel={selected.entry.subject}
+          degraded={Boolean(selected.degraded)}
+          verdict={selected.verdict as "pass" | "warn" | "fail" | undefined}
+          pendingApprovals={state.approvals.length}
+          reviewDurationMs={
+            selected.reviewDurationMs ??
+            (selected.entry.status === "running" ? Math.max(0, Date.now() - Date.parse(selected.entry.startedAt)) : undefined)
+          }
+          sessionEstimatedInputTokens={selected.budget?.estimatedInputTokens}
+          sessionEstimatedPricedInputCostUsd={selected.budget?.estimatedInputCostUsd}
+        />
+      ) : null}
 
       <Box marginTop={1}>
         <Text color={PALETTE.dim}>

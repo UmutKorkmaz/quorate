@@ -1,4 +1,5 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -95,6 +96,19 @@ describe("stripClaudeHooks", () => {
 });
 
 describe("buildClaudeHookCommand", () => {
+  it.skipIf(process.platform === "win32")("treats shell metacharacters in the executable path as literal data", () => {
+    const dir = tempDir();
+    try {
+      const binary = join(dir, "quorate $(printf expanded) `printf expanded` '$HOME' \\\"path");
+      writeFileSync(binary, '#!/bin/sh\nprintf "%s\\n" "$@"\n');
+      chmodSync(binary, 0o700);
+      const result = spawnSync("/bin/sh", ["-c", buildClaudeHookCommand(binary, "Stop")], { encoding: "utf8" });
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim().split("\n")).toEqual(["hook-report", "--source", "claude", "--event", "Stop"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it("embeds the binary path, the event, and always exits 0", () => {
     const cmd = buildClaudeHookCommand("/abs/quorate", "Stop");
     expect(cmd.startsWith("/bin/sh -c '")).toBe(true);
@@ -106,13 +120,13 @@ describe("buildClaudeHookCommand", () => {
 });
 
 describe("detectCliCapabilities + renderCapabilityTable", () => {
-  it("classifies claude as full, codex as shim, others as scan-only", () => {
+  it("classifies claude as full and unimplemented integrations as scan-only", () => {
     const caps = detectCliCapabilities({ claude: true, codex: true, gemini: false, qwen: false, kimi: false, opencode: false, crush: false, goose: false });
     const claude = caps.find((c) => c.kind === "claude");
     const codex = caps.find((c) => c.kind === "codex");
     const gemini = caps.find((c) => c.kind === "gemini");
     expect(claude?.hookSupport).toBe("full");
-    expect(codex?.hookSupport).toBe("shim");
+    expect(codex?.hookSupport).toBe("scan-only");
     expect(gemini?.hookSupport).toBe("scan-only");
   });
 
@@ -193,8 +207,9 @@ describe("computeSetupPlan codex handling", () => {
     expect(plan.codex.note).toContain("occupied");
   });
 
-  it("plans a shim when the notify slot is empty", () => {
+  it("does not promise an unimplemented shim when the notify slot is empty", () => {
     const plan = computeSetupPlan({ claudePath: "/none", codexPath: "/none", codexNotifyOccupied: false, dryRun: true });
-    expect(plan.codex.action).toBe("shim");
+    expect(plan.codex.action).toBe("none");
+    expect(plan.codex.note).toContain("not yet implemented");
   });
 });

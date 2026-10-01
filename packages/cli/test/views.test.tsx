@@ -10,6 +10,7 @@ import {
   RouteView,
   RunningCard,
   VerdictReport,
+  stripAnsiEscapes,
   stripAnsiLine,
   truncateLine,
   type RunRow
@@ -69,6 +70,54 @@ describe("VerdictReport", () => {
     report.verdict = "warn";
     const { lastFrame, unmount } = render(<VerdictReport report={report} />);
     expect(lastFrame() ?? "").toContain("heuristic only");
+    unmount();
+  });
+
+  it("shows each lane duration and uses the request-level priced input estimate", () => {
+    const report = failReport();
+    report.metadata.budget = {
+      changedFiles: 2,
+      changedLines: 12,
+      addedLines: 10,
+      removedLines: 2,
+      skippedGeneratedFiles: [],
+      promptBytes: 2_000,
+      estimatedInputTokens: 500,
+      estimatedInputCostUsd: 0.42,
+      providerEstimates: [],
+      exceeded: []
+    };
+
+    const { lastFrame, unmount } = render(<VerdictReport report={report} />);
+    const frame = lastFrame() ?? "";
+    for (const expected of [
+      "claude:architect (3.2s)",
+      "codex:qa (2.0s)",
+      "qwen:performance (1.5s)",
+      "droid:maintainer (1.2s)"
+    ]) {
+      expect(frame).toContain(expected);
+    }
+    expect(frame).toContain("~$0.42 in");
+    unmount();
+  });
+
+  it("shows an input-token estimate when the request has no priced estimate", () => {
+    const report = failReport();
+    report.metadata.budget = {
+      changedFiles: 1,
+      changedLines: 4,
+      addedLines: 4,
+      removedLines: 0,
+      skippedGeneratedFiles: [],
+      promptBytes: 3_400,
+      estimatedInputTokens: 850,
+      providerEstimates: [],
+      exceeded: []
+    };
+
+    const { lastFrame, unmount } = render(<VerdictReport report={report} />);
+    expect(lastFrame() ?? "").toContain("~850 tok in");
     unmount();
   });
 });
@@ -147,6 +196,24 @@ describe("LaneStream", () => {
     expect(lastFrame() ?? "").toContain("waiting for output");
     unmount();
   });
+
+  it("renders a streamed hyperlink line as plain text with no escape payload", () => {
+    const { lastFrame, unmount } = render(
+      <LaneStream
+        providerId="claude"
+        role="qa"
+        lines={["\x1b]8;;https://evil.example/a\x1b\\click here\x1b]8;;\x1b\\ done"]}
+        maxWidth={80}
+        startedAt={Date.now()}
+      />
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("click here done");
+    // Neither the OSC payload (URL) nor a raw ESC byte may reach the terminal.
+    expect(frame).not.toContain("evil.example");
+    expect(frame).not.toContain("\x1b");
+    unmount();
+  });
 });
 
 describe("truncateLine", () => {
@@ -157,6 +224,50 @@ describe("truncateLine", () => {
     expect(truncateLine("first\n\nsecond", 80)).toBe("second");
     // ANSI is fully removed from short input.
     expect(truncateLine("\x1b[32mok\x1b[0m", 80)).toBe("ok");
+  });
+});
+
+describe("stripAnsiEscapes", () => {
+  it("unwraps an OSC-8 hyperlink to its inner text (both URL and close marker gone)", () => {
+    const line = "see \x1b]8;;https://evil.example/a\x1b\\this doc\x1b]8;;\x1b\\ for details";
+    expect(stripAnsiEscapes(line)).toBe("see this doc for details");
+  });
+
+  it("strips window-title and clipboard OSC writes, BEL- and ST-terminated", () => {
+    expect(stripAnsiEscapes("\x1b]0;pwned title\x07body text")).toBe("body text");
+    expect(stripAnsiEscapes("\x1b]2;pwned title\x1b\\body text")).toBe("body text");
+    expect(stripAnsiEscapes("\x1b]52;c;Zm9v\x07after")).toBe("after");
+  });
+
+  it("swallows an unterminated OSC through end of line but keeps later lines", () => {
+    expect(stripAnsiEscapes("keep\x1b]0;cut-off\nnext line")).toBe("keep\nnext line");
+  });
+
+  it("strips all CSI sequences (cursor, screen, mode), not just SGR color", () => {
+    expect(stripAnsiEscapes("\x1b[31mred\x1b[0m")).toBe("red"); // the old, narrow behavior is a subset
+    expect(stripAnsiEscapes("\x1b[2Aup\x1b[1Bdown")).toBe("updown");
+    expect(stripAnsiEscapes("\x1b[?25lhidden\x1b[?25h")).toBe("hidden");
+    expect(stripAnsiEscapes("\x1b[2J\x1b[Hcleared")).toBe("cleared");
+    expect(stripAnsiEscapes("\x1b[38;2;10;20;30mtruecolor\x1b[0m")).toBe("truecolor");
+  });
+
+  it("strips other ESC-led controls (reverse index, cursor save/restore, reset)", () => {
+    expect(stripAnsiEscapes("a\x1bMb")).toBe("ab");
+    expect(stripAnsiEscapes("a\x1b7b\x1b8c")).toBe("abc");
+    expect(stripAnsiEscapes("\x1bcfresh")).toBe("fresh");
+    expect(stripAnsiEscapes("trailing esc\x1b")).toBe("trailing esc");
+  });
+
+  it("leaves plain text, newlines, and tabs untouched, and keeps non-ESC control bytes", () => {
+    expect(stripAnsiEscapes("plain text")).toBe("plain text");
+    expect(stripAnsiEscapes("line one\nline two\ttabbed")).toBe("line one\nline two\ttabbed");
+    // Only ESC-led sequences are stripped; other control bytes pass through as-is.
+    expect(stripAnsiEscapes("bell\x07back\x08space")).toBe("bell\x07back\x08space");
+  });
+
+  it("feeds the shared per-line and truncating sanitizers", () => {
+    expect(stripAnsiLine("\x1b]8;;https://x.example\x1b\\docs\x1b]8;;\x1b\\", 80)).toBe("docs");
+    expect(truncateLine("\x1b]0;busy\x07compiling src/a.ts", 80)).toBe("compiling src/a.ts");
   });
 });
 

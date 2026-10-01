@@ -92,6 +92,7 @@ run npm run ci
 run npm run typecheck --workspace @quorate/github-app
 run npm run build --workspace @quorate/github-app
 run npm run build:website
+run node scripts/verify-contract-fixtures.mjs
 
 ACTION_BUNDLE="packages/github-action/dist/index.js"
 ACTION_HASH_ONE="$(shasum -a 256 "$ACTION_BUNDLE" | awk '{print $1}')"
@@ -242,12 +243,6 @@ run git tag -a "$TAG" -m "Quorate $TAG"
 run git push origin "$TAG"
 run gh release create "$TAG" --verify-tag --target "$(git rev-parse HEAD)" \
   --title "Quorate $TAG" --notes-file "$NOTES_FILE"
-# monitor native asset (v1.4.0+): build the .app, zip + sha256, and attach
-# so `quorate monitor install-companion` (non-local path) works. Run by hand:
-#   bash native/monitor/scripts/bundle.sh
-#   cd native/monitor && ditto -c -k --keepParent dist/monitor.app monitor-arm64.zip
-#   shasum -a 256 monitor-arm64.zip >monitor-arm64.zip.sha256
-#   gh release upload "$TAG" monitor-arm64.zip monitor-arm64.zip.sha256
 run npm publish --workspace quorate "${PUBLISH_ARGS[@]}"
 
 [[ "$(npm view "quorate@$VERSION" version)" == "$VERSION" ]] || fail "CLI package verification failed"

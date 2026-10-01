@@ -99,11 +99,13 @@ export class FindingDecorations {
 export function findingHover(findings: Finding[], documentUri: vscode.Uri): vscode.Hover | undefined {
   if (findings.length === 0) return undefined;
   const md = new vscode.MarkdownString();
-  md.isTrusted = true;
+  md.isTrusted = { enabledCommands: ["quorate.fixFinding", "quorate.suppressFinding"] };
   md.supportThemeIcons = true;
   for (const f of findings) {
-    const agreed = f.agreedBy?.length ? ` · agreed by ${f.agreedBy.join(", ")}` : "";
-    md.appendMarkdown(`$(law) **Quorate** — \`${f.severity.toUpperCase()}\`${f.role ? ` · ${f.role}` : ""}${agreed}\n\n`);
+    const agreed = f.agreedBy?.length ? ` · agreed by ${escapeMd(f.agreedBy.join(", "))}` : "";
+    md.appendMarkdown(
+      `$(law) **Quorate** — \`${escapeMd(f.severity.toUpperCase())}\`${f.role ? ` · ${escapeMd(f.role)}` : ""}${agreed}\n\n`
+    );
     md.appendMarkdown(`**${escapeMd(f.title)}**\n\n${escapeMd(f.body)}\n\n`);
     if (f.suggestion) md.appendMarkdown(`_Suggestion:_ ${escapeMd(f.suggestion)}\n\n`);
     const suppressArgs = encodeURIComponent(JSON.stringify([documentUri.toString(), Math.max(0, (f.line ?? 1) - 1)]));
@@ -116,6 +118,10 @@ export function findingHover(findings: Finding[], documentUri: vscode.Uri): vsco
   return new vscode.Hover(md);
 }
 
-function escapeMd(text: string): string {
+/** Escape markdown metacharacters so provider-derived text (finding titles,
+ *  bodies, severities, agent errors) can't break out of code fences or inject
+ *  links/commands into MarkdownString hovers and tooltips. Exported so the
+ *  tree views share the same escaping. */
+export function escapeMd(text: string): string {
   return text.replace(/([\\`*_{}[\]()#+\-!|])/g, "\\$1");
 }

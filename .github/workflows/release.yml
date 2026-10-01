@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package version to release (for example 1.4.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quorate-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the verified tag and GitHub Release
+      id-token: write # npm provenance
+      actions: read # exact-revision CI gate
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.22.0"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: Require successful CI for this exact main revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push --json conclusion,status,headSha > /tmp/release-ci.json
+          node --input-type=module -e 'import fs from "node:fs"; const runs=JSON.parse(fs.readFileSync("/tmp/release-ci.json","utf8")); if (!runs.some(r => r.headSha===process.env.GITHUB_SHA && r.status==="completed" && r.conclusion==="success")) throw Error("This main revision has no successful CI run");'
+      - name: Verify and publish in GitHub-first order
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          npm whoami
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          CONFIRM_RELEASE="v$RELEASE_VERSION" bash scripts/release.sh --execute "$RELEASE_VERSION"

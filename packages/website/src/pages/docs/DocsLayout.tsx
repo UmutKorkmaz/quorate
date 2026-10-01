@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router";
 import { DocNav, DOC_LABELS, DOC_PATHS, type DocPath } from "../../components/DocNav";
 import { DocPager } from "../../components/DocPager";
 import { Seo } from "../../components/Seo";

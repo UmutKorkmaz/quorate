@@ -1,5 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDefaultConfig, type CouncilReport } from "@quorate/core";
@@ -146,6 +146,26 @@ describe("saveSession and loadSession", () => {
     });
     expect(loadSession(cwd, "persist-1")).toEqual(session);
     expect(loadSession(cwd, "missing")).toBeUndefined();
+  });
+
+  it("writes session files owner-only (0600) inside a private sessions dir (0700)", () => {
+    // Arrange — transcriptTail can hold pasted secrets; the audit ledger and
+    // live spool keep the same owner-only discipline.
+    const cwd = tempCwd();
+
+    // Act
+    saveSession(cwd, {
+      id: "mode-check",
+      name: "Modes",
+      timestamp: "2026-06-08T12:00:00.000Z",
+      mode: "review",
+      transcriptTail: []
+    });
+
+    // Assert — POSIX permission bits only (mirrors the history suite's gate).
+    if (platform() === "win32") return;
+    expect(statSync(sessionsDir(cwd)).mode & 0o777).toBe(0o700);
+    expect(statSync(sessionPath(cwd, "mode-check")).mode & 0o777).toBe(0o600);
   });
 
   it("lists sessions newest-first and returns the latest entry", () => {

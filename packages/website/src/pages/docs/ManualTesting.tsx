@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { CodeBlock } from "../../components/CodeBlock";
 import { InlineCode } from "../../components/InlineCode";
 
@@ -64,7 +64,7 @@ export default function ManualTesting() {
       </nav>
 
       <div className="test-section-note">
-        <strong>Prerequisites:</strong> Node 22 or newer, git, and this repo cloned. Build the workspace
+        <strong>Prerequisites:</strong> Node 22.22.0 or newer, git, and this repo cloned. Build the workspace
         CLI before testing so you are not validating an older global install.
         <br />
         <br />

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { InlineCode } from "../../components/InlineCode";
 
@@ -139,7 +139,7 @@ export default function DocsHub() {
         </li>
         <li>
           <strong>Guarded execution.</strong> Real providers are opt-in, spawned without a shell, and bounded by
-          explicit headless args, byte caps, time caps, and a dangerous-flag denylist.
+          explicit headless args, byte caps, time caps, and boundary-prefix dangerous-flag matching.
         </li>
         <li>
           <strong>Designed for the terminal.</strong> Use an inline transcript, a <InlineCode>/</InlineCode>{" "}

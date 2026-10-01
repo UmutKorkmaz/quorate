@@ -260,12 +260,14 @@ separately — it is the anchor SKU component that justifies Ship vs. free OSS.
 
 ## Roadmap
 
-| Version | Feature |
-| --- | --- |
-| v0.5.0 | `policy.yml.example`, docs, manual policy → `.quorate.yml` mapping |
-| v0.6.0 | Native `policy.yml` parser in `@quorate/core` |
-| v0.7.0 | GitHub App + Stripe license verification |
-| v0.8.0 | `roles_required` enforcement in Action (fail if role skipped) |
+| Version | Feature | Status |
+| --- | --- | --- |
+| v0.5.0 | `policy.yml.example`, docs, manual policy → `.quorate.yml` mapping | Shipped |
+| v0.6.0 | Native `policy.yml` parser in `@quorate/core` | Shipped (`parsePolicyYaml` in `core/src/policy.ts`) |
+| v0.7.0 | GitHub App + Stripe license verification | GitHub App half shipped; Stripe license verification not implemented — parked pending product decision (appears in no active roadmap) |
+| v0.8.0 | `roles_required` enforcement in Action (fail if role skipped) | Shipped (`requiredRolesMissing` enforcement) |
+
+[`docs/ROADMAP.md`](../ROADMAP.md) is the canonical status source.
 
 ---
 

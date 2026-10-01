@@ -3,19 +3,19 @@ const STEPS = [
     step: "01",
     title: "Install Quorate",
     command: "npm install -g quorate",
-    detail: "Requires Node 22 or newer. One package includes the CLI, shell, and council engine."
+    detail: "Requires Node 22.22.0 or newer. One package includes the CLI, shell, and council engine."
   },
   {
     step: "02",
-    title: "Audit your setup",
-    command: "quorate doctor",
-    detail: "See which AI CLIs are installed, runnable, or waiting on a headless profile."
+    title: "See a working gate",
+    command: "quorate setup demo",
+    detail: "An offline example goes from blocked to corrected to passing. Inspect the diffs and evidence in a new temporary directory."
   },
   {
     step: "03",
-    title: "Get a verdict",
-    command: "quorate review --base main",
-    detail: "Run a one-shot review, or open the shell with quorate and type / to explore commands."
+    title: "Choose your reviewer",
+    command: "quorate doctor",
+    detail: "Check configured agents in your repository, then follow the explicit provider-selection command to review your own changes."
   }
 ] as const;
 
@@ -38,10 +38,10 @@ export function QuickStart() {
             </p>
           </div>
           <h2 className="display-section text-3xl text-white md:text-4xl">
-            From install to verdict in three commands
+            See your first gate in three commands
           </h2>
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-quorate-muted">
-            Check your local agents, run a review, and get a result your team can act on.
+            See why a change is blocked, inspect the correction, and take the same workflow to your repository.
           </p>
         </div>
 

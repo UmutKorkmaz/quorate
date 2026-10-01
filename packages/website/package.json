@@ -3,6 +3,9 @@
   "version": "1.4.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "dev": "npm run generate:command-docs --prefix ../.. && vite",
     "build": "npm run generate:command-docs --prefix ../.. && tsc --noEmit && vite build",
@@ -10,10 +13,10 @@
   },
   "dependencies": {
     "prismjs": "^1.30.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "react-helmet-async": "^3.0.0",
-    "react-router-dom": "^7.6.2"
+    "react-router": "^8.3.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.11",

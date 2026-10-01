@@ -13,8 +13,14 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: ./
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # Pinned to the immutable v1.3.0 release commit instead of `uses: ./`:
+      # the committed action bundle is PR-controlled code, so a local action on
+      # pull_request would let a PR run its own dist/index.js with GLM_API_KEY
+      # and a write-scoped GITHUB_TOKEN. Tradeoff: PRs are reviewed by the
+      # latest release's code, not the PR's own code — bump this pin when
+      # cutting a release.
+      - uses: UmutKorkmaz/quorate@6194b688903a77609ac0eecb9c43f96f7838e934 # v1.3.0
         env:
           # Bearer token for the GLM-5.1 `api` provider in .quorate.yml. On
           # GitHub-hosted runners runner-mode `auto` resolves to `api`, so GLM

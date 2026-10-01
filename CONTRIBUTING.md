@@ -5,7 +5,7 @@ setup and the conventions we follow.
 
 ## Development setup
 
-Quorate requires **Node ≥ 22**.
+Quorate requires **Node ≥ 22.22.0**.
 
 ```bash
 git clone https://github.com/UmutKorkmaz/quorate
@@ -46,7 +46,7 @@ each commit focused on one logical change.
 ## Pull requests
 
 - Keep `npm test` green. CI runs the suite on the **ubuntu / macOS / Windows**
-  matrix on Node 22; a PR should pass on all three.
+  matrix on Node 22.22.0; a PR should pass on all three.
 - If you touch the Action source, rebuild and commit `dist/index.js`.
 - Update `CHANGELOG.md` under the in-progress section when your change is
   user-visible.

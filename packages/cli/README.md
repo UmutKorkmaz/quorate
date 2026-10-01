@@ -29,7 +29,7 @@ npm install -g quorate
 quorate
 ```
 
-Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interactive shell.
+Requires **Node ≥ 22.22.0**. Running `quorate` with no arguments opens the interactive shell.
 
 ## Why Quorate
 
@@ -40,6 +40,9 @@ Requires **Node ≥ 22**. Running `quorate` with no arguments opens the interact
 - **Safe by design.** Real agents are opt-in, spawned without a shell, with explicit headless args, byte/time caps, and a dangerous-flag denylist.
 
 ## Quick start
+
+The v1.4 candidate adds `quorate setup demo`: an offline, disposable fail → fix →
+pass gate journey. It does not require provider credentials.
 
 ```bash
 quorate                                   # open the interactive shell
@@ -114,6 +117,14 @@ constraint/invariant regressions, plus an offline release gate over Anchor/Cargo
 IDL, deployed-program evidence, verifiable-build evidence, and Quorate config.
 
 ## Documentation
+
+In the v1.4 candidate, one-shot reviews save a portable decision record to
+`.quorate/decision.json`; `review --write-receipt <path>` exports it elsewhere.
+Use `audit verify --receipt <path> --diff <reviewed-diff>` to check input/content
+integrity. This does not attest the producer or test execution. `feedback add`
+records a finding outcome and reason without changing policy; `evaluate <manifest>`
+compares labeled saved reports offline. See the repository README for the format
+and opt-in adaptive execution settings.
 
 Full docs, slash-command reference, provider/model configuration, and the GitHub
 Action: **<https://umutkorkmaz.github.io/quorate>**

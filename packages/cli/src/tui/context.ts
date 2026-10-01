@@ -223,7 +223,14 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "setLastRequest":
       return { ...state, lastRequest: action.request };
     case "setLastReport":
-      return { ...state, lastReport: action.report };
+      return {
+        ...state,
+        lastReport: action.report,
+        sessionEstimatedInputTokens:
+          (state.sessionEstimatedInputTokens ?? 0) + (action.report?.metadata.budget?.estimatedInputTokens ?? 0),
+        sessionEstimatedPricedInputCostUsd:
+          (state.sessionEstimatedPricedInputCostUsd ?? 0) + (action.report?.metadata.budget?.estimatedInputCostUsd ?? 0)
+      };
     case "setRoute":
       return {
         ...state,

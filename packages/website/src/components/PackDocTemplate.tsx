@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { CodeBlock } from "./CodeBlock";
 import { InlineCode } from "./InlineCode";
 import type { PackDocData } from "../lib/pack-docs";

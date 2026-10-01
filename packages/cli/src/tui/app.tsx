@@ -53,7 +53,8 @@ import { SlashPalette } from "./SlashPalette.js";
 import { Spinner, Elapsed, BusyLabel, Cursor } from "./Spinner.js";
 import { readVersion } from "../version.js";
 import { nextInterruptAction } from "../interactive-interrupt.js";
-import { createLiveSpoolSink } from "../live-spool.js";
+import { createLiveSpoolSink, listPendingApprovals } from "../live-spool.js";
+import { prepareReviewRequest } from "../review-preparation.js";
 import {
   Welcome,
   DiffCard,
@@ -260,6 +261,8 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<RunProgress | null>(null);
+  const [pendingApprovals, setPendingApprovals] = useState(() => listPendingApprovals().length);
+  const [lastReviewDurationMs, setLastReviewDurationMs] = useState<number | undefined>(undefined);
   const stateRef = useRef(state);
   stateRef.current = state;
   const idRef = useRef(0);
@@ -291,6 +294,10 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
   const runReview = useCallback(
     async (request: CouncilRequest): Promise<CouncilReport> => {
       const current = effectiveConfig(stateRef.current);
+      const preparedRequest = prepareReviewRequest(request, current);
+      dispatch({ type: "setLastRequest", request: preparedRequest });
+      const councilStartedAt = Date.now();
+      setLastReviewDurationMs(undefined);
       const errors = providerRunPreflight(current);
       if (errors.length > 0) {
         // Thrown (not emitted) so submit()'s catch surfaces it exactly once.
@@ -363,7 +370,7 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
       // its own errors, so it can never break the run or this UI.
       const liveSpool = createLiveSpoolSink({ cwd: stateRef.current.cwd });
       try {
-        const report = await runCouncil(request, current, {
+        const report = await runCouncil(preparedRequest, current, {
           onEvent: (event) => {
             liveSpool.handleEvent(event);
             onEvent(event);
@@ -371,6 +378,7 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
           signal: controller.signal
         });
         liveSpool.finish("done");
+        setLastReviewDurationMs(Math.max(0, Date.now() - councilStartedAt));
         return report;
       } catch (error: unknown) {
         liveSpool.finish("error");
@@ -642,6 +650,12 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
   const footerHint = idleFooterHint(state, ux, g.separator);
   const heuristicHint = statusHeuristicHint(ux);
 
+  // Refresh approval count on meaningful shell transitions. There is no
+  // independent timer: active monitor surfaces already own the live poll.
+  useEffect(() => {
+    setPendingApprovals(listPendingApprovals().length);
+  }, [busy, cells.length]);
+
   const startedAt = startedAtRef.current || Date.now();
   const maxWidth = stdout?.columns ?? 80;
   // The status-line affordance for drill-in only makes sense when the composer is
@@ -687,6 +701,9 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
                 diffLabel={progress.label}
                 degraded={degraded}
                 runningSince={startedAt}
+                pendingApprovals={pendingApprovals}
+                sessionEstimatedInputTokens={state.sessionEstimatedInputTokens}
+                sessionEstimatedPricedInputCostUsd={state.sessionEstimatedPricedInputCostUsd}
               />
             </>
           ) : (
@@ -704,6 +721,9 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
                 diffLabel={progress.label}
                 degraded={degraded}
                 runningSince={startedAt}
+                pendingApprovals={pendingApprovals}
+                sessionEstimatedInputTokens={state.sessionEstimatedInputTokens}
+                sessionEstimatedPricedInputCostUsd={state.sessionEstimatedPricedInputCostUsd}
                 drillHint={composerEmptyForHint ? " · ↑/↓ pick · → watch a lane" : undefined}
               />
             </>
@@ -725,6 +745,10 @@ export function App({ cwd, config, mode, providers, restoredSession }: AppProps)
             heuristicHint={heuristicHint}
             degraded={degraded}
             lastReport={state.lastReport}
+            pendingApprovals={pendingApprovals}
+            sessionEstimatedInputTokens={state.sessionEstimatedInputTokens}
+            sessionEstimatedPricedInputCostUsd={state.sessionEstimatedPricedInputCostUsd}
+            reviewDurationMs={lastReviewDurationMs}
           />
         )}
         <Box borderStyle="round" borderColor={paletteOpen ? PALETTE.command : PALETTE.dim} paddingX={1}>
@@ -808,6 +832,12 @@ interface StatusLineProps {
   runningSince?: number;
   /** Appended after the running spinner to advertise drill-in navigation. */
   drillHint?: string;
+  pendingApprovals?: number;
+  sessionEstimatedInputTokens?: number;
+  sessionEstimatedPricedInputCostUsd?: number;
+  /** Monitor surfaces can supply persisted values without fabricating a report. */
+  verdict?: CouncilReport["verdict"];
+  reviewDurationMs?: number;
 }
 
 /** Semantic color per mode, like Claude Code's mode footer: review is the active
@@ -834,16 +864,22 @@ function FooterHint({ hint }: { hint: string }): React.ReactElement {
 
 /** The status line: mode · active agents · diff (when loaded) · then either a
  *  live spinner+elapsed while a council runs, or the verdict/degraded/hint tail. */
-function StatusLine(props: StatusLineProps): React.ReactElement {
+export function StatusLine(props: StatusLineProps): React.ReactElement {
   const g = glyphs();
   const { mode, activeAgents, diffLabel, heuristicHint, degraded, runningSince, drillHint } = props;
-  const verdict = props.lastReport?.verdict;
+  const verdict = props.verdict ?? props.lastReport?.verdict;
+  const reviewDurationMs = props.reviewDurationMs;
+  const tokens = props.sessionEstimatedInputTokens ?? props.lastReport?.metadata.budget?.estimatedInputTokens;
+  const pricedCost = props.sessionEstimatedPricedInputCostUsd ?? props.lastReport?.metadata.budget?.estimatedInputCostUsd;
   const verdictColor = degraded ? PALETTE.degraded : verdict ? VERDICT_COLOR[verdict] ?? "white" : "white";
   return (
     <Text dimColor>
       <Text color={modeColor(mode)}>{`${g.mode} ${mode}`}</Text>
       <Text>{`   ${g.provider} ${activeAgents}`}</Text>
       {diffLabel ? <Text>{`   ${g.diff} ${diffLabel}`}</Text> : null}
+      {props.pendingApprovals && props.pendingApprovals > 0 ? (
+        <Text color={PALETTE.degraded}>{`   ${props.pendingApprovals} pending`}</Text>
+      ) : null}
       {runningSince != null ? (
         <Text color={PALETTE.spinner}>
           {"   "}
@@ -858,6 +894,15 @@ function StatusLine(props: StatusLineProps): React.ReactElement {
           {degraded ? <Text color={PALETTE.degraded}>{`   ${g.warn} degraded`}</Text> : null}
           {verdict ? (
             <Text color={verdictColor}>{`   ${g.verdict[verdict]} ${verdict.toUpperCase()}`}</Text>
+          ) : null}
+          {reviewDurationMs !== undefined && reviewDurationMs > 0 ? (
+            <Text>{`   ${(reviewDurationMs / 1000).toFixed(1)}s`}</Text>
+          ) : null}
+          {tokens !== undefined && tokens > 0 ? (
+            <Text>{`   ~${tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : tokens} tok in`}</Text>
+          ) : null}
+          {pricedCost !== undefined && pricedCost > 0 ? (
+            <Text>{`   ~$${pricedCost.toFixed(2)} priced in`}</Text>
           ) : null}
         </>
       )}

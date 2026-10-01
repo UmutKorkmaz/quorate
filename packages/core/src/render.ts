@@ -69,6 +69,15 @@ export function renderMarkdownReport(
     "## Findings"
   ].filter((line): line is string => line !== undefined);
 
+  if (report.metadata.decision) {
+    const decision = report.metadata.decision;
+    const section = ["## Merge Decision", "", `Gate: **${decision.gate.blocked ? "BLOCKED" : "ALLOWED"}**`,
+      ...decision.gate.reasons.map((reason) => `- ${reason.replaceAll("\n", " ")}`),
+      "", `Receipt: \`${decision.integrity.hash}\` (content integrity; no execution attestation).`,
+      ...decision.coverage.limitations.map((limitation) => `- ${limitation}`), ""];
+    lines.splice(lines.length - 1, 0, ...section);
+  }
+
   if (report.findings.length === 0) {
     lines.push("", "No findings.");
   } else {

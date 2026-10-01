@@ -1,7 +1,7 @@
 # Quorate Engineering Roadmap
 
 **Canonical status source**
-**As of:** v1.1.0 release · 2026-07-16
+**As of:** v1.4.0 local candidate · 2026-09-08
 
 This file is the active engineering sequence. Product concepts in
 [`AI-PRODUCT-SUITE-PLAN.md`](./AI-PRODUCT-SUITE-PLAN.md) are horizon/backlog material, and
@@ -13,15 +13,18 @@ and VS Code surfaces.
 
 ## Active sequence
 
-1. **Phase 0 — SupplyChainGate v1.1 stabilization**
-2. **Phase 1 — ProofRunner Lite**
-3. **Phase 2 — ContractCourt MVP**
-4. **Phase 3 — CI adoption hardening**
-5. **Phase 4 — Design-partner validation**
+1. **Phase 0 — SupplyChainGate v1.1 stabilization** — done (v1.1.0)
+2. **Phase 1 — ProofRunner Lite** — MVP on local main; further trust/metrics hardening locally verified
+3. **Phase 2 — ContractCourt MVP** — MVP on local main; array and coverage hardening locally verified
+4. **Phase 3 — CI adoption hardening** — local implementation verified; container and remote CI gates pending
+5. **Phase 4 — Design-partner validation** — measurement tools implemented locally; partner validation pending
 
-Phase 0 satisfies its local implementation and verification exit gate. Phase 1
-is next but has not started; later phases still begin only after the previous
-phase satisfies its exit gate.
+Phase 0 satisfied its exit gate with the v1.1.0 release. Phase 1 and Phase 2
+MVPs are merged into local main at `22bf5e7`. The next hardening work is on
+`codex/quorate-trust-adoption`; local changes are not a public release.
+GitHub and npm still expose v1.3.0 as of this audit. Current-candidate remote CI,
+release publication, cross-machine proof trust, and partner outcomes remain
+separate exit gates.
 
 ## Phase 0 — SupplyChainGate v1.1 stabilization
 
@@ -74,13 +77,30 @@ MVP:
 - Detect or configure test, typecheck, lint, and build commands.
 - Run proof steps with bounded output and duration.
 - Record command, exit code, duration, and changed artifacts in
-  `.quorate/proof/latest.json`.
+  `.quorate/proofs/latest.{json,md}`.
 - Add `quorate review --proof <path>`.
 - Support an optional Playwright smoke command when already configured.
 
-**Exit gate:** a fixture PR produces a portable proof artifact showing tests and
-build passed, and the council includes that evidence without trusting arbitrary
-artifact claims.
+Status: the MVP is committed on local main
+(`packages/cli/src/proof-runner.ts`): `quorate proof run/show/verify` writes
+`.quorate/proofs/latest.{json,md}`, and review evidence attaches by proof
+fingerprint rather than by trusting arbitrary artifact claims. The implemented
+artifact path is `.quorate/proofs/`. Explicit `--proof <path>` attachment and
+command discovery exist. Current hardening adds complete credential redaction,
+bounded retained proof history, and portable content-integrity decision records;
+the local proof signature is not a cross-machine execution attestation.
+
+**Exit gate:**
+
+- [ ] A fixture PR produces a portable proof artifact showing tests and build
+  passed.
+- [ ] The council includes that evidence without trusting arbitrary artifact
+  claims.
+
+Both boxes are plausibly met in the committed candidate — the fixture proof
+artifact and the fingerprint-gated council evidence attachment exist — but they
+stay unchecked: the formal review gate is part of the pending release
+verification, and portability across machines is unverified.
 
 ## Phase 2 — ContractCourt MVP
 
@@ -93,12 +113,22 @@ MVP:
 - Emit stable findings and machine-readable evidence.
 - Start with one proven contract type; do not launch a broad compatibility suite.
 
+Status: candidate on local main awaiting release verification. The core
+engine plus `quorate contract check` with `--spec/--base/--head/--before/--after/--gate`, the
+`.quorate/contract/latest.{json,md}` artifacts, and `quorate metrics` local
+aggregation are implemented on the v1.4 release-candidate branch.
+
 **Exit gate:** a vulnerable/clean corpus proves detection of breaking changes with
 bounded false positives.
 
 ## Phase 3 — CI adoption hardening
 
 **Goal:** make first-week adoption predictable for real repositories.
+
+Local implementation now covers an offline fail/fix/pass demo, shared provider
+readiness, portable decision records, report-bound editor fixes, trusted hosted
+configuration/policy, durable webhook jobs, and App/Docker CI checks. A container
+runtime and current-candidate Windows/remote CI still need execution evidence.
 
 - Generate and validate GitHub Action setup.
 - Add contract-drift checks for Action metadata and public docs.
@@ -111,6 +141,11 @@ evidence, and diagnose failure from documented commands alone.
 ## Phase 4 — Design-partner validation
 
 **Goal:** validate which workflow deserves the next product investment.
+
+Local feedback and offline paired-report evaluation provide measurement tools.
+Adaptive scheduling is opt-in and preserves policy requirements. No partner
+results, live-model precision/recall, cost improvement, or calibrated confidence
+are established by these implementations or synthetic tests.
 
 - Recruit a small set of active repositories.
 - Measure setup time, gate reliability, actionable finding rate, and false-positive
@@ -138,6 +173,8 @@ evidence to prioritize the next build without relying on feature-count ambition.
 | ReviewGraph surfaces | Done |
 | PlanCourt gate workflow | Done |
 | Custom pack format | Done |
+| Live monitor, approvals, trust ledger | Done (v1.4.0) |
+| ProofRunner Lite | Done (v1.4.0 candidate awaiting release) |
 
 ## Release order
 

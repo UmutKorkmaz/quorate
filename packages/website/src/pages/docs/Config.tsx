@@ -170,7 +170,9 @@ providers:
       <h2>Custom packs</h2>
       <p>
         Workspace packs in <InlineCode>.quorate/packs/*.yml</InlineCode> can add council
-        roles, role guidance, and regex heuristics. In GitHub Actions they are loaded from the
+        roles, role guidance, and regex heuristics. They load only when you opt in with{" "}
+        <InlineCode>QUORATE_TRUST_WORKSPACE=1</InlineCode> (the same gate as custom slash commands
+        in <InlineCode>.quorate/commands/</InlineCode>). In GitHub Actions they are loaded from the
         pull request base ref, never from the PR head.
       </p>
       <CodeBlock language="bash">{`quorate pack scaffold org-rules
@@ -373,10 +375,11 @@ quorate review                          # GLM-5.1 reviews as architect/security/
       <h2>Dangerous flags</h2>
       <p>
         Session/resume flags and <InlineCode>--yolo</InlineCode>/<InlineCode>--dangerously</InlineCode>-style
-        tokens (a fixed denylist) are rejected unless a profile sets{" "}
+        tokens are rejected by boundary-prefix matching (catches{" "}
+        <InlineCode>--dangerously-skip-permissions</InlineCode> and similar) unless a profile sets{" "}
         <InlineCode>allowDangerousArgs</InlineCode>. Alternatively, give a profile a{" "}
         <InlineCode>headlessAllowlist</InlineCode> and only those flags are permitted — that path replaces
-        the denylist entirely.
+        the boundary-prefix denylist entirely.
       </p>
 
       <h2>Config file locations</h2>

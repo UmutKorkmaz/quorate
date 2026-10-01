@@ -1,12 +1,47 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { type QuorateConfig } from "@quorate/core";
+import { loadConfig, resolvePolicy, shouldFailForPolicy, type QuorateConfig } from "@quorate/core";
 
 import {
   buildRiskReport,
   generateGithubActionWorkflow,
-  mergeVscodeRecommendations
+  mergeVscodeRecommendations,
+  runSetupDemo
 } from "../src/setup-command.js";
+
+const demoDirectories: string[] = [];
+afterEach(() => { for (const dir of demoDirectories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
+
+describe("offline first gate demo", () => {
+  it("runs the real deterministic gate against the before and corrected diffs with portable evidence", () => {
+    const demo = runSetupDemo(process.cwd());
+    demoDirectories.push(demo.directory);
+    const config = loadConfig(join(demo.directory, ".quorate.yml"), demo.directory);
+    const policy = resolvePolicy(config);
+    expect(shouldFailForPolicy(demo.before, policy)).toBe(true);
+    expect(shouldFailForPolicy(demo.after, policy)).toBe(false);
+    expect(demo.after.findings).toEqual([]);
+    expect(demo.before.findings).toContainEqual(expect.objectContaining({ file: ".github/workflows/example.yml", severity: "medium" }));
+    expect(config.providers.every((provider) => provider.type === "mock")).toBe(true);
+    expect(JSON.parse(readFileSync(join(demo.directory, "blocked.json"), "utf8"))).toEqual(demo.before);
+    expect(JSON.parse(readFileSync(join(demo.directory, "passed.json"), "utf8"))).toEqual(demo.after);
+    expect(readFileSync(join(demo.directory, "before.diff"), "utf8")).toContain("actions/checkout@v4");
+    expect(readFileSync(join(demo.directory, "after.diff"), "utf8")).toContain("actions/checkout@11d5960a326750d5838078e36cf38b85af677262");
+  });
+
+  it("accepts a new explicit directory and refuses to overwrite existing work", () => {
+    const parent = mkdtempSync(join(tmpdir(), "quorate-demo-parent-"));
+    demoDirectories.push(parent);
+    const demo = runSetupDemo(parent, "sample");
+    expect(demo.directory).toBe(join(parent, "sample"));
+    writeFileSync(join(demo.directory, "before.diff"), "user work");
+    expect(() => runSetupDemo(parent, "sample")).toThrow(/EEXIST/);
+    expect(readFileSync(join(demo.directory, "before.diff"), "utf8")).toBe("user work");
+  });
+});
 
 function config(overrides: Partial<QuorateConfig> = {}): QuorateConfig {
   return {
@@ -28,7 +63,9 @@ describe("generateGithubActionWorkflow", () => {
     expect(yaml).toContain("pull_request");
     expect(yaml).toContain("UmutKorkmaz/quorate@");
     expect(yaml).toMatch(/UmutKorkmaz\/quorate@[0-9a-f]{40}/);
-    expect(yaml).toContain("pinned to the reviewed v1.2.1 Action bundle commit");
+    expect(yaml).toContain("Pinned to a reviewed immutable Action bundle commit");
+    expect(yaml).toMatch(/actions\/checkout@[0-9a-f]{40}/);
+    expect(yaml).toContain("persist-credentials: false");
     expect(yaml).not.toContain("replace the release-candidate tag");
     expect(yaml).toContain("github-token: ${{ secrets.GITHUB_TOKEN }}");
     // pull-requests write permission is required to post the comment

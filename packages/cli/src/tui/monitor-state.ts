@@ -1,4 +1,4 @@
-import type { CouncilEvent } from "@quorate/core";
+import type { CouncilEvent, ReviewBudgetSummary } from "@quorate/core";
 import { listLiveRuns, readRunEvents, reapAndListPendingApprovals, type ApprovalRequest, type LiveRunEntry } from "../live-spool.js";
 import type { ExternalAgent } from "../agent-scan.js";
 import type { RunRow } from "./views.js";
@@ -31,6 +31,9 @@ export interface MonitorRun {
   lanes: MonitorLane[];
   verdict?: string;
   degraded?: boolean;
+  /** Persisted from the final report for the stable monitor status line. */
+  budget?: ReviewBudgetSummary;
+  reviewDurationMs?: number;
   /** Spool file read offset — passed back to readRunEvents to tail. */
   offset: number;
   /** Nested subagent councils spawned by this run's lanes (one level deep). */
@@ -191,7 +194,14 @@ export function pollMonitorState(previous: MonitorState, options: PollOptions = 
     for (const event of events) lanes = applyEventToLanes(lanes, event);
     const verdict = reset ? report?.verdict : report?.verdict ?? existing?.verdict;
     const degraded = reset ? report?.metadata?.degraded : report?.metadata?.degraded ?? existing?.degraded;
-    return { entry, lanes, verdict, degraded, offset } satisfies MonitorRun;
+    const budget = reset ? report?.metadata?.budget : report?.metadata?.budget ?? existing?.budget;
+    const startedAt = Date.parse(entry.startedAt);
+    const endedAt = Date.parse(entry.updatedAt);
+    const reportDuration = report && Number.isFinite(startedAt) && Number.isFinite(endedAt)
+      ? Math.max(0, endedAt - startedAt)
+      : undefined;
+    const reviewDurationMs = reset ? reportDuration : reportDuration ?? existing?.reviewDurationMs;
+    return { entry, lanes, verdict, degraded, budget, reviewDurationMs, offset } satisfies MonitorRun;
   });
   const runs = buildRunTree(flat);
 

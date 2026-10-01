@@ -19,6 +19,12 @@ const TOP_N = 50;
 
 /** One review, projected compactly from a CouncilReport. */
 export interface HistoryEntry {
+  /** Absent on legacy records. */
+  schemaVersion?: 2;
+  /** Measured wall time; absent when the producer did not record it. */
+  durationMs?: number;
+  /** Fraction of active findings corroborated by at least two distinct providers. */
+  agreement?: number;
   reviewId?: string;
   generatedAt: string;
   verdict: Verdict;
@@ -63,6 +69,10 @@ export function toHistoryEntry(report: CouncilReport): HistoryEntry {
   const located = active.filter((finding): finding is Finding & { file: string } => Boolean(finding.file));
 
   return {
+    schemaVersion: 2,
+    durationMs: report.metadata.durationMs,
+    agreement: active.length === 0 ? undefined
+      : active.filter((finding) => new Set(finding.agreedBy ?? []).size >= 2).length / active.length,
     reviewId: report.metadata.reviewId,
     generatedAt: report.metadata.generatedAt,
     verdict: report.verdict,
@@ -97,6 +107,9 @@ export function isHistoryEntry(value: unknown): value is HistoryEntry {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const entry = value as HistoryEntry;
   return (
+    (entry.schemaVersion === undefined || entry.schemaVersion === 2) &&
+    (entry.durationMs === undefined || (Number.isFinite(entry.durationMs) && entry.durationMs >= 0)) &&
+    (entry.agreement === undefined || (Number.isFinite(entry.agreement) && entry.agreement >= 0 && entry.agreement <= 1)) &&
     (entry.reviewId === undefined || typeof entry.reviewId === "string") &&
     typeof entry.generatedAt === "string" &&
     Number.isFinite(Date.parse(entry.generatedAt)) &&

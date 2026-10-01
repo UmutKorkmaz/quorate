@@ -11,6 +11,7 @@ export type Verdict = "pass" | "warn" | "fail";
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
 export interface Finding {
+  fingerprint?: string;
   severity: Severity;
   title: string;
   body: string;
@@ -38,7 +39,22 @@ export interface CouncilReport {
   summary: string;
   findings: Finding[];
   providerResults: ProviderResult[];
-  metadata: { degraded: boolean; mergedBy?: string };
+  metadata: { degraded: boolean; mergedBy?: string; reviewId?: string; generatedAt?: string };
+}
+
+/** Launch the CLI directly in the reviewed workspace, without shell text or a
+ * reused terminal's mutable working directory. The CLI revalidates this binding. */
+export function fixTerminalOptions(cli: string, cwd: string, report: CouncilReport, finding: Finding): vscode.TerminalOptions {
+  const { reviewId, generatedAt } = report.metadata;
+  if (!path.isAbsolute(cwd) || !reviewId || !generatedAt || !finding.fingerprint) {
+    throw new Error("Run a new review with the current Quorate CLI before fixing this finding.");
+  }
+  return {
+    name: "Quorate Fix",
+    cwd,
+    shellPath: cli,
+    shellArgs: ["fix", "--cwd", cwd, "--report-id", reviewId, "--report-generated-at", generatedAt, "--finding-fingerprint", finding.fingerprint]
+  };
 }
 
 export interface ProviderConfig {
@@ -70,8 +86,30 @@ export function providerRunState(
 
 export interface DoctorReport {
   detected: Array<{ id: string; command?: string; path?: string; available: boolean; installHint?: string }>;
-  /** doctor --json returns the FULL config object, not a provider array. */
-  config: { providers: ProviderConfig[] };
+  config: { providers: ProviderConfig[]; councils?: string[] };
+}
+
+/** The CLI's current safe JSON uses provider snapshots; older versions exposed
+ * detected/config. Normalize both without requiring provider secrets/config. */
+export function normalizeDoctorReport(value: unknown): DoctorReport | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.providers)) {
+    const providers = record.providers.filter((provider): provider is ProviderConfig & { available?: boolean; assignedRoles?: string[] } =>
+      !!provider && typeof provider === "object" && typeof provider.id === "string" && ["api", "cli", "mock"].includes(provider.type)
+    );
+    return {
+      detected: providers.filter((provider) => provider.type === "cli").map((provider) => ({ id: provider.id, available: provider.available === true })),
+      config: {
+        providers: providers.map((provider) => ({ ...provider, roles: provider.roles ?? provider.assignedRoles })),
+        councils: Array.isArray(record.councils) && record.councils.every((role) => typeof role === "string")
+          ? record.councils : [...new Set(providers.flatMap((provider) => provider.roles ?? provider.assignedRoles ?? []))]
+      }
+    };
+  }
+  if (Array.isArray(record.detected) && record.config && typeof record.config === "object"
+    && Array.isArray((record.config as { providers?: unknown }).providers)) return value as DoctorReport;
+  return undefined;
 }
 
 /** A streamed NDJSON progress event (provider/started, provider/chunk, provider/done, …). */

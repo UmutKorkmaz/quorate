@@ -192,6 +192,17 @@ export function applyInlineSuppressions(findings: Finding[], lines: DiffLine[]):
   });
 }
 
+/**
+ * Diff lines longer than this are skipped for PACK-supplied regex rules. Both
+ * the pattern (custom pack YAML) and the subject text (the diff) can be
+ * repo-controlled, so a nested-quantifier pattern against one long minified
+ * line is a synchronous hang (ReDoS). Built-in rules come from a static,
+ * audited table and still run on lines of any length. Heuristic coverage note:
+ * findings on skipped lines are missed by design — a fair trade for a
+ * hang-proof review run.
+ */
+const PACK_RULE_MAX_LINE_LENGTH = 8000;
+
 export function runHeuristicReview(request: CouncilRequest, role = "maintainer"): ProviderResult {
   const startedAt = Date.now();
   const findings: Finding[] = [];
@@ -200,6 +211,9 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
   const addedTextByFile = textByFile(addedLinesByFile);
   const testLikeByFile = new Map<string, boolean>();
   const heuristicRules: CustomHeuristicRule[] = [...PACK_HEURISTIC_RULES, ...(request.customHeuristics ?? [])];
+  // Rules at or above this index come from pack YAML rather than the static
+  // built-in table — only those are subject to the line-length cap above.
+  const builtInRuleCount = PACK_HEURISTIC_RULES.length;
 
   for (const line of lines) {
     const text = line.text;
@@ -211,14 +225,22 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       testLike = isTestLikePath(line.file);
       testLikeByFile.set(fileKey, testLike);
     }
-    for (const rule of heuristicRules) {
+    for (const [ruleIndex, rule] of heuristicRules.entries()) {
       // The "Synchronous fs call in a request path" rule only applies to
       // long-lived server code; in test helpers and short-lived processes
       // (CLI/scripts/config) sync fs is the correct idiom, so skip it there.
       const skipRequestPathFsRule =
         rule.title === "Synchronous fs call in a request path" &&
         (testLike || isNonRequestPath(line.file));
-      if (!skipRequestPathFsRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      // Pack-supplied regexes: skip pathologically long lines (ReDoS guard).
+      const skipLongLineForPackRule =
+        ruleIndex >= builtInRuleCount && text.length > PACK_RULE_MAX_LINE_LENGTH;
+      if (
+        !skipRequestPathFsRule &&
+        !skipLongLineForPackRule &&
+        (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) &&
+        rule.textRe.test(text)
+      ) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }

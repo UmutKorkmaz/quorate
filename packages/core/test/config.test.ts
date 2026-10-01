@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { parseConfig, serializeConfig } from "../src/config.js";
 
 describe("config", () => {
+  it("keeps adaptive execution opt-in and round-trips its bounded defaults", () => {
+    expect(parseConfig("{}").execution).toBeUndefined();
+    const config = parseConfig("execution:\n  mode: adaptive\n");
+    expect(config.execution).toEqual({ mode: "adaptive", maxParallelProviders: 3 });
+    expect(parseConfig(serializeConfig(config)).execution).toEqual(config.execution);
+  });
+
+  it.each(["0", "-1", "17", "1.5", ".inf", ".nan"])("rejects unsafe adaptive concurrency %s", (value) => {
+    expect(() => parseConfig(`execution:\n  mode: adaptive\n  maxParallelProviders: ${value}\n`)).toThrow();
+  });
+
   it("parses provider and GitHub settings", () => {
     const config = parseConfig(`
 councils:

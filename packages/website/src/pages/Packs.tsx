@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Seo } from "../components/Seo";
 import { CodeBlock } from "../components/CodeBlock";
 import { PACKS_DATA, type PackInfo } from "../lib/packs-data";

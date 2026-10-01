@@ -24,6 +24,8 @@ export interface BaselineWriteOptions {
   update?: boolean;
   /** Advisory expiry in days. */
   expiresDays?: number;
+  /** Baseline generation clock; defaults to now. Injected for deterministic tests. */
+  now?: number;
 }
 
 export interface BaselineWriteResult {
@@ -60,7 +62,10 @@ export function writeBaselineFromReport(options: BaselineWriteOptions): Baseline
     throw new Error(`Baseline already exists at ${baselinePath}. Use --update to overwrite it.`);
   }
 
-  const store = createBaseline(report.findings ?? [], { expiresAfterDays: options.expiresDays });
+  const store = createBaseline(report.findings ?? [], {
+    expiresAfterDays: options.expiresDays,
+    generatedAt: options.now !== undefined ? new Date(options.now).toISOString() : undefined
+  });
   mkdirSync(dirname(baselinePath), { recursive: true });
   writeFileSync(baselinePath, serializeBaseline(store), "utf8");
   return { path: baselinePath, count: store.findings.length, overwritten };

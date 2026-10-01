@@ -4,7 +4,7 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
   "/docs":
     "Quorate documentation — install, quick start, slash commands, providers, configuration, and GitHub Action.",
   "/docs/install":
-    "Install Quorate globally with npm. Requires Node 22+. Verify setup with quorate doctor.",
+    "Install Quorate globally with npm. Requires Node 22.22.0+. Verify setup with quorate doctor.",
   "/docs/quickstart":
     "Quick start guide: open the shell, load a diff, enable providers, and run your first council review.",
   "/docs/commands":
@@ -15,6 +15,8 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
     "Configure councils, providers, headless args, and safety limits in .quorate.yml.",
   "/docs/github-action":
     "Run the Quorate council on every pull request with GitHub Action release gates, SARIF, baselines, suppressions, and Solana pack support.",
+  "/docs/contract":
+    "Deterministic OpenAPI 3 contract breaking-change detection. Block releases on removed operations, newly required fields, incompatible types, removed enum values. Privacy-preserving metrics track verdicts and agreement locally.",
   "/docs/faq":
     "Frequently asked questions about Quorate — install, providers, degraded reviews, and the GitHub Action.",
   "/docs/manual-testing":

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,7 +11,10 @@ import {
   formatHistoryTable,
   formatStatsReport,
   historyPath,
-  readHistory
+  readHistory,
+  feedbackPath,
+  readFindingFeedback,
+  recordFindingFeedback
 } from "../src/history-command.js";
 import { buildProgram } from "../src/index.js";
 import { computeStats } from "@quorate/core";
@@ -21,8 +24,59 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "quorate-hist-"));
 });
 afterEach(() => {
+  rmSync(feedbackPath(dir), { force: true });
   rmSync(dir, { recursive: true, force: true });
   vi.restoreAllMocks();
+});
+
+describe("human finding feedback", () => {
+  it("binds a local label to the report and finding without changing the report or gate", async () => {
+    const saved = report([finding({ fingerprint: "finding-1" })]);
+    const original = JSON.stringify(saved);
+    const entry = await recordFindingFeedback(dir, saved, { finding: 1, outcome: "false-positive", reason: "Input is validated at the trusted boundary." });
+    expect(entry).toMatchObject({ schema: 1, reviewId: "abc123", reportGeneratedAt: saved.metadata.generatedAt, fingerprint: "finding-1", outcome: "false-positive" });
+    expect(entry.reportHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(saved)).toBe(original);
+    expect(existsSync(join(dir, ".quorate", "suppressions.json"))).toBe(false);
+    expect(feedbackPath(dir)).not.toContain(dir);
+    expect(await readFindingFeedback(dir)).toEqual([entry]);
+    expect(statSync(feedbackPath(dir)).mode & 0o777).toBe(platform() === "win32" ? 0o666 : 0o600);
+  });
+
+  it("rejects missing identities, ambiguous selections, invalid outcomes, and empty reasons", async () => {
+    const saved = report([finding({ fingerprint: "one" })]);
+    const options = { fingerprint: "one", outcome: "confirmed", reason: "Reproduced." };
+    await expect(recordFindingFeedback(dir, saved, { ...options, outcome: "pass" })).rejects.toThrow(/Outcome/);
+    await expect(recordFindingFeedback(dir, saved, { ...options, reason: " " })).rejects.toThrow(/reason/);
+    await expect(recordFindingFeedback(dir, saved, { ...options, finding: 1 })).rejects.toThrow(/exactly one/);
+    await expect(recordFindingFeedback(dir, saved, { ...options, fingerprint: "absent" })).rejects.toThrow(/missing or ambiguous/);
+    await expect(recordFindingFeedback(dir, { ...saved, metadata: { ...saved.metadata, reviewId: undefined } }, options)).rejects.toThrow(/identity/);
+    expect(existsSync(feedbackPath(dir))).toBe(false);
+  });
+
+  it.skipIf(platform() === "win32")("does not follow a redirected feedback file or overwrite its target", async () => {
+    const victim = join(dir, "victim.txt");
+    writeFileSync(victim, "untouched");
+    // Ensure the managed history parent exists, without creating a feedback file.
+    await appendHistoryNow(dir, report([]));
+    symlinkSync(victim, feedbackPath(dir));
+    await expect(recordFindingFeedback(dir, report([finding({ fingerprint: "one" })]), { fingerprint: "one", outcome: "confirmed", reason: "Reproduced." })).rejects.toThrow();
+    expect(readFileSync(victim, "utf8")).toBe("untouched");
+  });
+
+  it("exposes targets, explicit outcome recording, and JSON history through the CLI", async () => {
+    mkdirSync(join(dir, ".quorate"));
+    writeFileSync(join(dir, ".quorate", "last-report.json"), JSON.stringify(report([finding({ fingerprint: "one" })])));
+    const output = captureConsoleLog();
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "feedback", "targets"], { from: "node" });
+    expect(JSON.parse(output.join("\n")).findings[0]).toMatchObject({ number: 1, fingerprint: "one" });
+    output.length = 0;
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "feedback", "add", "--finding", "1", "--outcome", "confirmed", "--reason", "Reproduced in a regression test.", "--json"], { from: "node" });
+    expect(JSON.parse(output.join("\n")).outcome).toBe("confirmed");
+    output.length = 0;
+    await buildProgram().parseAsync(["node", "quorate", "--cwd", dir, "feedback", "list", "--json"], { from: "node" });
+    expect(JSON.parse(output.join("\n"))).toHaveLength(1);
+  });
 });
 
 function finding(o: Partial<Finding> = {}): Finding {

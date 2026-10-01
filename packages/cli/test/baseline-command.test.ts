@@ -91,7 +91,7 @@ describe("applyBaselineToReport", () => {
   it("warns when the baseline is past its expiry but still applies it", () => {
     const known = finding({ severity: "critical", file: "a.ts" });
     writeLastReport(report([known]));
-    writeBaselineFromReport({ cwd: dir, expiresDays: 30 });
+    writeBaselineFromReport({ cwd: dir, expiresDays: 30, now: Date.parse("2026-06-13T00:00:00.000Z") });
     // 100 days later
     const applied = applyBaselineToReport(report([known]), dir, undefined, Date.parse("2026-09-21T00:00:00.000Z"));
     expect(applied.notes.join(" ")).toMatch(/expiry/i);

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import type { CouncilReport, Finding, ProviderResult } from "./cli";
 
@@ -13,8 +14,7 @@ function escHtml(raw: string): string {
 }
 
 function nonce(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  return randomBytes(16).toString("hex");
 }
 
 type FileGroup = { file: string; findings: Finding[] };

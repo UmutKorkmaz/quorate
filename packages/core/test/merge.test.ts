@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { clusterFindings } from "../src/council.js";
 import { buildMergePrompt, parseMergeResult } from "../src/merge.js";
-import type { Finding } from "../src/types.js";
+import { shouldFailForPolicy } from "../src/policy.js";
+import type { CouncilReport, Finding } from "../src/types.js";
 
 const f = (over: Partial<Finding>): Finding => ({
   severity: "low",
@@ -37,6 +38,20 @@ describe("tight-location clustering", () => {
 });
 
 describe("master merge parsing", () => {
+  it("preserves source votes through repeated merge and clustering so agreement gates still block", () => {
+    const findings = PARAPHRASED.map((finding) => ({ ...finding, severity: "high" as const }));
+    const merged = parseMergeResult('[{"sources":[0,1,2]},{"sources":[3,4]}]', findings)!;
+    const remerged = parseMergeResult('[{"sources":[0,1]}]', merged)!;
+    const finalFindings = clusterFindings(clusterFindings(remerged));
+    expect(finalFindings[0].agreedBy).toEqual(["claude", "codex", "gemma4", "heuristic", "ollama"]);
+    expect(finalFindings[0].agreement).toBe(5);
+    const report = { findings: finalFindings, providerResults: [], verdict: "fail", metadata: { degraded: false } } as unknown as CouncilReport;
+    expect(shouldFailForPolicy(report, {
+      enabled: true, failOn: "never", blockOnVerdict: [], allowWarnMerge: true,
+      failOnDegraded: false, gate: { severity: "high", minAgreement: 2 }, rolesRequired: [], minRealProviders: 0
+    })).toBe(true);
+  });
+
   it("builds merged findings from a valid partition (severity never lowered)", () => {
     const text = `Here you go:\n\`\`\`json\n[{"sources":[0,1,2,3,4],"title":"Stray console.log debug statement","body":"One console.log left at src/diff.ts:28.","severity":"info"}]\n\`\`\``;
     const merged = parseMergeResult(text, PARAPHRASED)!;

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runApiProvider } from "../src/api-provider.js";
+import { runCouncil } from "../src/council.js";
+import { createDefaultConfig } from "../src/providers.js";
+import { shouldFailForPolicy } from "../src/policy.js";
 import type { CouncilRequest, ProviderConfig } from "../src/types.js";
 
 const request: CouncilRequest = {
@@ -31,6 +34,53 @@ afterEach(() => {
 });
 
 describe("runApiProvider", () => {
+  it("does not let an empty response satisfy the final required-provider policy", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(chatCompletion("")));
+    const report = await runCouncil(request, {
+      ...createDefaultConfig(), providers: [{ ...apiProvider(), roles: ["security"] }], councils: ["security"]
+    });
+    expect(report.metadata.degraded).toBe(true);
+    expect(report.verdict).toBe("warn");
+    expect(shouldFailForPolicy(report, {
+      enabled: true, failOn: "high", blockOnVerdict: ["warn", "fail"], allowWarnMerge: false,
+      failOnDegraded: true, rolesRequired: ["security"], minRealProviders: 1
+    })).toBe(true);
+  });
+
+  it.each(["", "I cannot review this request.", '[{"severity":"high"}]', '[{"severity":"high","title":"Bug"},{}]', '[{"severity":"high"'])
+    ("rejects incomplete or unrecognized review output: %j", async (content) => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(chatCompletion(content)));
+      const result = await runApiProvider(apiProvider(), "security", request);
+      expect(result.status).toBe("error");
+      expect(result.error).toMatch(/valid review/i);
+    });
+
+  it.each(["[]", "```json\n[]\n```", "No findings."])("accepts an explicit empty review: %j", async (content) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(chatCompletion(content)));
+    const result = await runApiProvider(apiProvider(), "security", request);
+    expect(result.status).toBe("ok");
+    expect(result.findings).toEqual([]);
+  });
+
+  it.each(["[]", "[{}]", "{}"])("retains a reported high finding beside an unusable JSON block: %s", async (json) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(chatCompletion(
+      `\`\`\`json\n${json}\n\`\`\`\n- [high] SQL injection (db.ts:4): User input reaches an unparameterized query.`
+    )));
+    const report = await runCouncil(request, {
+      ...createDefaultConfig(), providers: [{ ...apiProvider(), roles: ["security"] }], councils: ["security"]
+    });
+    expect(report.providerResults[0].status).toBe("error");
+    expect(report.findings[0]).toMatchObject({ severity: "high", title: "SQL injection" });
+    expect(report.verdict).toBe("fail");
+  });
+
+  it.each(["length", "content_filter"])("rejects a response with finish_reason=%s even when its prefix parses", async (finish_reason) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ finish_reason, message: { content: "[]" } }]
+    }), { status: 200 })));
+    expect((await runApiProvider(apiProvider(), "security", request)).status).toBe("error");
+  });
+
   it("parses findings from a chat-completions response and returns ok", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       chatCompletion("- [high] Title (file.ts:1): body")
@@ -63,6 +113,7 @@ describe("runApiProvider", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("http://localhost:11434/v1/chat/completions");
     expect(init.method).toBe("POST");
+    expect(init.redirect).toBe("error");
     const body = JSON.parse(init.body as string);
     expect(body.model).toBe("test-model");
     expect(body.stream).toBe(false);
@@ -111,6 +162,99 @@ describe("runApiProvider", () => {
     expect(result.error).not.toContain("secret-token");
     expect(result.rawOutput).not.toContain("sk-supersecret");
     expect(result.error).toContain("[redacted]");
+  });
+
+  it("redacts an echoed API token before deriving successful provider output", async () => {
+    const token = "provider-token-value-123456";
+    const fetchMock = vi.fn().mockResolvedValue(
+      chatCompletion(
+        `${token} summary\n- [high] ${token} finding (secret.ts:7): echoed ${token}`
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({ apiKeyEnv: "MY_TOKEN" }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.summary).not.toContain(token);
+    expect(result.findings).toHaveLength(1);
+    expect(JSON.stringify(result.findings)).not.toContain(token);
+    expect(JSON.stringify(result.findings)).toContain("[redacted]");
+    expect(result.error ?? "").not.toContain(token);
+    expect(result.rawOutput ?? "").not.toContain(token);
+  });
+
+  it("redacts a complete token before rejecting a truncated response", async () => {
+    const token = "token-that-is-long-enough-to-be-truncated-123456";
+    const findingPrefix = "- [high] Kept finding (file.ts:1): ";
+    const fetchMock = vi.fn().mockResolvedValue(chatCompletion(`${findingPrefix}${token}`));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({
+        apiKeyEnv: "MY_TOKEN",
+        maxOutputBytes: Buffer.byteLength(findingPrefix) + 12
+      }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.summary).toContain("truncated");
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]?.body).toContain("[redacted]");
+    expect(result.rawOutput ?? "").not.toContain(token);
+    expect(result.rawOutput ?? "").not.toContain(token.slice(0, 12));
+  });
+
+  it("redacts a short API token from every successful provider field", async () => {
+    const token = "xy";
+    const fetchMock = vi.fn().mockResolvedValue(
+      chatCompletion(`${token} summary\n- [high] ${token} finding (secret.ts:7): echoed ${token}`)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({ apiKeyEnv: "MY_TOKEN" }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.summary).toContain("[redacted]");
+    expect(result.findings).toHaveLength(1);
+    expect(JSON.stringify(result.findings)).toContain("[redacted]");
+    expect(JSON.stringify(result.findings)).not.toContain(token);
+    expect(result.error ?? "").not.toContain(token);
+    expect(result.rawOutput ?? "").not.toContain(token);
+  });
+
+  it("caps expanded redaction output when repeated short tokens fit the original byte limit", async () => {
+    const token = "xy";
+    const content = "- [high] Kept finding (file.ts:1): xyxyxyxyxyxy";
+    const maxOutputBytes = Buffer.byteLength(content);
+    const fetchMock = vi.fn().mockResolvedValue(chatCompletion(content));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("MY_TOKEN", token);
+
+    const result = await runApiProvider(
+      apiProvider({ apiKeyEnv: "MY_TOKEN", maxOutputBytes }),
+      "maintainer",
+      request
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.summary).toContain("truncated");
+    expect(result.findings).toHaveLength(1);
+    expect(result.rawOutput ?? "").toContain("[redacted]");
+    expect(Buffer.byteLength(result.rawOutput ?? "")).toBeLessThanOrEqual(maxOutputBytes);
   });
 
   it("returns error without calling fetch when model is missing", async () => {

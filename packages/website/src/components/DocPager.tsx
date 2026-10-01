@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 import { DOC_LABELS, DOC_PATHS, type DocPath } from "./DocNav";
 
 export function DocPager() {

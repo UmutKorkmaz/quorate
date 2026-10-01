@@ -106,6 +106,8 @@ inputs:
     required: false
     default: ""
 outputs:
+  receipt-path:
+    description: Absolute path of the portable decision JSON in a private runner temporary directory. Upload it as an artifact to retain it.
   verdict:
     description: Final Quorate verdict.
   findings:

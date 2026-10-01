@@ -109,6 +109,9 @@ committing.
 - `findings` — the number of findings in the report.
 - `sarif-path` — absolute path of the written SARIF file when `sarif-file` is set.
 - `reviewgraph-path` — absolute path of ReviewGraph JSON when `reviewgraph-file` is set.
+- `receipt-path` — v1.4 candidate: absolute path of the portable decision JSON in
+  the runner temporary directory. Archive it with your workflow artifacts; it
+  binds the final policy decision and input hashes but does not attest execution.
 
 ```yaml
       - id: quorate

@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
 import { Packs } from "./pages/Packs";
@@ -32,6 +32,7 @@ import Mlops from "./pages/docs/Mlops";
 import Embedded from "./pages/docs/Embedded";
 import Performance from "./pages/docs/Performance";
 import Graphql from "./pages/docs/Graphql";
+import Contract from "./pages/docs/Contract";
 
 export function App() {
   return (
@@ -47,6 +48,7 @@ export function App() {
           <Route path="providers" element={<Providers />} />
           <Route path="config" element={<Config />} />
           <Route path="github-action" element={<GithubAction />} />
+          <Route path="contract" element={<Contract />} />
           <Route path="faq" element={<Faq />} />
           <Route path="manual-testing" element={<ManualTesting />} />
           <Route path="solana" element={<Solana />} />

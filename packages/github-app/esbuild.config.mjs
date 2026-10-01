@@ -1,5 +1,6 @@
 import { build } from "esbuild";
 import { rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 
 await rm("dist", { recursive: true, force: true });
 
@@ -15,8 +16,9 @@ await build({
   external: ["node:*"],
   banner: {
     // ESM bundle self-import shim — required for bundled __dirname equivalent
-    js: `import { createRequire } from "node:module"; import { fileURLToPath } from "node:url"; import { dirname } from "node:path"; const __filename = fileURLToPath(import.meta.url); const __dirname = dirname(__filename); const require = createRequire(import.meta.url);`
+    js: `import { createRequire as quorateCreateRequire } from "node:module"; import { fileURLToPath as quorateFileURLToPath } from "node:url"; import { dirname as quorateDirname } from "node:path"; const __filename = quorateFileURLToPath(import.meta.url); const __dirname = quorateDirname(__filename); const require = quorateCreateRequire(import.meta.url);`
   }
 });
 
-console.log("Build complete → dist/server.js");
+execFileSync(process.execPath, ["--check", "dist/server.js"], { stdio: "inherit" });
+console.log("Build complete → dist/server.js (syntax checked)");

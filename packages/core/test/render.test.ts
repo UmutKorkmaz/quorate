@@ -6,6 +6,9 @@ import {
   summarizeDiff
 } from "../src/render.js";
 import type { CouncilReport, GithubConfig } from "../src/types.js";
+import { createDecisionRecord } from "../src/decision.js";
+import { createDefaultConfig } from "../src/providers.js";
+import { resolvePolicy } from "../src/policy.js";
 
 function baseGithub(overrides: Partial<GithubConfig> = {}): GithubConfig {
   return {
@@ -183,6 +186,17 @@ describe("shouldFailForReport", () => {
 });
 
 describe("renderMarkdownReport summary option", () => {
+  it("renders the final policy decision, receipt and execution limitations", () => {
+    const report = reportFixture();
+    const config = createDefaultConfig();
+    report.metadata.decision = createDecisionRecord({ mode: "review", subject: "test", diff: "+change" }, config, report, { ...resolvePolicy(config), failOnDegraded: true });
+    const markdown = renderMarkdownReport(report);
+    expect(markdown).toContain("Gate: **BLOCKED**");
+    expect(markdown).toContain(report.metadata.decision.integrity.hash);
+    expect(markdown).toContain("No real AI provider");
+    expect(markdown.indexOf("## Merge Decision")).toBeLessThan(markdown.indexOf("## Findings"));
+  });
+
   it("renders a Summary section before Findings when summary is provided", () => {
     const markdown = renderMarkdownReport(reportFixture(), { summary: "**1 file changed**\n\n- `a.ts`" });
     expect(markdown).toContain("## Summary");

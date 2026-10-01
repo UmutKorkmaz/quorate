@@ -26,7 +26,14 @@ zero-config, org-wide review with the richest native UI.
 3. Findings become **inline annotations** (path + line, severity → `failure` /
    `warning` / `notice`), and the run completes with a PASS / WARN / FAIL summary
    and a **"Re-run Quorate"** action button.
-4. A summary **PR comment** is upserted.
+4. A summary **PR comment** is upserted. The resolved merge decision, policy,
+   source revisions and provider coverage are committed to a decision receipt.
+   Its hash appears in the comment and check summary; the Check Run details
+   contain portable JSON that can be saved and checked with
+   `quorate audit verify --receipt decision.json`. Receipts provide content
+   integrity, not execution attestation. Oversized records are explicitly
+   omitted from GitHub's text field rather than publishing truncated JSON;
+   the host still receives the complete record in the review result.
 
 Re-run a review by clicking GitHub's native **Re-run** on the check
 (`check_run.rerequested`) or the **Re-run Quorate** action button
@@ -53,9 +60,20 @@ Then download the App's private key and note its App ID.
 | `PRIVATE_KEY` *or* `PRIVATE_KEY_PATH` | yes | the App private key (PEM); `PRIVATE_KEY` may use `\n`-escaped newlines |
 | `WEBHOOK_SECRET` | yes | the webhook secret (signatures are verified) |
 | `PORT` | no | default `3000` |
-| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `QUORATE_PROVIDERS` | no | provider keys for the council |
+| `OPENAI_API_KEY` / other hosted preset keys | no | credentials for the API reviewers configured in the repository |
+| `QUORATE_APP_PROVIDER_ALLOWLIST` | no | server-owned JSON array of additional approved `{ "origin": "https://gateway.example", "apiKeyEnv": "TEAM_MODEL_KEY" }` pairs |
 
 Secrets are never logged; on boot the server reports which optional vars are absent.
+
+Repository API settings must use a matching endpoint origin and credential
+variable. HTTPS origins and their credential names from Quorate's hosted API
+presets are allowed by default. Local endpoints and custom gateways require an
+explicit server allowlist entry. The allowlist pairs destinations with specific
+credentials: permission to use one destination never grants access to another
+provider's key. GitHub and App credential variables remain forbidden, including
+in operator extensions. URL credentials, query strings, inline provider `env`,
+`inheritEnv` and `envAllowlist` settings are rejected. HTTP redirects are not
+followed. Rejected configuration fails the Check Run before models execute.
 
 ## Run & deploy
 
@@ -72,6 +90,16 @@ APP_ID=… WEBHOOK_SECRET=… PRIVATE_KEY_PATH=./key.pem npm run start --workspa
 
 Routes: `GET /` serves the setup/landing page · `GET /health` is a JSON health
 check · `POST /api/webhook` receives GitHub webhooks.
+
+The App persists minimal review job identities before acknowledging webhooks. Set
+`QUORATE_APP_STATE_DIR` to a private persistent directory (default `.quorate-app`,
+or `/app/state` in Docker) and mount that path on a persistent volume. Run one App
+instance per state directory. `REVIEW_CONCURRENCY` defaults to 4; reviews for one PR
+run serially. The spool retains at most 1,000 jobs and deduplicates deliveries
+within that retention window. Interrupted reviews reconcile their existing Check
+Run after restart and cancel if the PR changed. Internal failures retry up to
+three attempts; a completed policy verdict, including FAIL, is terminal. Keep the
+state volume when replacing a container; deleting it removes recovery history.
 
 ## Architecture
 

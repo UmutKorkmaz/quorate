@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink } from "react-router";
 
 export const DOC_PATHS = [
   "/docs",
@@ -8,6 +8,7 @@ export const DOC_PATHS = [
   "/docs/providers",
   "/docs/config",
   "/docs/github-action",
+  "/docs/contract",
   "/docs/faq",
   // Blockchain & Web3
   "/docs/solana",
@@ -48,6 +49,7 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/providers": "Providers",
   "/docs/config": "Configuration",
   "/docs/github-action": "GitHub Action",
+  "/docs/contract": "Contract checks",
   "/docs/faq": "FAQ",
   "/docs/solana": "Solana / Anchor",
   "/docs/evm": "EVM / Solidity",
@@ -90,6 +92,7 @@ const SECTIONS = [
       { to: "/docs/providers", label: "Providers" },
       { to: "/docs/config", label: "Configuration" },
       { to: "/docs/github-action", label: "GitHub Action" },
+      { to: "/docs/contract", label: "Contract checks" },
       { to: "/docs/faq", label: "FAQ" }
     ]
   },

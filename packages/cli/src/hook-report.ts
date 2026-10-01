@@ -1,18 +1,20 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename } from "node:path";
 import {
   appendRunEventLine,
+  auditDirForLiveDir,
   deleteApproval,
   isMonitorAttached,
-  readApprovalDecision,
   readRunMeta,
   writeApprovalRequest,
-  writeApprovalDecision,
+  writeApprovalTimeout,
   writeRunMeta,
   type ApprovalRequest,
   type LiveRunEntry
 } from "./live-spool.js";
+import { readVerifiedApprovalAuditRecord, type ApprovalAuditRecord } from "./trust-ledger.js";
 
 /**
  * `quorate hook-report --source <s> --event <E>` — the Claude Code hook bridge.
@@ -347,6 +349,46 @@ export interface PermissionRoundtripResult {
   stdout?: string;
 }
 
+function terminalFor(request: ApprovalRequest, deps: HookReportDeps): ApprovalAuditRecord | undefined {
+  return readVerifiedApprovalAuditRecord(
+    { requestId: request.id, runId: request.runId, source: request.source, tool: request.toolName },
+    { dir: auditDirForLiveDir(deps.dir) }
+  );
+}
+
+function terminalResult(record: ApprovalAuditRecord): PermissionRoundtripResult {
+  if (record.decision === "timeout") return {};
+  return {
+    stdout: record.decision === "allow"
+      ? JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } })
+      : JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "deny", message: "Denied from Quorate monitor" } } })
+  };
+}
+
+function auditFailureResult(): PermissionRoundtripResult {
+  return {
+    stdout: JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest",
+        decision: { behavior: "deny", message: "Denied because the Quorate audit ledger could not be verified." }
+      }
+    })
+  };
+}
+
+function resolveAndCleanup(record: ApprovalAuditRecord, request: ApprovalRequest, deps: HookReportDeps): PermissionRoundtripResult {
+  appendEvent(request.runId, {
+    type: "approval/resolved",
+    id: request.id,
+    decision: record.decision,
+    decisionSurface: record.decisionSurface,
+    recordHash: record.recordHash,
+    at: new Date().toISOString()
+  }, deps);
+  cleanupApproval(request.id, deps.dir);
+  return terminalResult(record);
+}
+
 /**
  * The blocking PermissionRequest round-trip. Pure-ish: takes injectable
  * `isAttached`/`sleep`/`now` so tests drive it deterministically. Returns the
@@ -394,27 +436,33 @@ export function runPermissionRoundtrip(
   let lastMonitorCheck = createdAt.getTime();
   while (true) {
     const tick = now().getTime();
+    let resolved: ApprovalAuditRecord | undefined;
+    try {
+      resolved = terminalFor(request, deps);
+    } catch {
+      // Integrity/I/O/path failure is not a timeout and must never defer to an
+      // agent default. Preserve request evidence and fail closed.
+      return auditFailureResult();
+    }
+    if (resolved) return resolveAndCleanup(resolved, request, deps);
     if (tick >= deadline) {
-      cleanupApproval(decision.id, deps.dir);
-      return {}; // Timed out — defer to the agent's own default.
+      try {
+        resolved = writeApprovalTimeout(request, "hook-timeout", new Date(tick).toISOString(), deps.dir);
+      } catch {
+        return auditFailureResult();
+      }
+      return resolveAndCleanup(resolved, request, deps);
     }
     if (tick - lastMonitorCheck >= MONITOR_RECHECK_INTERVAL_MS) {
       lastMonitorCheck = tick;
       if (!isAttached()) {
-        cleanupApproval(decision.id, deps.dir);
-        return {}; // Monitor died — defer.
+        try {
+          resolved = writeApprovalTimeout(request, "hook-monitor-disconnected", new Date(tick).toISOString(), deps.dir);
+        } catch {
+          return auditFailureResult();
+        }
+        return resolveAndCleanup(resolved, request, deps);
       }
-    }
-    const resolved = readApprovalDecision(decision.id, deps.dir);
-    if (resolved) {
-      appendEvent(decision.runId, { type: "approval/resolved", id: decision.id, decision: resolved.decision, at: now().toISOString() }, deps);
-      cleanupApproval(decision.id, deps.dir);
-      return {
-        stdout:
-          resolved.decision === "allow"
-            ? JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } })
-            : JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "deny", message: resolved.reason ?? "Denied from Quorate monitor" } } })
-      };
     }
     sleep(POLL_INTERVAL_MS);
   }
@@ -428,10 +476,12 @@ function cleanupApproval(id: string, dir?: string): void {
   }
 }
 
-/** Generate a fresh approval id (charset-safe, time-prefixed for sortability). */
+/** Generate a fresh approval id (charset-safe, time-prefixed for sortability).
+ *  CSPRNG suffix: approval ids gate approve/deny decisions, so they must not
+ *  be guessable by a concurrent local process racing the decision. */
 export function newApprovalId(now: Date = new Date()): string {
   const base = now.getTime().toString(36);
-  const rand = Math.random().toString(36).slice(2, 10);
+  const rand = randomBytes(6).toString("hex");
   return `ap-${base}-${rand}`;
 }
 

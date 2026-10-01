@@ -1,10 +1,53 @@
 import { findConfigPath, findExecutable, glyphs, PALETTE, type QuorateConfig } from "@quorate/core";
-import { providerSnapshots, type ShellState } from "./session.js";
+import { providerSnapshots, type ProviderSnapshot, type ShellState } from "./session.js";
 import { bold, dim, paint } from "./term.js";
 
 export interface DoctorFormatOptions {
   /** When true, apply terminal colors via {@link paint}. */
   color?: boolean;
+}
+
+export interface DoctorReport {
+  schema: 1;
+  status: "ready" | "degraded" | "error";
+  /** Read-only configuration checks; no model request or authentication probe. */
+  verification: "configuration";
+  environment: { node: { version: string; supported: boolean }; git?: string; gh?: string };
+  providers: ProviderSnapshot[];
+  councils: string[];
+  configPath: string | null;
+  nextSteps: string[];
+}
+
+export function buildDoctorReport(state: ShellState): DoctorReport {
+  const providers = providerSnapshots(state);
+  const runnable = providers.filter((provider) => provider.runnable && provider.type !== "mock");
+  const node = { version: process.versions.node, supported: isSupportedNodeVersion(process.versions.node) };
+  const ids = runnable.slice(0, 2).map((provider) => provider.id).join(",");
+  return {
+    schema: 1,
+    status: !node.supported ? "error" : runnable.length > 0 ? "ready" : "degraded",
+    verification: "configuration",
+    environment: { node, git: findExecutable("git"), gh: findExecutable("gh") },
+    providers,
+    councils: [...state.config.councils],
+    configPath: findConfigPath(state.cwd) ?? null,
+    nextSteps: runnable.length > 0
+      ? [`quorate review --providers ${ids}`, `In shell: /git → /use ${ids} → /review`, "No changes yet? Run quorate setup demo."]
+      : ["quorate setup demo", "Install a reviewer, then run quorate doctor.", "In shell: /setup"]
+  };
+}
+
+const MIN_NODE_MAJOR = 22;
+const MIN_NODE_MINOR = 22;
+
+/** The workspace and website dependency minimum: Node 22.22.0 or newer. */
+export function isSupportedNodeVersion(version: string): boolean {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > MIN_NODE_MAJOR || (major === MIN_NODE_MAJOR && minor >= MIN_NODE_MINOR);
 }
 
 function doctorRow(
@@ -28,9 +71,13 @@ function doctorRow(
  * reported as DEGRADED, never a confident green.
  */
 export function formatDoctorReport(state: ShellState, options: DoctorFormatOptions = {}): string {
+  return renderDoctorReport(buildDoctorReport(state), options);
+}
+
+export function renderDoctorReport(report: DoctorReport, options: DoctorFormatOptions = {}): string {
   const g = glyphs();
-  const snapshots = providerSnapshots(state);
-  const realRunnable = snapshots.filter((snapshot) => snapshot.runnable && snapshot.id !== "heuristic");
+  const snapshots = report.providers;
+  const realRunnable = snapshots.filter((snapshot) => snapshot.runnable && snapshot.type !== "mock");
   const color = options.color ?? false;
 
   const heading = (text: string): string => (color ? bold(text) : text);
@@ -44,19 +91,19 @@ export function formatDoctorReport(state: ShellState, options: DoctorFormatOptio
   ];
 
   lines.push("", `  ${heading("Environment")}`);
-  const nodeOk = Number(process.versions.node.split(".")[0]) >= 22;
+  const nodeOk = report.environment.node.supported;
   lines.push(
     doctorRow(
       nodeOk ? g.check : g.cross,
       nodeOk ? PALETTE.ok : PALETTE.missing,
-      `Node ${process.versions.node}`,
-      nodeOk ? "Node >= 22 — ok" : "Quorate requires Node >= 22",
+      `Node ${report.environment.node.version}`,
+      nodeOk ? "Node >= 22.22.0 — ok" : "Quorate requires Node >= 22.22.0",
       false,
       options
     )
   );
   for (const tool of ["git", "gh"] as const) {
-    const path = findExecutable(tool);
+    const path = report.environment[tool];
     const hint = tool === "gh" ? "optional — enables /pr and --pr" : "recommended for git diffs";
     lines.push(
       doctorRow(path ? g.check : g.warn, path ? PALETTE.ok : PALETTE.needsProfile, tool, path ?? hint, false, options)
@@ -96,27 +143,24 @@ export function formatDoctorReport(state: ShellState, options: DoctorFormatOptio
   }
 
   lines.push("", `  ${heading("Verdict")}`);
-  if (realRunnable.length > 0) {
-    const ids = realRunnable.slice(0, 2).map((snapshot) => snapshot.id).join(",");
+  if (report.status === "error") {
+    lines.push("  Unsupported Node version — upgrade to Node >= 22.22.0.");
+  } else if (realRunnable.length > 0) {
     const ready = color
-      ? paint(PALETTE.ok, `${g.check} Council ready — ${realRunnable.length} real reviewer${realRunnable.length === 1 ? "" : "s"} runnable.`)
-      : `${g.check} Council ready — ${realRunnable.length} real reviewer${realRunnable.length === 1 ? "" : "s"} runnable.`;
+      ? paint(PALETTE.ok, `${g.check} ${realRunnable.length} reviewer profile${realRunnable.length === 1 ? "" : "s"} ready to select.`)
+      : `${g.check} ${realRunnable.length} reviewer profile${realRunnable.length === 1 ? "" : "s"} ready to select.`;
     lines.push(`  ${ready}`);
-    lines.push(muted(`     Try:  quorate review --providers ${ids} --base main`));
-    lines.push(muted(`     Or in shell:  /git main HEAD  →  /use available  →  /review`));
   } else {
     const degraded = color
       ? paint(PALETTE.degraded, `${g.warn} Heuristic-only — reviews report as DEGRADED, never a confident pass.`)
       : `${g.warn} Heuristic-only — reviews report as DEGRADED, never a confident pass.`;
     lines.push(`  ${degraded}`);
-    lines.push(muted("     Install a reviewer (claude, codex, qwen …), then:"));
-    lines.push(muted("       quorate init      # write .quorate.yml"));
-    lines.push(muted("       quorate doctor    # confirm it is runnable"));
-    lines.push(muted("     Or in shell:  /setup"));
   }
+  lines.push(muted("  Configuration checks only; authentication and model execution have not been tested."));
+  for (const step of report.nextSteps) lines.push(muted(`     ${step}`));
   lines.push(
     "",
-    muted(`  Config: ${findConfigPath(state.cwd) ?? "none — using built-in defaults (run quorate init)"}`)
+    muted(`  Config: ${report.configPath ?? "none — using built-in defaults (run quorate init)"}`)
   );
   return lines.join("\n");
 }

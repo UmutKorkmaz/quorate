@@ -1,15 +1,16 @@
 import * as vscode from "vscode";
 import {
   cmpVersion,
+  fixTerminalOptions,
   gitRoot,
   MIN_CLI,
+  normalizeDoctorReport,
   resolveCli,
   resolveFindingPath,
   runCli,
   runJson,
   runReviewStreaming,
   type CouncilReport,
-  type DoctorReport,
   type ProviderConfig
 } from "./cli";
 import { diffSourceLabel, pickDiffSource, toReviewArgs, type DiffSource } from "./diff";
@@ -314,7 +315,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     const providers = ready ? await listProviders() : [];
     setContext("quorate.hasConfig", providers.length > 0);
-    const doctor = ready ? await runJson<DoctorReport>(["doctor"]) : undefined;
+    const doctor = ready ? normalizeDoctorReport(await runJson<unknown>(["doctor"])) : undefined;
     councilRoleCache = uniqueStrings((doctor?.config as { councils?: string[] } | undefined)?.councils ?? [], DEFAULT_ROLES);
     const detected = new Map((doctor?.detected ?? []).map((d) => [d.id, { available: d.available }]));
     council.setData(providers, enabled, diffSourceLabel(diffSource), detected);
@@ -386,24 +387,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   let lastReport: CouncilReport | undefined;
+  let lastReportCwd: string | undefined;
+  let reviewing = false;
 
   /** Findings the CLI's `fix --finding <n>` can target, in its exact 1-based order. */
   function fixableFindings(): CouncilReport["findings"] {
     return (lastReport?.findings ?? []).filter((f) => f.file);
   }
 
-  /** Open (or reuse) the Quorate Fix terminal and run the interactive fix flow. */
+  /** Bind the interactive fix to the exact report and workspace shown here. */
   async function openFixTerminal(findingIndex?: number): Promise<void> {
+    const report = lastReport;
+    const cwd = lastReportCwd;
+    const finding = findingIndex ? fixableFindings()[findingIndex - 1] : undefined;
+    if (reviewing || !report || !cwd || !finding) {
+      void vscode.window.showWarningMessage("Quorate: select a finding from a completed review first.");
+      return;
+    }
     const { path: cli } = await resolveCli();
-    const existing = vscode.window.terminals.find((t) => t.name === "Quorate Fix" && t.exitStatus === undefined);
-    const terminal = existing ?? vscode.window.createTerminal({ name: "Quorate Fix" });
-    terminal.show();
-    const quoted = cli.includes(" ") ? `"${cli}"` : cli;
-    terminal.sendText(`${quoted} fix${findingIndex ? ` --finding ${findingIndex}` : " --list"}`);
+    try {
+      vscode.window.createTerminal(fixTerminalOptions(cli, cwd, report, finding)).show();
+    } catch (error) {
+      void vscode.window.showWarningMessage(`Quorate: ${(error as Error).message}`);
+    }
   }
 
-  function applyReport(report: CouncilReport, bases: string[]): void {
+  function applyReport(report: CouncilReport, bases: string[], cwd: string): void {
     lastReport = report;
+    lastReportCwd = cwd;
     results.setReport(report);
     diagnostics.clear();
     for (const [file, diags] of findingDiagnostics(report, bases)) diagnostics.set(vscode.Uri.file(file), diags);
@@ -419,68 +430,77 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   async function runReviewCommand(): Promise<void> {
+    if (reviewing) {
+      void vscode.window.showWarningMessage("Quorate: wait for the current review or cancel it first.");
+      return;
+    }
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
       void vscode.window.showErrorMessage("Quorate: open a folder before reviewing.");
       return;
     }
-    const cwd = folder.uri.fsPath;
-    reviewBases = [await gitRoot(cwd), cwd];
-    let sourceArgs: string[];
+    reviewing = true;
     try {
-      sourceArgs = await toReviewArgs(diffSource, cwd);
-    } catch (err) {
-      void vscode.window.showWarningMessage(`Quorate: ${(err as Error).message}`);
-      return;
-    }
-    if (enabled) sourceArgs.push("--providers", [...enabled].join(","));
-    const env = await buildEnv();
-
-    diagnostics.clear();
-    statusBar.text = "$(sync~spin) Quorate reviewing…";
-    results.beginRun();
-    void vscode.commands.executeCommand("quorate.results.focus");
-
-    for (const channel of laneChannels.values()) channel.clear();
-
-    await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: "Quorate — convening the council…", cancellable: true },
-      async (_p, token) => {
-        const outcome = await runReviewStreaming(
-          sourceArgs,
-          (e) => {
-            results.applyEvent(e);
-            if (!e.providerId || !e.role) return;
-            const key = `${e.providerId}:${e.role}`;
-            if (e.type === "provider/started") {
-              laneChannel(key).appendLine(`── ${key} started ─────────────────────────`);
-            } else if (e.type === "provider/chunk" && e.text) {
-              laneChannel(key).append(e.text);
-            } else if (e.type === "provider/done") {
-              const status = e.result?.status ?? "done";
-              laneChannel(key).appendLine(`\n── ${key} ${status} (${e.result?.findings.length ?? 0} findings) ──`);
-            }
-          },
-          token,
-          env
-        );
-        if (token.isCancellationRequested) {
-          statusBar.text = "$(law) Quorate";
-          results.setReport(undefined);
-          return;
-        }
-        if (!outcome.report) {
-          statusBar.text = "$(law) Quorate";
-          results.setReport(undefined);
-          const msg = outcome.stale
-            ? "Your quorate CLI looks outdated — run `npm i -g quorate`, or set quorate.cliPath to a 0.6.0 binary (e.g. ~/.local/bin/quorate)."
-            : outcome.error;
-          void vscode.window.showWarningMessage(`Quorate: ${msg}`);
-          return;
-        }
-        applyReport(outcome.report, reviewBases);
+      const cwd = folder.uri.fsPath;
+      reviewBases = [await gitRoot(cwd), cwd];
+      let sourceArgs: string[];
+      try {
+        sourceArgs = await toReviewArgs(diffSource, cwd);
+      } catch (err) {
+        void vscode.window.showWarningMessage(`Quorate: ${(err as Error).message}`);
+        return;
       }
-    );
+      if (enabled) sourceArgs.push("--providers", [...enabled].join(","));
+      const env = await buildEnv();
+
+      diagnostics.clear();
+      statusBar.text = "$(sync~spin) Quorate reviewing…";
+      results.beginRun();
+      void vscode.commands.executeCommand("quorate.results.focus");
+
+      for (const channel of laneChannels.values()) channel.clear();
+
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "Quorate — convening the council…", cancellable: true },
+        async (_p, token) => {
+          const outcome = await runReviewStreaming(
+            sourceArgs,
+            (e) => {
+              results.applyEvent(e);
+              if (!e.providerId || !e.role) return;
+              const key = `${e.providerId}:${e.role}`;
+              if (e.type === "provider/started") {
+                laneChannel(key).appendLine(`── ${key} started ─────────────────────────`);
+              } else if (e.type === "provider/chunk" && e.text) {
+                laneChannel(key).append(e.text);
+              } else if (e.type === "provider/done") {
+                const status = e.result?.status ?? "done";
+                laneChannel(key).appendLine(`\n── ${key} ${status} (${e.result?.findings.length ?? 0} findings) ──`);
+              }
+            },
+            token,
+            env
+          );
+          if (token.isCancellationRequested) {
+            statusBar.text = "$(law) Quorate";
+            results.setReport(undefined);
+            return;
+          }
+          if (!outcome.report) {
+            statusBar.text = "$(law) Quorate";
+            results.setReport(undefined);
+            const msg = outcome.stale
+              ? "Your quorate CLI looks outdated — run `npm i -g quorate`, or set quorate.cliPath to a 0.6.0 binary (e.g. ~/.local/bin/quorate)."
+              : outcome.error;
+            void vscode.window.showWarningMessage(`Quorate: ${msg}`);
+            return;
+          }
+          applyReport(outcome.report, reviewBases, cwd);
+        }
+      );
+    } finally {
+      reviewing = false;
+    }
   }
 
   async function setKey(keyEnv?: string): Promise<void> {
@@ -831,6 +851,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void vscode.window.showErrorMessage(`Quorate: ${reason}`);
     }),
     vscode.commands.registerCommand("quorate.clearFindings", () => {
+      lastReport = undefined;
+      lastReportCwd = undefined;
       diagnostics.clear();
       decorations.clear();
       results.setReport(undefined);

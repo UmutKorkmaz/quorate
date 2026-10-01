@@ -10,6 +10,7 @@ import {
   availableProviderIds,
   isRunnableProvider,
   providerRunPreflight,
+  providerSnapshots,
   spawnPreviewText,
   configuredActiveProviders,
   activeProviderSet,
@@ -189,6 +190,31 @@ describe("spawnPreviewText", () => {
 });
 
 describe("providerRunPreflight", () => {
+  it("resolves a custom provider by its configured executable across every readiness surface", () => {
+    const state = createState({ config: {
+      ...createDefaultConfig([]),
+      providers: [{ id: "company-reviewer", type: "cli", command: process.execPath, args: ["--version"], inputMode: "none", enabled: true, roles: ["maintainer"] }]
+    } });
+    expect(providerSnapshots(state)).toEqual([expect.objectContaining({ id: "company-reviewer", available: true, runnable: true, path: process.execPath })]);
+    expect(availableProviderIds(state)).toEqual(["company-reviewer"]);
+    expect(providerRunPreflight(state.config)).toEqual([]);
+    expect(resolveUseProviders(state, ["available"])).toEqual(["company-reviewer"]);
+    state.config.providers[0].command = "quorate-nonexistent-reviewer-command";
+    expect(providerRunPreflight(state.config)).toEqual(["company-reviewer is not available on PATH."]);
+  });
+
+  it("allows a local API endpoint without an optional key while retaining remote key checks", () => {
+    const state = createState({ config: {
+      ...createDefaultConfig([]),
+      providers: [{ id: "local", type: "api", model: "local-model", baseUrl: "http://127.0.0.1:11434/v1", apiKeyEnv: "QUORATE_UNSET_READINESS_KEY", enabled: true }]
+    } });
+    expect(providerSnapshots(state)[0].runnable).toBe(true);
+    expect(providerRunPreflight(state.config)).toEqual([]);
+    state.config.providers[0].baseUrl = "https://example.test/v1";
+    expect(providerSnapshots(state)[0].runnable).toBe(false);
+    expect(providerRunPreflight(state.config)).toEqual(["local (api) is missing its key — set QUORATE_UNSET_READINESS_KEY."]);
+  });
+
   it("skips mock providers, reports missing-on-PATH cli providers, and no-headless-profile cli providers", () => {
     const config = createDefaultConfig([]);
     const codex = config.providers.find((provider) => provider.id === "codex")!;

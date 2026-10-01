@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { DOC_FAQ_ITEMS } from "../../lib/faq-items";
 
 export default function Faq() {

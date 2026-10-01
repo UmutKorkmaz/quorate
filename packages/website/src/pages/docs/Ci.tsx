@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { CodeBlock } from "../../components/CodeBlock";
 import { InlineCode } from "../../components/InlineCode";
 

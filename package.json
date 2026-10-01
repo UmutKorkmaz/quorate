@@ -6,7 +6,7 @@
   "type": "module",
   "packageManager": "npm@11.7.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.22.0"
   },
   "workspaces": [
     "packages/*"

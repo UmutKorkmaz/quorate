@@ -6,7 +6,7 @@ describe("runCliProvider prompt-file input mode", () => {
     // node -e reads all of stdin and echoes it back; we assert the council
     // prompt text appears in the output, proving file CONTENTS were piped.
     const script =
-      "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{process.stdout.write(d)})";
+      "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{process.stdout.write(JSON.stringify([{severity:'info',title:'Prompt echo',body:d}]))})";
 
     const result = await runCliProvider(
       {

@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -17,13 +20,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [22]
+        node: ["22.22.0"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Node ${{ matrix.node }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -40,8 +43,33 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Build and typecheck GitHub App
+        run: |
+          npm run build --workspace @quorate/github-app
+          npm run typecheck --workspace @quorate/github-app
+
       - name: Package VS Code extension
         run: npm run package:vscode
 
       - name: Test
         run: npx vitest run
+
+      - name: Verify bundled ContractCourt fixture verdicts and exit codes
+        run: node scripts/verify-contract-fixtures.mjs
+
+      - name: Build and smoke-test GitHub App container
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          docker build --pull -f packages/github-app/Dockerfile -t quorate-app:ci .
+          container=$(docker run -d -p 127.0.0.1:3300:3000 -e APP_ID=1 -e PRIVATE_KEY=smoke-only -e WEBHOOK_SECRET=smoke-only quorate-app:ci)
+          trap 'docker logs "$container"; docker rm -f "$container"' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3300/health > /tmp/quorate-app-health.json; then
+              node -e "const fs=require('node:fs'); const body=JSON.parse(fs.readFileSync('/tmp/quorate-app-health.json')); if(body.status!=='ok'||body.version!==require('./packages/github-app/package.json').version) process.exit(1)"
+              node --input-type=module -e 'import {createHmac} from "node:crypto"; const body=JSON.stringify({zen:"CI smoke",hook_id:1}); const headers={"content-type":"application/json","x-github-event":"ping","x-github-delivery":"ci-smoke","x-hub-signature-256":"sha256="+createHmac("sha256","smoke-only").update(body).digest("hex")}; const url="http://127.0.0.1:3300/api/webhook"; const valid=await fetch(url,{method:"POST",headers,body}); const invalid=await fetch(url,{method:"POST",headers:{...headers,"x-hub-signature-256":"sha256="+"0".repeat(64)},body}); if(!valid.ok||invalid.ok) throw Error("Webhook signature smoke failed")'
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
