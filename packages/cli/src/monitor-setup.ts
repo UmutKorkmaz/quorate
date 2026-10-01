@@ -6,8 +6,8 @@ import { spawnSync } from "node:child_process";
 /**
  * `quorate monitor setup [--remove] [--dry-run] [--yes]` — installs (or
  * removes) Quorate hook-report entries in foreign AI CLIs so `quorate monitor`
- * can observe them. Today only Claude Code has a rich hook surface; Codex gets
- * a guarded notify shim only when its notify slot is empty.
+ * can observe them. Today the installer writes Claude Code hooks only;
+ * a guarded Codex notify shim remains a follow-up.
  *
  * Safety contract:
  * - parse → modify → atomic write, PRESERVING every other key in the file;
@@ -74,7 +74,9 @@ export function buildClaudeHookCommand(quorateBinary: string, event: string): st
   if (!/^[A-Za-z]+$/.test(event)) {
     throw new Error(`Unsafe hook event name: ${JSON.stringify(event)}`);
   }
-  const abs = quorateBinary.replace(/'/g, "'\"'\"'");
+  // Protect the inner double-quoted assignment first, then the outer shell's
+  // single-quoted script. A binary path must never become shell expansion.
+  const abs = quorateBinary.replace(/[\\$`\"]/g, "\\$&").replace(/'/g, "'\"'\"'");
   return `/bin/sh -c 'Q="${abs}"; [ -x "$Q" ] || Q="$(command -v quorate||true)"; [ -n "$Q" ] && exec "$Q" hook-report --source claude --event ${event}; exit 0'`;
 }
 
@@ -158,7 +160,7 @@ export function detectCliCapabilities(executables: Record<string, boolean>): Cli
       return { kind, name: "claude", installed, hookSupport: installed ? "full" : "full", note: installed ? "Rich hooks: lanes, subagents, approve/deny" : "Install Claude Code for rich hooks" };
     }
     if (kind === "codex") {
-      return { kind, name: "codex", installed, hookSupport: "shim", note: "notify shim only (skipped if slot occupied)" };
+      return { kind, name: "codex", installed, hookSupport: "scan-only", note: "Process-scan only; notify shim not yet implemented" };
     }
     return { kind, name: kind, installed, hookSupport: "scan-only" as const, note: "Process-scan only (no hook surface)" };
   });

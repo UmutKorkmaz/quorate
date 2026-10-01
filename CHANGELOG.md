@@ -29,8 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Foreign-agent ingest + hook installer** — `quorate monitor setup`
   installs Quorate hook-report entries in foreign AI CLIs so the monitor can
   observe them. Claude Code gets the rich surface (lanes, subagents, and live
-  approve/deny for `PermissionRequest` prompts); Codex gets a guarded notify
-  shim only when its notify slot is empty (never clobbered). Other CLIs
+  approve/deny for `PermissionRequest` prompts). The Codex notify shim remains
+  unimplemented; its existing notify configuration is preserved. Other CLIs
   (gemini, qwen, kimi, opencode, crush, goose) are observed by process scan.
   See `docs/MONITOR-HOOKS.md` for the honest capability matrix.
 - **`quorate hook-report --source <s> --event <E>`** — the foreign-CLI hook

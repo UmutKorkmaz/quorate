@@ -16,7 +16,7 @@ quorate monitor setup --yes      # skip the confirmation prompt
 | CLI        | hook support  | lanes | subagents | approve/deny | notes |
 |------------|---------------|:-----:|:---------:|:------------:|-------|
 | claude     | **full**      | ✅    | ✅        | ✅           | The only CLI with a rich hook surface today. |
-| codex      | shim only     | —     | —         | —            | A guarded notify shim is installed **only** when Codex's `notify` slot is empty. If it's occupied (as on this machine), Quorate skips it and never clobbers the existing program. |
+| codex      | scan-only     | —     | —         | —            | The notify shim is not implemented. Setup detects an occupied `notify` slot and leaves it untouched; an empty slot is also left unchanged. |
 | gemini     | scan-only     | —     | —         | —            | No hook surface; appears in the monitor's detected-processes strip when running. |
 | qwen       | scan-only     | —     | —         | —            | Process scan only. |
 | kimi       | scan-only     | —     | —         | —            | Process scan only. |
