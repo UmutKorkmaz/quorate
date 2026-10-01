@@ -1,5 +1,6 @@
+import { readBoundedProofFile } from "./portable-proof.js";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, lstatSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,9 +18,7 @@ export function readGitHubProof(path: string, policy: GitHubProofPolicy): unknow
       !policy.ref.startsWith("refs/heads/") || !/^[a-f0-9]{40}$/.test(policy.sourceDigest)) {
     throw new Error("Expected an explicit GitHub repository, workflow file, branch ref, and source commit.");
   }
-  const stat = lstatSync(path);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16 * 1024 * 1024) throw new Error("Invalid proof file.");
-  const raw = readFileSync(path);
+  const raw = readBoundedProofFile(path);
   const dir = mkdtempSync(join(tmpdir(), "quorate-attestation-"));
   try {
     const snapshot = join(dir, "proof.json");

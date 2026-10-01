@@ -314,12 +314,12 @@ export function dispatchHook(
     case "notify": {
       const text = payload?.message;
       if (runId && text) {
-        if (event === "notify") {
+        if (source === "codex" && event === "notify") {
           ensureExternalRun(runId, source, `${source} turn completed`, deps);
           startLane(runId, source, SESSION_LANE_ROLE, nowIso(deps.now?.()), deps);
         }
         appendEvent(runId, { type: "provider/chunk", councilRunId: runId, providerId: source, role: SESSION_LANE_ROLE, stream: "stdout", text: `${truncate(text, SUMMARY_MAX)}\n` }, deps);
-        if (event === "notify") {
+        if (source === "codex" && event === "notify") {
           appendEvent(runId, { type: "provider/done", councilRunId: runId, providerId: source, role: SESSION_LANE_ROLE, result: { status: "ok", findings: [] } }, deps);
           const entry = readRunMeta(runId, deps.dir);
           if (entry) {

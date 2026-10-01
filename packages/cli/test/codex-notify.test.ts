@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "smol-toml";
@@ -42,11 +42,22 @@ it("preserves BOM and refuses orphan markers or concurrent setup", () => {
   const dir = mkdtempSync(join(tmpdir(), "q-notify-lock-"));
   const path = join(dir, "config.toml");
   writeFileSync(path, original);
-  writeFileSync(`${path}.quorate-notify.lock`, "busy");
+  mkdirSync(`${path}.quorate-notify.lock`);
   expect(() => updateCodexNotify(path, "quorate")).toThrow();
   expect(readFileSync(path, "utf8")).toBe(original);
 });
 
 it("sanitizes hostile notification IDs before spool paths", () => {
   expect(foreignRunId("codex", "../../escape")).toBe("codex-..-..-escape");
+});
+
+it("recovers a lease abandoned by a crashed setup", () => {
+  const dir = mkdtempSync(join(tmpdir(), "q-notify-stale-"));
+  const path = join(dir, "config.toml"), lock = `${path}.quorate-notify.lock`;
+  writeFileSync(path, 'model = "test"\n');
+  mkdirSync(lock);
+  const expired = new Date(Date.now() - 60_000);
+  utimesSync(lock, expired, expired);
+  expect(updateCodexNotify(path, "quorate")).toContain("installed");
+  expect(parse(readFileSync(path, "utf8")).notify).toBeDefined();
 });

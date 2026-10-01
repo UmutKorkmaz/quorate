@@ -1,6 +1,7 @@
-import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
+import { lockSync } from "proper-lockfile";
 import { parse } from "smol-toml";
 
 const MARKER = "# quorate-managed-notify-v1";
@@ -45,7 +46,7 @@ export function readCodexConfig(path: string): string {
 export function updateCodexNotify(path: string, binary?: string): string {
   mkdirSync(dirname(path), { recursive: true });
   const lock = `${path}.quorate-notify.lock`;
-  const fd = openSync(lock, "wx", 0o600);
+  const release = lockSync(path, { realpath: false, lockfilePath: lock, stale: 10_000, retries: 0 });
   let temp: string | undefined;
   try {
     const before = readCodexConfig(path);
@@ -61,8 +62,6 @@ export function updateCodexNotify(path: string, binary?: string): string {
     renameSync(temp, path);
     return binary === undefined ? "Quorate Codex notify removed." : "Codex turn-completion notify installed.";
   } finally {
-    closeSync(fd);
-    if (temp) rmSync(temp, { force: true });
-    rmSync(lock, { force: true });
+    try { if (temp) rmSync(temp, { force: true }); } finally { release(); }
   }
 }

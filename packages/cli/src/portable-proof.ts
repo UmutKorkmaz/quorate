@@ -1,10 +1,10 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
-import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, writeFileSync } from "node:fs";
 
 const DOMAIN = "quorate-proof-attestation-v1\n";
 const MAX_BYTES = 16 * 1024 * 1024;
 
-function readBounded(path: string, privateKey = false): Buffer {
+export function readBoundedProofFile(path: string, privateKey = false): Buffer {
   const stat = lstatSync(path);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_BYTES) throw new Error("Expected a bounded regular file.");
   if (privateKey && process.platform !== "win32" && (stat.mode & 0o077) !== 0) throw new Error("Signing key must be owner-readable only.");
@@ -12,7 +12,15 @@ function readBounded(path: string, privateKey = false): Buffer {
   try {
     const opened = fstatSync(fd);
     if (!opened.isFile() || opened.dev !== stat.dev || opened.ino !== stat.ino || opened.size > MAX_BYTES) throw new Error("File changed during verification.");
-    return readFileSync(fd);
+    const buffer = Buffer.alloc(opened.size + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const count = readSync(fd, buffer, offset, buffer.length - offset, null);
+      if (count === 0) break;
+      offset += count;
+    }
+    if (offset !== opened.size) throw new Error("File size changed during verification.");
+    return buffer.subarray(0, offset);
   } finally { closeSync(fd); }
 }
 
@@ -24,7 +32,7 @@ export function generateProofKeyPair(privatePath: string, publicPath: string): v
 }
 
 export function exportPortableProof(artifact: unknown, privatePath: string, output: string): void {
-  const key = createPrivateKey(readBounded(privatePath, true));
+  const key = createPrivateKey(readBoundedProofFile(privatePath, true));
   if (key.asymmetricKeyType !== "ed25519") throw new Error("Proof signer must be Ed25519.");
   const payload = JSON.stringify(artifact);
   const signature = sign(null, Buffer.from(DOMAIN + payload), key).toString("base64");
@@ -33,10 +41,10 @@ export function exportPortableProof(artifact: unknown, privatePath: string, outp
 
 /** No embedded key, network lookup, or auto-trust. The caller pins the signer's key. */
 export function readPortableProof(path: string, trustedKeyPath: string): unknown {
-  const envelope = JSON.parse(readBounded(path).toString("utf8"));
+  const envelope = JSON.parse(readBoundedProofFile(path).toString("utf8"));
   if (envelope?.kind !== "quorate-proof-attestation-v1" || typeof envelope.payload !== "string" ||
       typeof envelope.signature !== "string" || !/^[A-Za-z0-9+/]{86}==$/.test(envelope.signature)) throw new Error("Invalid proof attestation envelope.");
-  const key = createPublicKey(readBounded(trustedKeyPath));
+  const key = createPublicKey(readBoundedProofFile(trustedKeyPath));
   if (key.asymmetricKeyType !== "ed25519" || !verify(null, Buffer.from(DOMAIN + envelope.payload), key, Buffer.from(envelope.signature, "base64"))) {
     throw new Error("Proof attestation does not match the explicitly trusted signing key.");
   }
