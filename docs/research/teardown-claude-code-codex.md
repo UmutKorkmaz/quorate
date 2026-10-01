@@ -102,11 +102,8 @@
 
 **Codex**
 ```bash
-curl -fsSL https://chatgpt.com/codex/install.sh | sh   # Mac/Linux
-# or
 npm i -g @openai/codex
 brew install --cask codex
-# Windows: irm install.ps1 | iex
 ```
 - Single binary releases (musl Linux, darwin arm/x64). **~101k GitHub stars** (open source = discoverability flywheel).
 - Alternate surfaces marketed immediately: IDE install, `codex app`, Codex Web.
