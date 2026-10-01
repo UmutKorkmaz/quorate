@@ -20,11 +20,11 @@ market hypotheses until validated with design partners.
 
 ## Current launch dependency
 
-The public release is v1.3.0; v1.4 remains a local candidate. Follow the reviewed
-sequence in [`RELEASE-CHECKLIST.md`](./RELEASE-CHECKLIST.md). The local candidate
-now includes `setup demo`, report-bound feedback, and offline paired-report
-evaluation. These are preparation tools; publication and partner evidence below
-remain unfinished.
+The v1.4 implementation is merged through PR #35 with Linux, macOS and Windows CI
+passing. Follow the distribution sequence in [`RELEASE-CHECKLIST.md`](./RELEASE-CHECKLIST.md)
+and verify the Release workflow and npm package before onboarding against a
+published version. `setup demo`, report-bound feedback, and offline paired-report
+evaluation are available; these tools do not establish partner outcomes.
 
 The concrete first-gate checklist, session record, held-out evaluation protocol,
 and hosted-App acceptance steps are in [PARTNER-VALIDATION.md](./PARTNER-VALIDATION.md).

@@ -175,7 +175,7 @@ git diff --exit-code -- "$ACTION_BUNDLE" packages/website/src/generated/commands
 
 PUBLIC_ACTION_REFS="$(
   rg -n 'UmutKorkmaz/quorate@' \
-    README.md docs examples packages/website packages/github-action \
+    README.md docs examples packages/website packages/github-action .github/workflows/quorate.yml \
     packages/cli/README.md packages/cli/src/setup-command.ts || true
 )"
 [[ -n "$PUBLIC_ACTION_REFS" ]] || fail "no public Quorate Action references were found"

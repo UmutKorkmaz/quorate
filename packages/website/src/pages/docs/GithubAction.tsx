@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
+      - uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
       <p>
@@ -241,7 +241,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: quorate
-        uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
+        uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
         env:
           OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -300,7 +300,7 @@ integrations:
       riskLevel: medium
 
 # workflow step
-- uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
+- uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
   env:
     WEBACY_API_KEY: \${{ secrets.WEBACY_API_KEY }}
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
@@ -328,7 +328,7 @@ integrations:
 steps:
   - uses: actions/checkout@v4
   - id: quorate
-    uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
+    uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
     with:
       github-token: \${{ secrets.GITHUB_TOKEN }}
       sarif-file: quorate.sarif
@@ -442,7 +442,7 @@ providers:
     apiKeyEnv: OPENROUTER_API_KEY
     roles: [security, architect]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
+- uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
   env:
     OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}
   with:
@@ -471,7 +471,7 @@ providers:
     apiKeyEnv: GLM_API_KEY
     roles: [architect, security, performance]`}</CodeBlock>
       <CodeBlock language="yaml">{`# workflow step
-- uses: UmutKorkmaz/quorate@1e7796b0f86cdbacadf149637c87b9812b246303
+- uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
   env:
     GLM_API_KEY: \${{ secrets.GLM_API_KEY }}
   with:

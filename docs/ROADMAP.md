@@ -1,7 +1,7 @@
 # Quorate Engineering Roadmap
 
 **Canonical status source**
-**As of:** v1.4.0 local candidate · 2026-09-08
+**As of:** v1.4.0 release preparation · 2026-10-01
 
 This file is the active engineering sequence. Product concepts in
 [`AI-PRODUCT-SUITE-PLAN.md`](./AI-PRODUCT-SUITE-PLAN.md) are horizon/backlog material, and
@@ -14,17 +14,20 @@ and VS Code surfaces.
 ## Active sequence
 
 1. **Phase 0 — SupplyChainGate v1.1 stabilization** — done (v1.1.0)
-2. **Phase 1 — ProofRunner Lite** — MVP on local main; further trust/metrics hardening locally verified
-3. **Phase 2 — ContractCourt MVP** — MVP on local main; array and coverage hardening locally verified
-4. **Phase 3 — CI adoption hardening** — local implementation verified; container and remote CI gates pending
-5. **Phase 4 — Design-partner validation** — measurement tools implemented locally; partner validation pending
+2. **Phase 1 — ProofRunner Lite** — merged; local proof verified, cross-machine attestation remains open
+3. **Phase 2 — ContractCourt MVP** — merged; 14 fixture verdicts and exit codes verified on all three CI operating systems
+4. **Phase 3 — CI adoption hardening** — merged; container, CLI, editor review and remote CI checks verified; live installed-App acceptance remains open
+5. **Phase 4 — Design-partner validation** — measurement tools and onboarding protocol available; partner validation pending
 
 Phase 0 satisfied its exit gate with the v1.1.0 release. Phase 1 and Phase 2
-MVPs are merged into local main at `22bf5e7`. The next hardening work is on
-`codex/quorate-trust-adoption`; local changes are not a public release.
-GitHub and npm still expose v1.3.0 as of this audit. Current-candidate remote CI,
-release publication, cross-machine proof trust, and partner outcomes remain
-separate exit gates.
+MVPs and subsequent hardening are merged through [PR #35](https://github.com/UmutKorkmaz/quorate/pull/35)
+at `a37fcde63edc11af6b26e1350258dc6938e8e3d4`. Linux, macOS and Windows CI passed.
+The local release matrix passed 1,618 tests with one platform-specific skip;
+Windows passed 1,578 tests with 41 skips for documented platform limits.
+Dependency audit reports zero vulnerabilities. Publication is a separate gate:
+check the Release workflow, GitHub release and published npm package rather than
+inferring distribution from merged source. Cross-machine proof trust and partner
+outcomes remain separate exit gates.
 
 ## Phase 0 — SupplyChainGate v1.1 stabilization
 
@@ -81,7 +84,7 @@ MVP:
 - Add `quorate review --proof <path>`.
 - Support an optional Playwright smoke command when already configured.
 
-Status: the MVP is committed on local main
+Status: the MVP and hardening are merged on main
 (`packages/cli/src/proof-runner.ts`): `quorate proof run/show/verify` writes
 `.quorate/proofs/latest.{json,md}`, and review evidence attaches by proof
 fingerprint rather than by trusting arbitrary artifact claims. The implemented
@@ -97,10 +100,11 @@ the local proof signature is not a cross-machine execution attestation.
 - [ ] The council includes that evidence without trusting arbitrary artifact
   claims.
 
-Both boxes are plausibly met in the committed candidate — the fixture proof
-artifact and the fingerprint-gated council evidence attachment exist — but they
-stay unchecked: the formal review gate is part of the pending release
-verification, and portability across machines is unverified.
+The local fixture proof verifies with its signing key. A separate container
+without that key rejects the same artifact; portability of execution trust is
+therefore not established. Portable decision records prove content integrity,
+not execution. These boxes remain open until an explicit cross-machine trust
+model and its acceptance test are implemented.
 
 ## Phase 2 — ContractCourt MVP
 
@@ -113,10 +117,13 @@ MVP:
 - Emit stable findings and machine-readable evidence.
 - Start with one proven contract type; do not launch a broad compatibility suite.
 
-Status: candidate on local main awaiting release verification. The core
+Status: merged and fixture-verified. The core
 engine plus `quorate contract check` with `--spec/--base/--head/--before/--after/--gate`, the
 `.quorate/contract/latest.{json,md}` artifacts, and `quorate metrics` local
-aggregation are implemented on the v1.4 release-candidate branch.
+aggregation are implemented. All 14 bundled fixtures have checked verdicts and
+exit codes (8 BLOCK, 5 WARN, 1 PASS). Shared request/response enum changes and
+unsupported schema facets are documented in the corpus README. This is regression
+coverage, not a general precision/recall benchmark.
 
 **Exit gate:** a vulnerable/clean corpus proves detection of breaking changes with
 bounded false positives.
@@ -127,8 +134,15 @@ bounded false positives.
 
 Local implementation now covers an offline fail/fix/pass demo, shared provider
 readiness, portable decision records, report-bound editor fixes, trusted hosted
-configuration/policy, durable webhook jobs, and App/Docker CI checks. A container
-runtime and current-candidate Windows/remote CI still need execution evidence.
+configuration/policy, durable webhook jobs, and App/Docker CI checks. Container
+health and valid/invalid signed webhook pings pass. A real VS Code extension host
+activates, completes Doctor, reviews a fixture, creates a diagnostic, opens the
+correct file/line, and opens the verdict panel. Live installed-App delivery and
+the interactive editor Fix/Revert journey still need acceptance evidence.
+
+Windows audit and spool behavior is tested on the Windows runner; ProofRunner
+execution intentionally fails closed there. See [SECURITY.md](../SECURITY.md).
+Codex monitor observation is scan-only: its notify shim remains unimplemented.
 
 - Generate and validate GitHub Action setup.
 - Add contract-drift checks for Action metadata and public docs.
@@ -143,6 +157,8 @@ evidence, and diagnose failure from documented commands alone.
 **Goal:** validate which workflow deserves the next product investment.
 
 Local feedback and offline paired-report evaluation provide measurement tools.
+The [partner validation protocol](./PARTNER-VALIDATION.md) specifies onboarding,
+human labels, held-out comparisons and hosted-App evidence.
 Adaptive scheduling is opt-in and preserves policy requirements. No partner
 results, live-model precision/recall, cost improvement, or calibrated confidence
 are established by these implementations or synthetic tests.
@@ -174,7 +190,7 @@ evidence to prioritize the next build without relying on feature-count ambition.
 | PlanCourt gate workflow | Done |
 | Custom pack format | Done |
 | Live monitor, approvals, trust ledger | Done (v1.4.0) |
-| ProofRunner Lite | Done (v1.4.0 candidate awaiting release) |
+| ProofRunner Lite | Merged; local execution verified, cross-machine trust open |
 
 ## Release order
 

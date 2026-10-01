@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.0] - Unreleased
+## [1.4.0] - 2026-10-01
 
 ### Added
 
@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- Refresh transitive dependencies to clear the dependency audit; verify Windows
+  ledger writes and reject spool symlinks without relying on `O_NOFOLLOW`.
+- Quote hook executable paths against shell expansion and document Windows ACL,
+  directory-flush, and ProofRunner containment limits.
 - Provider raw output, errors, summaries, and findings are redacted before they
   are persisted or exported — broader secret patterns (AKIA/AIza/xox/JWT/PEM
   blocks), provider-configured env values, and URL-credential masking in
