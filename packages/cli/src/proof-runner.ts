@@ -5,6 +5,7 @@ import { StringDecoder } from "node:string_decoder";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import type { CouncilRequest } from "@quorate/core";
+import { readGitHubProof, type GitHubProofPolicy } from "./github-proof.js";
 import { readPortableProof } from "./portable-proof.js";
 import { writeSecureWorkspaceState } from "./secure-state.js";
 
@@ -569,7 +570,7 @@ type ProofArtifactLoad =
   | { status: "missing" }
   | { status: "tampered" };
 
-function loadProofArtifactDetailed(path: string, trustedKeyPath?: string): ProofArtifactLoad {
+function loadProofArtifactDetailed(path: string, trustedKeyPath?: string | GitHubProofPolicy): ProofArtifactLoad {
   let raw: string;
   try {
     const stat = lstatSync(resolve(path));
@@ -580,7 +581,7 @@ function loadProofArtifactDetailed(path: string, trustedKeyPath?: string): Proof
   }
   let parsed: unknown;
   try {
-    parsed = trustedKeyPath ? readPortableProof(path, trustedKeyPath) : JSON.parse(raw);
+    parsed = typeof trustedKeyPath === "string" ? readPortableProof(path, trustedKeyPath) : trustedKeyPath ? readGitHubProof(path, trustedKeyPath) : JSON.parse(raw);
   } catch {
     return { status: "tampered" };
   }
@@ -617,7 +618,7 @@ export interface ProofAttachment {
  * latest.json attachment must be fully current; stale or tampered artifacts
  * are ignored with an explicit note.
  */
-export function proofAttachmentFor(cwd: string, explicitPath?: string, trustedKeyPath?: string): ProofAttachment | undefined {
+export function proofAttachmentFor(cwd: string, explicitPath?: string, trustedKeyPath?: string | GitHubProofPolicy): ProofAttachment | undefined {
   const root = resolve(cwd);
   if (explicitPath !== undefined) {
     // Resolve against the reviewed workspace, matching every other path option.
@@ -626,6 +627,7 @@ export function proofAttachmentFor(cwd: string, explicitPath?: string, trustedKe
     if (loaded.status === "tampered") {
       return { note: `Proof not attached: tampered (explicit proof artifact at ${explicitPath} failed integrity verification).` };
     }
+    if (typeof trustedKeyPath === "object" && loaded.artifact.fingerprint.gitHead !== trustedKeyPath.sourceDigest) return { note: "Proof not attached: artifact HEAD differs from the attested source commit." };
     if (fingerprintIsStale(root, loaded.artifact.fingerprint)) {
       return {
         artifact: loaded.artifact,
@@ -646,7 +648,7 @@ export function proofAttachmentFor(cwd: string, explicitPath?: string, trustedKe
 export function attachLatestProofToReview(
   request: CouncilRequest,
   explicitPath?: string,
-  trustedKeyPath?: string
+  trustedKeyPath?: string | GitHubProofPolicy
 ): { request: CouncilRequest; note?: string } {
   if (request.mode !== "review" || !request.repoPath) return { request };
   const attachment = proofAttachmentFor(request.repoPath, explicitPath, trustedKeyPath);
@@ -808,4 +810,11 @@ export function verifyPortableProof(cwd: string, path: string, trustedKeyPath: s
   if (loaded.status !== "ok") return { ok: false, reason: loaded.status, detail: "Portable proof failed trusted-key or content verification." };
   if (fingerprintIsStale(cwd, loaded.artifact.fingerprint)) return { ok: false, reason: "stale", artifact: loaded.artifact, detail: "Proof fingerprint does not match this checkout." };
   return { ok: true, reason: "verified", artifact: loaded.artifact, detail: "Verified statement from the explicitly trusted signer; not independent execution attestation." };
+}
+
+export function verifyGitHubProof(cwd: string, path: string, policy: GitHubProofPolicy): ProofVerification {
+  const loaded = loadProofArtifactDetailed(resolve(cwd, path), policy);
+  if (loaded.status !== "ok") return { ok: false, reason: loaded.status, detail: "GitHub provenance or proof content verification failed." };
+  if (loaded.artifact.fingerprint.gitHead !== policy.sourceDigest || fingerprintIsStale(cwd, loaded.artifact.fingerprint)) return { ok: false, reason: "stale", detail: "Attested source and proof fingerprint must match this checkout." };
+  return { ok: true, reason: "verified", artifact: loaded.artifact, detail: "Verified GitHub-hosted workflow provenance and matching checkout." };
 }

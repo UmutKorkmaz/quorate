@@ -1,0 +1,36 @@
+name: Attested proof
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proof:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.22.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Record actual tests, typecheck, and build
+        run: node packages/cli/dist/index.js proof run --detect --only test,typecheck,build
+      - name: Verify local evidence before attesting
+        run: node packages/cli/dist/index.js proof verify
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: .quorate/proofs/latest.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quorate-proof
+          path: .quorate/proofs/latest.json
+          include-hidden-files: true
+          if-no-files-found: error

@@ -31,4 +31,31 @@ The private key is never needed by a recipient; never share local HMAC keys.
 Acceptance covers independent checkouts and an offline Linux container with only
 the public key and envelope mounted. Wrong keys, changed signed payloads,
 malformed signatures, invalid proof content, and stale worktrees are rejected.
-Hosted CI identity/OIDC attestation is a separate, unimplemented trust mechanism.
+GitHub-hosted provenance uses the separate verification mode below.
+
+## GitHub-hosted provenance
+
+The manually dispatched `Attested proof` workflow runs only on `main`, records
+actual test/typecheck/build steps, verifies the local proof, and publishes GitHub
+OIDC/SLSA provenance for the raw `latest.json`. No long-lived signing secret is
+needed. Download the `quorate-proof` artifact from that run into a path outside
+your clean checkout at the same source commit, then run:
+
+```sh
+quorate proof verify-github /tmp/latest.json \
+  --repo UmutKorkmaz/quorate --workflow .github/workflows/proof.yml
+quorate review --proof /tmp/latest.json \
+  --proof-github-repo UmutKorkmaz/quorate \
+  --proof-github-workflow .github/workflows/proof.yml
+```
+
+Requires an authenticated current `gh` CLI. The verifier pins repository,
+workflow, branch (default `refs/heads/main`), source commit, signer commit, OIDC
+issuer and SLSA predicate, and rejects self-hosted runners. It verifies a private
+snapshot so changing the original file during verification cannot substitute
+accepted contents. It also checks proof hashes and the reviewed checkout.
+
+This establishes provenance from the expected hosted workflow. It does not
+establish that trusted workflow code or GitHub's runner infrastructure is free of
+compromise. Private-key statements and GitHub provenance are distinct modes;
+use the one matching your trust policy.

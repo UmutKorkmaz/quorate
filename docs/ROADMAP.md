@@ -104,9 +104,9 @@ The local fixture proof verifies with its signing key. The optional
 [portable proof statement](./PORTABLE-PROOFS.md) is verified in an independent
 checkout and an offline Linux container using only an explicitly supplied public
 key. Wrong signers, tampered payloads and stale checkouts fail. This closes the
-portable trusted-signer statement path. The broader exit gate above remains open
-for a real fixture PR with hosted runner identity and independent execution
-attestation; a signer assertion must not be presented as that stronger guarantee.
+portable trusted-signer statement path. The hosted `Attested proof` workflow and identity-pinned GitHub verifier are
+implemented; their live acceptance run is the remaining hosted-provenance gate.
+A standalone signer assertion must not be presented as hosted provenance.
 
 ## Phase 2 — ContractCourt MVP
 
