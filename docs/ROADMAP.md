@@ -14,9 +14,9 @@ and VS Code surfaces.
 ## Active sequence
 
 1. **Phase 0 — SupplyChainGate v1.1 stabilization** — done (v1.1.0)
-2. **Phase 1 — ProofRunner Lite** — local proof plus explicit trusted-signer portability implemented; hosted execution attestation remains open
+2. **Phase 1 — ProofRunner Lite** — local, trusted-signer, and GitHub-hosted proof paths verified
 3. **Phase 2 — ContractCourt MVP** — merged; 14 fixture verdicts and exit codes verified on all three CI operating systems
-4. **Phase 3 — CI adoption hardening** — merged; container, CLI, editor review and remote CI checks verified; live installed-App acceptance remains open
+4. **Phase 3 — CI adoption hardening** — container, CLI, editor Fix/Revert and remote CI verified; live installed-App acceptance remains open
 5. **Phase 4 — Design-partner validation** — measurement tools and onboarding protocol available; partner validation pending
 
 Phase 0 satisfied its exit gate with the v1.1.0 release. Phase 1 and Phase 2
@@ -95,18 +95,25 @@ the local proof signature is not a cross-machine execution attestation.
 
 **Exit gate:**
 
-- [ ] A fixture PR produces a portable proof artifact showing tests and build
+- [x] A reviewed PR revision produces a portable proof artifact showing tests and build
   passed.
-- [ ] The council includes that evidence without trusting arbitrary artifact
+- [x] The council includes that evidence without trusting arbitrary artifact
   claims.
 
 The local fixture proof verifies with its signing key. The optional
 [portable proof statement](./PORTABLE-PROOFS.md) is verified in an independent
 checkout and an offline Linux container using only an explicitly supplied public
 key. Wrong signers, tampered payloads and stale checkouts fail. This closes the
-portable trusted-signer statement path. The hosted `Attested proof` workflow and identity-pinned GitHub verifier are
-implemented; their live acceptance run is the remaining hosted-provenance gate.
-A standalone signer assertion must not be presented as hosted provenance.
+portable trusted-signer statement path.
+
+[Hosted proof run 36922893413](https://github.com/UmutKorkmaz/quorate/actions/runs/36922893413)
+passed on PR #37's merged revision `b13f06059101d27af24f033d33eadefb044b0ddd`:
+1,636 tests passed (one platform skip), typecheck passed, and build passed. Its
+GitHub OIDC/SLSA attestation verified in a separate clean checkout; a wrong
+workflow identity was rejected and a council review attached the verified proof.
+The workflow is main-only. Provenance identifies the expected hosted producer;
+it does not establish that trusted code or runner infrastructure is uncompromised.
+A standalone public-key signer assertion remains a distinct trust mode.
 
 ## Phase 2 — ContractCourt MVP
 
@@ -194,9 +201,16 @@ evidence to prioritize the next build without relying on feature-count ambition.
 | PlanCourt gate workflow | Done |
 | Custom pack format | Done |
 | Live monitor, approvals, trust ledger | Done (v1.4.0) |
-| ProofRunner Lite | Local execution and explicit trusted-signer portability verified |
+| ProofRunner Lite | Local execution, trusted-signer portability, and hosted GitHub provenance verified |
 
 ## Release order
 
 For any public release: verify locally → branch/PR → required CI and review → Git
 tag → GitHub Release → npm publication. Never publish npm first.
+
+v1.4.0 source and acceptance work are merged through
+[PR #37](https://github.com/UmutKorkmaz/quorate/pull/37). Publication remains blocked
+by the stored npm credential returning 401 in
+[Release run 36892293998](https://github.com/UmutKorkmaz/quorate/actions/runs/36892293998).
+Installed-App acceptance requires an accessible installation and test repository;
+design-partner validation requires actual participants and held-out human labels.
