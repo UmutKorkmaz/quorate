@@ -26,11 +26,12 @@ jobs:
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
       <p>
-        The Action is pinned to the reviewed v1.2.1 bundle commit. Keep the full 40-character SHA
+        The Action is pinned to the reviewed v1.4.0 bundle commit. Keep the full 40-character SHA
         in production workflows so upstream changes cannot alter a run.
       </p>
 
       <h2>Inputs</h2>
+      <div className="command-table" role="region" aria-label="GitHub Action inputs" tabIndex={0}>
       <table>
         <thead>
           <tr>
@@ -219,6 +220,7 @@ jobs:
           </tr>
         </tbody>
       </table>
+      </div>
 
       <h2>Solana release gate</h2>
       <p>

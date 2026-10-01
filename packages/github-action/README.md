@@ -21,10 +21,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-The Action is pinned to the reviewed v1.2.1 bundle commit. Keep the full
+The Action is pinned to the reviewed v1.4.0 bundle commit. Keep the full
 40-character SHA in production workflows so upstream changes cannot alter a run.
 The release verifier proves that this commit is on `main` and its bundled Action
-is byte-identical to the v1.2.1 release commit.
+is byte-identical to the release candidate.
 
 ## Which reviewers run in CI?
 
