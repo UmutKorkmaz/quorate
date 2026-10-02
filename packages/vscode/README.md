@@ -19,6 +19,8 @@ Requires **Node ≥ 22.22.0** and a git repository. Use the current Quorate CLI 
 
 ## Use
 
+The following controls are available in Quorate 1.4 and later.
+
 - Open the **Quorate** activity bar view and use **Change Diff Source** to choose
   the changes to review. Run **Quorate: Run Review** from the Command Palette
   or the Council view.
