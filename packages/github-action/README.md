@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
+      - uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -71,7 +71,7 @@ providers:
 Then pass the key through as an environment variable:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
+      - uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -119,7 +119,7 @@ committing.
 
 ```yaml
       - id: quorate
-        uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
+        uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
         with: { github-token: ${{ secrets.GITHUB_TOKEN }} }
       - if: steps.quorate.outputs.verdict == 'fail'
         run: echo "Quorate found ${{ steps.quorate.outputs.findings }} findings"
@@ -210,7 +210,7 @@ integrations:
 Then pass the key as a normal secret:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
+      - uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
         env:
           WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
