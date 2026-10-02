@@ -1,7 +1,7 @@
 # Quorate Engineering Roadmap
 
 **Canonical status source**
-**As of:** v1.4.0 release preparation · 2026-10-01
+**As of:** v1.4.0 published · 2026-10-02
 
 This file is the active engineering sequence. Product concepts in
 [`AI-PRODUCT-SUITE-PLAN.md`](./AI-PRODUCT-SUITE-PLAN.md) are horizon/backlog material, and
@@ -208,11 +208,16 @@ evidence to prioritize the next build without relying on feature-count ambition.
 For any public release: verify locally → branch/PR → required CI and review → Git
 tag → GitHub Release → npm publication. Never publish npm first.
 
-v1.4.0 source and acceptance work are merged through
-[PR #37](https://github.com/UmutKorkmaz/quorate/pull/37). The previous token-based
-[Release run 36892293998](https://github.com/UmutKorkmaz/quorate/actions/runs/36892293998)
-failed with 401. The release workflow now uses npm trusted publishing (OIDC);
-publication remains pending until a successful release run and published-package
-smoke establish distribution.
+v1.4.0 is available on [GitHub](https://github.com/UmutKorkmaz/quorate/releases/tag/v1.4.0)
+and [npm](https://www.npmjs.com/package/quorate/v/1.4.0), from commit
+`298b55ae60e76602fd97d97f29ffab3930bb5a0b`. The release workflow uses npm trusted
+publishing (OIDC), with account 2FA retained and bypass tokens disallowed.
+[Release run 36976291800](https://github.com/UmutKorkmaz/quorate/actions/runs/36976291800)
+accepted the publish and signed provenance, but reported failure because its
+immediate registry verification returned 404 during npm processing. The existing
+published version was subsequently verified through a fresh install, version/help
+checks, passing clean and failing unsafe supply-chain gates, registry signatures,
+and provenance matching the release workflow and commit. The helper now retries
+registry visibility before published CLI smokes; this version must not be republished.
 Installed-App acceptance requires an accessible installation and test repository;
 design-partner validation requires actual participants and held-out human labels.
