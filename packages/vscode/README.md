@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/UmutKorkmaz/quorate/main/assets/brand/icon.png" alt="Quorate" width="112" height="112" />
+</p>
+
 # Quorate — AI Review Council (VS Code)
 
 Convene [Quorate](https://github.com/UmutKorkmaz/quorate)'s multi-agent AI review

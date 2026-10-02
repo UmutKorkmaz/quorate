@@ -3,7 +3,7 @@ export default function Footer() {
     <footer className="border-t border-quorate-border px-6 py-12">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 md:flex-row">
         <div className="flex items-center gap-2.5 text-sm">
-          <span className="text-quorate-accent">◆</span>
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={22} height={22} />
           <span className="font-semibold tracking-wider">QUORATE</span>
           <span className="text-quorate-dim">· MIT © Umut Korkmaz</span>
         </div>

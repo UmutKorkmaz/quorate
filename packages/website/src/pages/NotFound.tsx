@@ -8,7 +8,7 @@ export default function NotFound() {
 
       <section className="not-found">
         <p className="not-found-mark" aria-hidden="true">
-          ◆
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" width={64} height={64} style={{ display: "inline-block" }} />
         </p>
         <h1>Page not found</h1>
         <p className="lead">
