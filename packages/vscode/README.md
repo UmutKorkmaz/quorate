@@ -19,8 +19,9 @@ Requires **Node ≥ 22.22.0** and a git repository. Use the current Quorate CLI 
 
 ## Use
 
-- Run **Quorate: Review Current Changes** from the Command Palette (or click the
-  `⚖ Quorate` status-bar item).
+- Open the **Quorate** activity bar view and use **Change Diff Source** to choose
+  the changes to review. Run **Quorate: Run Review** from the Command Palette
+  or the Council view.
 - Findings appear in the **Problems** panel and as squiggles on the offending lines;
   the status bar shows the verdict (`$(check)` PASS / `$(warning)` WARN / `$(error)` FAIL).
 - **Quorate: Clear Findings** removes them.
@@ -31,13 +32,11 @@ Requires **Node ≥ 22.22.0** and a git repository. Use the current Quorate CLI 
 | Setting | Default | Description |
 | --- | --- | --- |
 | `quorate.cliPath` | `quorate` | Path to the CLI (or `quorate` if on PATH). |
-| `quorate.baseBranch` | `main` | Base branch to diff the current branch against. |
-| `quorate.providers` | `` | Comma-separated provider ids to enable (blank = use `.quorate.yml`). |
 
 ## How it works
 
-The extension spawns `quorate review --base <baseBranch> --json` in the workspace
-root, parses the final NDJSON line (the full `CouncilReport`), maps findings to a
+The extension runs the Quorate CLI with the selected diff source and providers
+in the workspace, streams reviewer progress, maps report findings to a
 `DiagnosticCollection`, and shows the verdict. No engine code is duplicated — the
 review runs entirely in the Quorate CLI, so it uses your `.quorate.yml` council
 (local agent CLIs, `type: api` model endpoints, and the always-on heuristic).
