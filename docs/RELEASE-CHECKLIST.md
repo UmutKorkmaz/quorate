@@ -132,17 +132,22 @@ and `origin/main` parity before it creates any release artifact. OIDC availabili
 is not proof of npm authorization; a rejected publish can leave the earlier Git
 tag and GitHub Release in place and requires recovery before another attempt.
 
-### v1.4.0 Action evidence
+### v1.4.1 Action evidence
 
-- Canonical Action commit: `a37fcde63edc11af6b26e1350258dc6938e8e3d4`,
+- Canonical Action commit: `e7d30fd090007fd25183e3bf053a8d9e536d338d`,
   committed on `main` before the immutable-reference follow-up.
 - Bundled runtime SHA-256:
-  `c37aec721f66f3bc903eebad78e8dfd21d8ae7eb21847895410874049215cc2d`.
+  `8221bee4978f5e3ef46e7f7511c3a153ecf0e4d75d36a693acc6fecb973f741a`.
 
 The Action pin intentionally predates the docs/setup follow-up: a commit cannot
 contain its own hash. The release helper proves that every public ref uses this
 single commit, that it is an ancestor of the release commit, and that its
 `packages/github-action/dist/index.js` is byte-identical to the release bundle.
+
+### Historical v1.4.0 Action evidence
+
+- Canonical Action commit: `a37fcde63edc11af6b26e1350258dc6938e8e3d4`.
+- Bundled runtime SHA-256: `c37aec721f66f3bc903eebad78e8dfd21d8ae7eb21847895410874049215cc2d`.
 
 If any stage fails, fix it and restart verification from the earliest affected
 stage. Do not skip ahead to npm publication.

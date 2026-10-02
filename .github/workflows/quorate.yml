@@ -14,13 +14,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      # Pinned to the reviewed v1.4.0 bundle commit instead of `uses: ./`:
+        with:
+          fetch-depth: 0
+      - name: Verify trusted Action bundle
+        shell: bash
+        env:
+          TRUSTED_ACTION_COMMIT: e7d30fd090007fd25183e3bf053a8d9e536d338d
+          TRUSTED_ACTION_HASH: 8221bee4978f5e3ef46e7f7511c3a153ecf0e4d75d36a693acc6fecb973f741a
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$TRUSTED_ACTION_COMMIT" origin/main
+          actual_hash="$(git show "$TRUSTED_ACTION_COMMIT:packages/github-action/dist/index.js" | sha256sum | cut -d ' ' -f 1)"
+          test "$actual_hash" = "$TRUSTED_ACTION_HASH"
+      # Pinned to the reviewed v1.4.1 bundle commit instead of `uses: ./`:
       # the committed action bundle is PR-controlled code, so a local action on
       # pull_request would let a PR run its own dist/index.js with GLM_API_KEY
       # and a write-scoped GITHUB_TOKEN. Tradeoff: PRs are reviewed by the
       # reviewed bundle's code, not the PR's own code — bump this pin when
       # cutting a release.
-      - uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4 # v1.4.0 reviewed bundle
+      - uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d # v1.4.1 reviewed bundle
         env:
           # Bearer token for the GLM-5.1 `api` provider in .quorate.yml. On
           # GitHub-hosted runners runner-mode `auto` resolves to `api`, so GLM
