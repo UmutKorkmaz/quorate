@@ -5,6 +5,36 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-10-02
+
+### Added
+
+- Explicit local regression proofs for configuration-free standalone Vitest 4.x
+  projects on Linux and macOS: replay a selected HEAD test bundle against disposable
+  BASE and HEAD checkouts, verify one named assertion, and distinguish verified,
+  contradicted, and inconclusive results.
+- `proof regression run/show/verify`, bounded signed report history, explicit local
+  key trust, and opt-in review attachments with `--require-regression` enforced
+  before provider calls. Local signatures do not attest hosted execution.
+
+### Fixed
+
+- Preserve foreign-agent settings and unrelated hooks during setup/removal, and
+  keep external session lifecycle independent of short-lived hook process IDs.
+- Restore mouse and keyboard verdict controls in VS Code, bind Fix/Re-run to the
+  selected report, and target terminal Jump by the recorded TTY and tmux pane.
+- Abort review process groups cleanly, avoid publishing success after cancellation,
+  and preserve unrelated processes.
+- Add a recovery verifier that installs an already published npm version without
+  repeating publication.
+
+### Verification
+
+- Add regression classification, real-process cancellation, mutation, malformed
+  reporter, setup, redaction, checkout preservation, and native integration checks.
+- Regression execution refuses Windows, workspaces, custom runner configuration,
+  and dependency/configuration changes; read-only report inspection is supported.
+
 ## [1.4.1] - 2026-10-02
 
 ### Changed
