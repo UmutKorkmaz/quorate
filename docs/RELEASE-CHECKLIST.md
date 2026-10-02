@@ -144,5 +144,10 @@ contain its own hash. The release helper proves that every public ref uses this
 single commit, that it is an ancestor of the release commit, and that its
 `packages/github-action/dist/index.js` is byte-identical to the release bundle.
 
+### Historical v1.4.0 Action evidence
+
+- Canonical Action commit: `a37fcde63edc11af6b26e1350258dc6938e8e3d4`.
+- Bundled runtime SHA-256: `c37aec721f66f3bc903eebad78e8dfd21d8ae7eb21847895410874049215cc2d`.
+
 If any stage fails, fix it and restart verification from the earliest affected
 stage. Do not skip ahead to npm publication.
