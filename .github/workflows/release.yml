@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the verified tag and GitHub Release
-      id-token: write # npm provenance
+      id-token: write # npm trusted publishing and provenance
       actions: read # exact-revision CI gate
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -31,7 +31,8 @@ jobs:
         with:
           node-version: "22.22.0"
           registry-url: https://registry.npmjs.org
-          cache: npm
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.7.0 --ignore-scripts
       - name: Require successful CI for this exact main revision
         env:
           GH_TOKEN: ${{ github.token }}
@@ -41,10 +42,8 @@ jobs:
       - name: Verify and publish in GitHub-first order
         env:
           GH_TOKEN: ${{ github.token }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          npm whoami
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           CONFIRM_RELEASE="v$RELEASE_VERSION" bash scripts/release.sh --execute "$RELEASE_VERSION"

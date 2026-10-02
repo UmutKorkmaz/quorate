@@ -23,10 +23,14 @@ version confirmation:
 gh workflow run release.yml --ref main -f version=1.4.0
 ```
 
-The manual workflow requires successful push CI for the exact main revision and
-valid npm authentication before invoking the release helper. It uses the
-repository's `NPM_TOKEN` secret and GitHub Actions provenance. Check the run's
-result; dispatch alone is not publication.
+The manual workflow requires successful push CI for the exact main revision.
+It installs npm 11.7.0 and uses npm trusted publishing (OIDC) with GitHub Actions
+provenance; no `NPM_TOKEN` secret is needed. On npm, configure the `quorate`
+package's trusted publisher with user `UmutKorkmaz`, repository `quorate`, workflow
+filename `release.yml`, no environment, and permission for direct `npm publish`.
+Account 2FA can remain enabled and bypass tokens can be disallowed. npm validates
+the publisher configuration during publication. Check the run's result; dispatch
+alone is not publication.
 
 Publishing enforces this order: annotated Git tag → GitHub Release → `quorate`.
 The CLI bundles the workspace core, so `@quorate/core` is package-smoked but is
@@ -109,8 +113,11 @@ Run one clean fixture and one deliberately unsafe fixture. Verify:
    help, clean-gate, and failing-gate smokes.
 
 The helper validates the clean branch, aligned workspace versions, release notes,
-GitHub/npm authentication, immutable public Action references, absent tag/release/
-package versions, and `origin/main` parity before it creates any release artifact.
+GitHub authentication, OIDC availability and npm version on Actions (or npm login
+locally), immutable public Action references, absent tag/release/package versions,
+and `origin/main` parity before it creates any release artifact. OIDC availability
+is not proof of npm authorization; a rejected publish can leave the earlier Git
+tag and GitHub Release in place and requires recovery before another attempt.
 
 ### v1.4.0 Action evidence
 
