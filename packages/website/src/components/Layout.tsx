@@ -72,7 +72,7 @@ export function Layout() {
       <footer className="site-footer">
         <div className="site-footer-inner">
           <p>
-            <img src={logo} alt="" width={22} height={22} style={{ display: "inline-block", verticalAlign: "middle" }} />{" "}
+            <img src={logo} alt="" width={24} height={24} style={{ display: "inline-block", verticalAlign: "middle" }} />{" "}
             <strong>QUORATE</strong> · MIT ©{" "}
             <a href="https://github.com/UmutKorkmaz" target="_blank" rel="noopener noreferrer">
               Umut Korkmaz
