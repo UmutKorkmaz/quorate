@@ -8,7 +8,7 @@ import { buildSupplyChainReport, renderMarkdownReport, resolvePolicy, serializeC
  * offline demonstration that writes only into a new directory.
  */
 
-const ACTION_REF = "UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d";
+const ACTION_REF = "UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4";
 const VSCODE_EXTENSION_ID = "umutkorkmaz.quorate-vscode";
 
 /** A reproducible, offline first gate. Only a new directory is written. */
