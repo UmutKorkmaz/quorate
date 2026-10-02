@@ -11,6 +11,7 @@ import {
   summarizeToolInput,
   type HookReportDeps
 } from "../src/hook-report.js";
+import { listLiveRuns, readRunMeta, writeRunMeta } from "../src/live-spool.js";
 import { auditDirForLiveDir } from "../src/live-spool.js";
 import { auditKeyPath, exportApprovalAuditRecords } from "../src/trust-ledger.js";
 import { listPendingApprovals, readMonitorDiscovery, writeMonitorDiscovery, writeApprovalDecision, type ApprovalRequest } from "../src/live-spool.js";
@@ -336,5 +337,44 @@ describe("newApprovalId", () => {
     expect(() => newApprovalId(new Date(0))).not.toThrow();
     expect(random).not.toHaveBeenCalled();
     random.mockRestore();
+  });
+});
+
+
+describe("external session lifecycle", () => {
+  it("does not reap an active external session because its hook exited", () => {
+    const dir=tempDir(); dispatchHook("claude","SessionStart",{sessionId:"alive"},deps(dir,{pid:2**22+1}));
+    expect(listLiveRuns({dir}).find(r=>r.runId==="claude-alive")?.status).toBe("running");
+  });
+  it("closes stale external session on SessionEnd and duplicate end leaves terminal time unchanged", () => {
+    const dir=tempDir(), id="claude-stale";
+    dispatchHook("claude","SessionStart",{sessionId:"stale"},deps(dir));
+    writeRunMeta({...readRunMeta(id,dir)!,status:"stale"},dir);
+    dispatchHook("claude","SessionEnd",{sessionId:"stale"},deps(dir,{now:()=>new Date("2026-10-02T10:00:00Z")}));
+    expect(readRunMeta(id,dir)?.status).toBe("done");
+    dispatchHook("claude","SessionEnd",{sessionId:"stale"},deps(dir,{now:()=>new Date("2026-10-02T11:00:00Z")}));
+    expect(readRunMeta(id,dir)?.updatedAt).toBe("2026-10-02T10:00:00.000Z");
+  });
+  it("late prompt and duplicate start do not revive ended session", () => {
+    const dir=tempDir();
+    dispatchHook("claude","SessionStart",{sessionId:"end"},deps(dir));
+    dispatchHook("claude","SessionEnd",{sessionId:"end"},deps(dir));
+    const end=readRunMeta("claude-end",dir)!;
+    dispatchHook("claude","UserPromptSubmit",{sessionId:"end",prompt:"late"},deps(dir));
+    dispatchHook("claude","SessionStart",{sessionId:"end"},deps(dir));
+    expect(readRunMeta("claude-end",dir)).toEqual(end);
+    dispatchHook("claude","SessionStart",{sessionId:"new"},deps(dir));
+    expect(readRunMeta("claude-new",dir)?.status).toBe("running");
+  });
+  it("idle external session becomes stale even when its PID is alive", () => {
+    const dir=tempDir();
+    dispatchHook("claude","SessionStart",{sessionId:"idle"},deps(dir,{pid:process.pid,now:()=>new Date(Date.now()-1_800_001)}));
+    expect(listLiveRuns({dir}).find(r=>r.runId==="claude-idle")?.status).toBe("stale");
+  });
+  it("tool activity refreshes a stale observation without reviving a terminal session", () => {
+    const dir=tempDir();
+    dispatchHook("claude","SessionStart",{sessionId:"tools"},deps(dir,{now:()=>new Date(0)}));
+    dispatchHook("claude","PreToolUse",{sessionId:"tools",toolName:"Read"},deps(dir));
+    expect(listLiveRuns({dir}).find(r=>r.runId==="claude-tools")?.status).toBe("running");
   });
 });

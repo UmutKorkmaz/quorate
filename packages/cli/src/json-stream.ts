@@ -76,18 +76,20 @@ export async function runCouncilWithJsonStream(
   config: QuorateConfig,
   sink: JsonStreamSink,
   transformReport?: (report: CouncilReport) => CouncilReport,
-  constraints: Pick<RunCouncilOptions, "requiredRoles" | "minRealProviders"> = {}
+  constraints: Pick<RunCouncilOptions, "requiredRoles" | "minRealProviders" | "signal"> = {}
 ): Promise<CouncilReport> {
   // Opt-in chunk passthrough for streaming UIs (e.g. the VS Code extension).
   const includeChunks = ["1", "true", "yes"].includes((process.env.QUORATE_JSON_CHUNKS ?? "").toLowerCase());
   const raw = await runCouncil(request, config, {
     ...constraints,
-    onEvent: (event) => handleCouncilEvent(event, sink, includeChunks)
+    onEvent: (event) => { if (!constraints.signal?.aborted) handleCouncilEvent(event, sink, includeChunks); }
   });
   // The per-lane events above are the raw run; the authoritative final report
   // line reflects any post-run transform (e.g. baseline filtering) so stdout,
   // the returned value, and the gate all agree.
+  constraints.signal?.throwIfAborted();
   const report = transformReport ? transformReport(raw) : raw;
+  constraints.signal?.throwIfAborted();
   finalizeJsonStream(report, sink);
   return report;
 }

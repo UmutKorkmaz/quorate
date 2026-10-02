@@ -38,9 +38,9 @@ export function resolveTty(pid: number, exec: Exec = defaultExec): string | unde
   let current = pid;
   for (let hop = 0; hop < 5 && current > 0; hop += 1) {
     const result = exec("ps", ["-o", "tty=", "-p", String(current)], { timeout: 4_000, encoding: "utf8" });
-    const tty = result.stdout.trim();
+    const tty = normalizeTty(result.stdout.trim());
     // A real terminal device looks like ttys### or pts/N (not "??" or "?").
-    if (tty && tty !== "?" && /^ttys?\d+|^pts\/\d+|^tty\d+/.test(tty)) return tty;
+    if (tty) return tty;
     // Walk up: read ppid and retry.
     const ppidResult = exec("ps", ["-o", "ppid=", "-p", String(current)], { timeout: 4_000, encoding: "utf8" });
     const ppid = Number(ppidResult.stdout.trim());
@@ -90,19 +90,25 @@ end tell
 -- resolved tty: ${escaped}`;
 }
 
-function tryTmux(tty: string, exec: Exec): boolean {
-  // tmux list-panes -a -F '#{pane_tty} #{session_name}:#{window_index}.#{pane_index}'
-  const list = exec("tmux", ["list-panes", "-a", "-F", "#{pane_tty} #{session_name}:#{window_index}.#{pane_index}"], { timeout: 4_000, encoding: "utf8" });
+export function normalizeTty(value: string): string | undefined {
+  const bare = value.replace(/^\/dev\//, "");
+  return /^(?:ttys?\d+|tty\d+|pts\/\d+)$/.test(bare) ? bare : undefined;
+}
+
+export function selectTmuxPane(tty: string, exec: Exec): boolean {
+  const wanted = normalizeTty(tty);
+  if (!wanted) return false;
+  const opts = { timeout: 4_000, encoding: "utf8" as const };
+  const list = exec("tmux", ["list-panes", "-a", "-F", "#{pane_tty} #{session_name}:#{window_index}.#{pane_index}"], opts);
   if (list.status !== 0) return false;
-  const target = list.stdout
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.startsWith(tty));
-  if (!target) return false;
-  const spec = target.split(/\s+/)[1];
-  if (!spec) return false;
-  const sw = exec("tmux", ["switch-client", "-t", spec], { timeout: 4_000, encoding: "utf8" });
-  return sw.status === 0;
+  const matches = list.stdout.split("\n").map(line => line.trim().split(/\s+/)).filter(parts => normalizeTty(parts[0] ?? "") === wanted);
+  if (matches.length !== 1) return false;
+  const spec = matches[0]?.[1];
+  const match = spec?.match(/^(.+):(\d+)\.(\d+)$/);
+  if (!spec || !match) return false;
+  return exec("tmux", ["switch-client", "-t", match[1]!], opts).status === 0
+    && exec("tmux", ["select-window", "-t", `${match[1]}:${match[2]}`], opts).status === 0
+    && exec("tmux", ["select-pane", "-t", spec], opts).status === 0;
 }
 
 function tryIterm(tty: string, exec: Exec): boolean {
@@ -127,7 +133,7 @@ export function jumpToRun(runId: string, options: { dir?: string; exec?: Exec } 
   if (!run) return { ok: false, message: `Unknown run: ${runId}`, via: "none" };
   const tty = resolveTty(run.pid, exec);
   if (!tty) return { ok: false, message: `Could not resolve a tty for pid ${run.pid}.`, via: "none" };
-  if (tryTmux(tty, exec)) return { ok: true, message: `Focused tmux pane (${tty}).`, via: "tmux" };
+  if (selectTmuxPane(tty, exec)) return { ok: true, message: `Focused tmux pane (${tty}).`, via: "tmux" };
   if (tryIterm(tty, exec)) return { ok: true, message: `Focused iTerm2 tab (${tty}).`, via: "iterm2" };
   if (tryTerminalApp(tty, exec)) return { ok: true, message: `Activated Terminal.app (${tty}).`, via: "terminal" };
   return { ok: false, message: `No tmux/iTerm2/Terminal owner found for ${tty}.`, via: "none" };

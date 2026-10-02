@@ -5,11 +5,12 @@ It does not report recruited partners or measured model quality.
 
 ## First gate
 
-Use Node 22.22 or later. Until v1.4.0 is published, install the candidate tarball;
-after publication use the exact version below:
+Use Node 22.22 or later. For the published baseline, install the exact version below. For the current
+integration reliability and regression-proof candidate, use its freshly built
+tarball/VSIX and record its working-diff identity separately:
 
 ```bash
-npm install --global quorate@1.4.0
+npm install --global quorate@1.4.1
 quorate --version
 quorate setup demo
 ```
@@ -115,3 +116,5 @@ After 3–5 repositories have repeated use, compare setup friction, gate failure
 actionable findings and observed demand. Update [ROADMAP.md](./ROADMAP.md) using
 those results. Recruitment, live credentials, human labels and partner outcomes
 remain external inputs; this protocol alone does not satisfy the adoption gate.
+
+Local candidate acceptance and outstanding platform/hosting evidence are tracked in [INTEGRATION-ACCEPTANCE.md](./INTEGRATION-ACCEPTANCE.md). Optional regression proofs follow [REGRESSION-PROOFS.md](./REGRESSION-PROOFS.md); they do not replace consent or the known unsafe/corrected partner journeys.

@@ -108,6 +108,10 @@ import { runContractCheck } from "./contract-command.js";
 import { runMetrics } from "./metrics-command.js";
 import { writeSecureWorkspaceState } from "./secure-state.js";
 
+import { registerRegressionCommands } from './regression/command.js';
+import { prepareRegressionAttachment } from './regression/attachment.js';
+import { defaultRegressionKeyDir } from './regression/report.js';
+
 interface GlobalOptions {
   config?: string;
   cwd?: string;
@@ -1112,6 +1116,10 @@ export function buildProgram(): Command {
     .option("--proof-github-workflow <path>", "Expected .github/workflows/file.yml signer")
     .option("--proof-github-ref <ref>", "Expected signer branch ref", "refs/heads/main")
     .option("--proof-key <path>", "Explicit trusted Ed25519 public key for a portable --proof attestation")
+    .option("--regression-report <path>", "Attach independently verified regression evidence")
+    .option("--regression-manifest <path>", "Expected regression manifest and test bundle")
+    .option("--regression-key-dir <path>", "Trusted local regression signing key directory")
+    .option("--require-regression", "Block unless regression evidence is current and verified")
     .option("--proof <path>", "Attach an explicit proof artifact (signed; a stale worktree attaches with a note)")
     .action(async (options) => {
       const cwd = cwdFrom(program);
@@ -1149,6 +1157,15 @@ export function buildProgram(): Command {
       const proofAttachment = attachLatestProofToReview(request, options.proof, trust);
       request = proofAttachment.request;
       if (proofAttachment.note) console.error(proofAttachment.note);
+      if (options.regressionReport || options.regressionManifest || options.requireRegression || options.regressionKeyDir) {
+        if (!options.regressionReport || !options.regressionManifest || source.kind !== "git" || !source.baseSha || !source.headSha) {
+          console.error("Regression evidence requires explicit report, manifest and Git --base/--head revisions."); process.exitCode = 2; return;
+        }
+        const attached = prepareRegressionAttachment({cwd, reportPath:resolve(cwd,options.regressionReport), manifestPath:resolve(cwd,options.regressionManifest), baseSha:source.baseSha,headSha:source.headSha,keyDir:options.regressionKeyDir??defaultRegressionKeyDir(),required:Boolean(options.requireRegression),existingProof:request.proof});
+        console.error(attached.detail);
+        if(attached.gate !== "allow"){process.exitCode=attached.gate==="error"?2:1;return;}
+        request={...request,proof:attached.proof};
+      }
       try {
         request = prepareReviewRequest(request, config);
         diff = request.diff ?? "";
@@ -1188,6 +1205,12 @@ export function buildProgram(): Command {
       // Every run also feeds the live spool (~/.quorate/live) so `quorate
       // monitor` surfaces can watch it from other terminals.
       const liveSpool = createLiveSpoolSink({ cwd });
+      const controller = new AbortController();
+      let interruptedExit: number | undefined;
+      const onSigint = () => { interruptedExit ??= 130; controller.abort(); };
+      const onSigterm = () => { interruptedExit ??= 143; controller.abort(); };
+      process.on("SIGINT", onSigint);
+      process.on("SIGTERM", onSigterm);
       let report: CouncilReport;
       try {
         report = options.json
@@ -1202,13 +1225,18 @@ export function buildProgram(): Command {
                 liveSpool
               ),
               transformReport,
-              { requiredRoles: policy.rolesRequired, minRealProviders: policy.minRealProviders }
+              { requiredRoles: policy.rolesRequired, minRealProviders: policy.minRealProviders, signal: controller.signal }
             )
           : transformReport(await runCouncil(request, config, { onEvent: (event) => liveSpool.handleEvent(event),
-              requiredRoles: policy.rolesRequired, minRealProviders: policy.minRealProviders }));
+              requiredRoles: policy.rolesRequired, minRealProviders: policy.minRealProviders, signal: controller.signal }));
+        controller.signal.throwIfAborted();
       } catch (error: unknown) {
-        liveSpool.finish("error");
+        liveSpool.finish("error", { interrupted: controller.signal.aborted });
+        if (controller.signal.aborted) { process.exitCode = interruptedExit ?? 130; return; }
         throw error;
+      } finally {
+        process.off("SIGINT", onSigint);
+        process.off("SIGTERM", onSigterm);
       }
       liveSpool.finish("done");
 
@@ -1506,6 +1534,8 @@ export function buildProgram(): Command {
     .command("proof")
     .helpGroup("Review:")
     .description("Run, inspect, and verify bounded local verification proof artifacts.");
+
+  registerRegressionCommands(proofCmd);
 
   proofCmd
     .command("run")

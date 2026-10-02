@@ -1,77 +1,11 @@
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-
-const releaseScript = readFileSync(
-  new URL("../../../scripts/release.sh", import.meta.url),
-  "utf8"
-);
-
-function checkRegistryVisibility(visibleAfter: number) {
-  const directory = mkdtempSync(join(tmpdir(), "quorate-registry-test-"));
-  const counter = join(directory, "reads");
-  writeFileSync(counter, "0");
-  try {
-    const start = releaseScript.indexOf("# npm can accept a publish");
-    const end = releaseScript.indexOf("PUBLISHED_CLI=", start);
-    if (start < 0 || end < 0) throw new Error("Registry verification block missing");
-    const result = spawnSync("bash", ["-c", `
-      set -Eeuo pipefail
-      fail() { printf '%s\\n' "$*" >&2; exit 1; }
-      sleep() { :; }
-      npm() {
-        local count="$(cat "$REGISTRY_READS")"
-        count=$((count + 1))
-        printf '%s' "$count" > "$REGISTRY_READS"
-        if [[ "$count" -lt "$VISIBLE_AFTER" ]]; then
-          printf 'npm error E404: version not visible yet' >&2
-          return 1
-        fi
-        printf '%s' "$VERSION"
-      }
-      ${releaseScript.slice(start, end)}
-    `], {
-      encoding: "utf8",
-      timeout: 10_000,
-      env: { ...process.env, SMOKE_DIR: directory, VERSION: "1.4.0", REGISTRY_READS: counter, VISIBLE_AFTER: String(visibleAfter) },
-    });
-    return { ...result, reads: Number(readFileSync(counter, "utf8")) };
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-}
-
-describe("release helper", () => {
-  it("publishes only the self-contained public CLI package", () => {
-    expect(releaseScript).toContain(
-      'run npm publish --workspace quorate "${PUBLISH_ARGS[@]}"'
-    );
-    expect(releaseScript).not.toMatch(
-      /npm publish --workspace @quorate\/core/
-    );
-  });
-
-  it.skipIf(process.platform === "win32")("waits for an accepted version to reach registry readers", () => {
-    const result = checkRegistryVisibility(3);
-    expect(result.status).toBe(0);
-    expect(result.reads).toBe(3);
-    expect(result.stdout).toContain("Waiting for registry visibility (2/30)");
-  });
-
-  it.skipIf(process.platform === "win32")("continues immediately when the version is already visible", () => {
-    const result = checkRegistryVisibility(1);
-    expect(result.status).toBe(0);
-    expect(result.reads).toBe(1);
-    expect(result.stdout).not.toContain("Waiting for registry visibility");
-  });
-
-  it.skipIf(process.platform === "win32")("bounds retries and warns against republishing after a visibility timeout", () => {
-    const result = checkRegistryVisibility(31);
-    expect(result.status).toBe(1);
-    expect(result.reads).toBe(30);
-    expect(result.stderr).toContain("verify registry status before any further publish");
-    expect(result.stderr).toContain("npm error E404: version not visible yet");
-  });
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+const releaseScript=readFileSync(new URL('../../../scripts/release.sh',import.meta.url),'utf8');
+describe('release helper',()=>{
+ it('publishes only the self-contained public CLI package',()=>{expect(releaseScript).toContain('run npm publish --workspace quorate "${PUBLISH_ARGS[@]}"');expect(releaseScript).not.toMatch(/npm publish --workspace @quorate\/core/);});
+ it('runs standalone verification only after GitHub release and npm publication',()=>{
+  const tag=releaseScript.indexOf('run git tag -a'),release=releaseScript.indexOf('run gh release create'),publish=releaseScript.indexOf('run npm publish'),verify=releaseScript.indexOf('run node scripts/verify-published-cli.mjs --version "$VERSION"');
+  expect(tag).toBeGreaterThan(0);expect(release).toBeGreaterThan(tag);expect(publish).toBeGreaterThan(release);expect(verify).toBeGreaterThan(publish);
+ });
+ it('leaves bounded registry retries to the independently tested recovery helper',()=>{const recovery=releaseScript.slice(releaseScript.indexOf('# Retry package availability'));expect(recovery).toContain('verify-published-cli.mjs');expect(recovery).not.toMatch(/npm publish|npm exec/);});
 });

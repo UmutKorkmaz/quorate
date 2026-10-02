@@ -76,6 +76,7 @@ function pidLooksLikeQuorate(pid: number): boolean {
 export function abortLiveRun(runId: string, dir?: string): ControlResult {
   const run = findRun(runId, dir);
   if (!run) return { ok: false, message: `Unknown run: ${runId}` };
+  if (run.kind === "external") return { ok: false, message: "External sessions do not grant hook PID signal authority." };
   if (run.status !== "running") {
     return { ok: false, message: `Run is ${run.status}; only running runs can be aborted.` };
   }

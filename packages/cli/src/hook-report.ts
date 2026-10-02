@@ -214,6 +214,7 @@ function ensureExternalRun(
   const cwd = deps.cwd ?? process.cwd();
   const pid = deps.pid ?? process.pid;
   const existing = readRunMeta(runId, deps.dir);
+  if (existing?.status === "done" || existing?.status === "error") return existing;
   const entry: LiveRunEntry = {
     runId,
     pid,
@@ -266,6 +267,12 @@ export function dispatchHook(
   const runId = foreignRunId(source, payload?.sessionId);
   // Non-session events with no resolvable runId are no-ops (defer).
   if (event !== "notify" && !runId) return { action: "defer" };
+
+  const observed = runId ? readRunMeta(runId, deps.dir) : undefined;
+  if (observed?.status === "done" || observed?.status === "error") return { action: "defer" };
+  if (observed && event !== "SessionEnd" && event !== "SessionStart" && event !== "UserPromptSubmit") {
+    ensureExternalRun(runId!, source, observed.subject, deps);
+  }
 
   switch (event) {
     case "SessionStart": {
@@ -337,7 +344,7 @@ export function dispatchHook(
     case "SessionEnd": {
       if (!runId) return { action: "defer" };
       const existing = readRunMeta(runId, deps.dir);
-      if (existing && existing.status === "running") {
+      if (existing && (existing.status === "running" || existing.status === "stale")) {
         try {
           writeRunMeta({ ...existing, status: "done", updatedAt: nowIso(deps.now?.()) }, deps.dir);
         } catch {

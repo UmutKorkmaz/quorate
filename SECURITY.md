@@ -29,8 +29,10 @@ part of its design:
   contributes commands, packs, or their regexes and prompts to a review.
 - **No shell.** Providers are spawned directly, never through a shell, so there is
   no shell-injection surface.
-- **Explicit headless args.** Each provider runs with explicit headless arguments;
-  empty args are refused so no interactive session is ever opened.
+- **Explicit headless args.** Providers require nonempty argv. A configured
+  `headlessAllowlist` additionally requires a normalized argument matching one of
+  its entries; it does not imply every argument is allowlisted. Dangerous flags
+  are checked independently. Standard presets supply their supported headless flags.
 - **Dangerous-flag denylist.** Session/resume and `--dangerously*`/`--yolo`-style
   flags are matched by boundary-prefix, so compound flags such as
   `--dangerously-skip-permissions` are rejected too — not just exact tokens —
