@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-10-02
+
+### Changed
+
+- Unified Quorate's scales logo across the website, social cards, package documentation,
+  GitHub App landing page, CLI monitor, and VS Code extension, with crisp vector artwork,
+  circle-safe avatars, browser icons, and a theme-aware activity bar icon.
+- Corrected GitHub App installation links to the registered Quorate Council App.
+
 ## [1.4.0] - 2026-10-01
 
 ### Added

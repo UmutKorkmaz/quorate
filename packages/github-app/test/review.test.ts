@@ -6,6 +6,7 @@
  * includes a TypeScript file containing a focused test.
  */
 
+import pkg from "../package.json" with { type: "json" };
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildHostedConfig, reviewPullRequest, type AppDeps, type AppOctokit } from "../src/review.js";
 import { addSuppression, createBaseline, createDefaultConfig, createSuppressionStore, PACKS, PROVIDER_PRESETS, runCouncil, validateDecisionRecord } from "@quorate/core";
@@ -181,7 +182,7 @@ describe("reviewPullRequest", () => {
     expect(validateDecisionRecord(result.decision)).toBe(true);
     expect(result.decision?.source).toEqual({ kind: "pull-request", headSha: "a".repeat(40), baseSha: "b".repeat(40) });
     expect(result.decision?.policy.value).toMatchObject({ rolesRequired: ["security"], minRealProviders: 2 });
-    expect(result.decision?.toolVersion).toBe("1.4.0");
+    expect(result.decision?.toolVersion).toBe(pkg.version);
     expect(result.decision?.gate.blocked).toBe(true);
     expect(result.conclusion).toBe("failure");
     expect((checkCalls.at(-1)?.params.output as { summary: string }).summary).toContain(result.decision?.integrity.hash);

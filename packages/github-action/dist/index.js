@@ -56278,7 +56278,7 @@ var import_node_os2 = require("node:os");
 // package.json
 var package_default = {
   name: "@quorate/github-action",
-  version: "1.4.0",
+  version: "1.4.1",
   main: "./dist/index.js",
   private: true,
   files: [
@@ -56291,7 +56291,7 @@ var package_default = {
   dependencies: {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@quorate/core": "1.4.0"
+    "@quorate/core": "1.4.1"
   }
 };
 

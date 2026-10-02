@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/UmutKorkmaz/quorate/main/assets/brand/icon.png" alt="Quorate" width="112" height="112" />
+</p>
+
 <div align="center">
 
 # quorate

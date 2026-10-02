@@ -2,13 +2,13 @@
   "name": "quorate-vscode",
   "displayName": "Quorate — AI Review Council",
   "description": "Convene Quorate's multi-agent AI review council on your current change, right inside VS Code.",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "publisher": "umutkorkmaz",
   "private": true,
   "license": "MIT",
   "icon": "media/icon.png",
   "galleryBanner": {
-    "color": "#0b0f17",
+    "color": "#101827",
     "theme": "dark"
   },
   "repository": {

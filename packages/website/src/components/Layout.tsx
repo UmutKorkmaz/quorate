@@ -10,14 +10,14 @@ const NAV_LINKS = [
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
-  const favicon = `${import.meta.env.BASE_URL}favicon.svg`;
+  const logo = `${import.meta.env.BASE_URL}logo.svg`;
 
   return (
     <div className="site">
       <header className="site-header">
         <div className="site-header-inner">
           <Link to="/" className="site-logo" onClick={closeMenu}>
-            <img src={favicon} alt="" className="site-logo-icon" width={28} height={28} />
+            <img src={logo} alt="" className="site-logo-icon" width={28} height={28} />
             <span className="site-logo-text">QUORATE</span>
           </Link>
 
@@ -72,9 +72,7 @@ export function Layout() {
       <footer className="site-footer">
         <div className="site-footer-inner">
           <p>
-            <span className="brand-mark" aria-hidden="true">
-              ◆
-            </span>{" "}
+            <img src={logo} alt="" width={24} height={24} style={{ display: "inline-block", verticalAlign: "middle" }} />{" "}
             <strong>QUORATE</strong> · MIT ©{" "}
             <a href="https://github.com/UmutKorkmaz" target="_blank" rel="noopener noreferrer">
               Umut Korkmaz
