@@ -84,7 +84,7 @@ quorate provider set-model local                  # switch a provider's model by
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: UmutKorkmaz/quorate@a37fcde63edc11af6b26e1350258dc6938e8e3d4
+- uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
