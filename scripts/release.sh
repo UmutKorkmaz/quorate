@@ -249,7 +249,15 @@ run gh release create "$TAG" --verify-tag --target "$(git rev-parse HEAD)" \
   --title "Quorate $TAG" --notes-file "$NOTES_FILE"
 run npm publish --workspace quorate "${PUBLISH_ARGS[@]}"
 
-[[ "$(npm view "quorate@$VERSION" version)" == "$VERSION" ]] || fail "CLI package verification failed"
+# npm can accept a publish before the new version reaches registry readers.
+for attempt in {1..30}; do
+  if [[ "$(npm view "quorate@$VERSION" version --prefer-online --fetch-retries=0 --fetch-timeout=10000 2>/dev/null)" == "$VERSION" ]]; then
+    break
+  fi
+  [[ "$attempt" -lt 30 ]] || fail "npm accepted publication, but the CLI version is not visible after registry retries; verify registry status before any further publish"
+  printf 'Waiting for registry visibility (%s/30)...\n' "$attempt"
+  sleep 10
+done
 
 PUBLISHED_CLI=(npm exec --yes --package "quorate@$VERSION" -- quorate)
 run "${PUBLISHED_CLI[@]}" --version
