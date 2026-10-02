@@ -209,8 +209,10 @@ For any public release: verify locally → branch/PR → required CI and review 
 tag → GitHub Release → npm publication. Never publish npm first.
 
 v1.4.0 source and acceptance work are merged through
-[PR #37](https://github.com/UmutKorkmaz/quorate/pull/37). Publication remains blocked
-by the stored npm credential returning 401 in
-[Release run 36892293998](https://github.com/UmutKorkmaz/quorate/actions/runs/36892293998).
+[PR #37](https://github.com/UmutKorkmaz/quorate/pull/37). The previous token-based
+[Release run 36892293998](https://github.com/UmutKorkmaz/quorate/actions/runs/36892293998)
+failed with 401. The release workflow now uses npm trusted publishing (OIDC);
+publication remains pending until a successful release run and published-package
+smoke establish distribution.
 Installed-App acceptance requires an accessible installation and test repository;
 design-partner validation requires actual participants and held-out human labels.

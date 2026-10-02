@@ -213,6 +213,10 @@ rg -q "^## \\[$VERSION\\] - Unreleased$" CHANGELOG.md && fail "replace Unrelease
 
 run gh auth status
 if [[ "${GITHUB_ACTIONS:-false}" == "true" ]]; then
+  [[ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" && -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]] || fail "GitHub Actions trusted publishing requires id-token: write"
+  [[ -z "${NODE_AUTH_TOKEN:-}" && -z "${NPM_TOKEN:-}" ]] || fail "GitHub Actions publishing must use OIDC, not a stored npm token"
+  NPM_VERSION="$(npm --version)"
+  node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); if (!(major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1))))) process.exit(1)' "$NPM_VERSION" || fail "trusted publishing requires npm >=11.5.1"
   run npm ping
 else
   run npm whoami
