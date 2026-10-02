@@ -32,6 +32,12 @@ Account 2FA can remain enabled and bypass tokens can be disallowed. npm validate
 the publisher configuration during publication. Check the run's result; dispatch
 alone is not publication.
 
+After a successful run, verify the exact version and its provenance:
+
+```bash
+npm view quorate@1.4.0 version dist.attestations
+```
+
 Publishing enforces this order: annotated Git tag → GitHub Release → `quorate`.
 The CLI bundles the workspace core, so `@quorate/core` is package-smoked but is
 not a separate public npm artifact. GitHub Actions adds npm provenance. A local

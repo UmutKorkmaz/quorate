@@ -30,15 +30,16 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.22.0"
-          registry-url: https://registry.npmjs.org
-      - name: Install npm with trusted publishing support
-        run: npm install --global npm@11.7.0 --ignore-scripts
       - name: Require successful CI for this exact main revision
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --event push --json conclusion,status,headSha > /tmp/release-ci.json
           node --input-type=module -e 'import fs from "node:fs"; const runs=JSON.parse(fs.readFileSync("/tmp/release-ci.json","utf8")); if (!runs.some(r => r.headSha===process.env.GITHUB_SHA && r.status==="completed" && r.conclusion==="success")) throw Error("This main revision has no successful CI run");'
+      - name: Install npm with trusted publishing support
+        run: |
+          npm install --global npm@11.7.0 --ignore-scripts
+          test "$(npm --version)" = "11.7.0"
       - name: Verify and publish in GitHub-first order
         env:
           GH_TOKEN: ${{ github.token }}
