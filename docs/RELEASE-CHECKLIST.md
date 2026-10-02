@@ -39,7 +39,9 @@ npm view quorate@1.4.0 version dist.attestations
 ```
 
 npm may accept a publish while the version is still processing. The helper waits
-up to 30 registry reads before running the published CLI smokes. If publication
+up to 30 registry reads (10-second request limits and 10-second intervals, roughly
+10 minutes maximum including requests) before running the published CLI smokes.
+It retains the final registry error if those reads fail. If publication
 was accepted but verification still fails, inspect registry visibility and run
 the smokes against the existing version; do not republish or replace its tag.
 

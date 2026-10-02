@@ -18,19 +18,24 @@ function checkRegistryVisibility(visibleAfter: number) {
     const end = releaseScript.indexOf("PUBLISHED_CLI=", start);
     if (start < 0 || end < 0) throw new Error("Registry verification block missing");
     const result = spawnSync("bash", ["-c", `
+      set -Eeuo pipefail
       fail() { printf '%s\\n' "$*" >&2; exit 1; }
       sleep() { :; }
       npm() {
         local count="$(cat "$REGISTRY_READS")"
         count=$((count + 1))
         printf '%s' "$count" > "$REGISTRY_READS"
-        [[ "$count" -ge "$VISIBLE_AFTER" ]] || return 1
+        if [[ "$count" -lt "$VISIBLE_AFTER" ]]; then
+          printf 'npm error E404: version not visible yet' >&2
+          return 1
+        fi
         printf '%s' "$VERSION"
       }
       ${releaseScript.slice(start, end)}
     `], {
       encoding: "utf8",
-      env: { ...process.env, VERSION: "1.4.0", REGISTRY_READS: counter, VISIBLE_AFTER: String(visibleAfter) },
+      timeout: 10_000,
+      env: { ...process.env, SMOKE_DIR: directory, VERSION: "1.4.0", REGISTRY_READS: counter, VISIBLE_AFTER: String(visibleAfter) },
     });
     return { ...result, reads: Number(readFileSync(counter, "utf8")) };
   } finally {
@@ -55,10 +60,18 @@ describe("release helper", () => {
     expect(result.stdout).toContain("Waiting for registry visibility (2/30)");
   });
 
+  it.skipIf(process.platform === "win32")("continues immediately when the version is already visible", () => {
+    const result = checkRegistryVisibility(1);
+    expect(result.status).toBe(0);
+    expect(result.reads).toBe(1);
+    expect(result.stdout).not.toContain("Waiting for registry visibility");
+  });
+
   it.skipIf(process.platform === "win32")("bounds retries and warns against republishing after a visibility timeout", () => {
     const result = checkRegistryVisibility(31);
     expect(result.status).toBe(1);
     expect(result.reads).toBe(30);
     expect(result.stderr).toContain("verify registry status before any further publish");
+    expect(result.stderr).toContain("npm error E404: version not visible yet");
   });
 });
