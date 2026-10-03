@@ -1,6 +1,6 @@
-# Regression proofs (local candidate)
+# Regression proofs
 
-A regression proof overlays exactly the selected HEAD test bundle onto disposable BASE and HEAD checkouts. It verifies one named assertion only when BASE reproduces the declared failure and HEAD passes. The original checkout must be clean and remains untouched. This feature is implemented locally and has not been published.
+A regression proof overlays exactly the selected HEAD test bundle onto disposable BASE and HEAD checkouts. It verifies one named assertion only when BASE reproduces the declared failure and HEAD passes. The original checkout must be clean and remains untouched. Introduced in version 1.5.0. Verify the exact published version before installing from npm.
 
 Supported execution: Linux/macOS, Node 22.22+, configuration-free standalone npm packages and installed Vitest 4.x. Workspaces, nested packages, custom Vite/Vitest configuration, dependency/configuration changes, executable support files and Windows execution are refused or inconclusive. Windows can inspect reports. This is a conservative first adapter, not a sandbox for untrusted tests: execute only operator-approved test code and dependencies. Disposable checkouts protect source preservation; tests still run as your OS user.
 

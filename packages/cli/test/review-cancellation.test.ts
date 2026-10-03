@@ -40,7 +40,7 @@ it.skipIf(process.platform==="win32").each([["SIGINT",130],["SIGTERM",143]] as c
  const runs=listLiveRuns({dir});expect(runs).toHaveLength(1);
  const base=(await listenMonitorServer(server)).split('/?')[0];
  if(signal==='SIGINT'){
- const response=await fetch(`${base}/control?token=owned-cancellation`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"abort",runId:runs[0]!.runId})});expect(response.status).toBe(200);
+ const response=await fetch(`${base}/control?token=owned-cancellation`,{method:"POST",signal:AbortSignal.timeout(5000),headers:{"content-type":"application/json"},body:JSON.stringify({action:"abort",runId:runs[0]!.runId})});expect(response.status).toBe(200);
  }else{cli.kill('SIGTERM');cli.kill('SIGTERM');}
  expect(await exited,stderr).toBe(exit);
  await wait(()=>ids.every(pid=>!alive(pid)));
