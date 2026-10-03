@@ -22,5 +22,5 @@ it('resolves explicit signing keys against selected cwd, not process cwd',async(
  vi.spyOn(console,'log').mockImplementation(()=>{});
  const p=new Command();p.option('--cwd <path>');registerRegressionCommands(p.command('proof'));
  await p.parseAsync(['node','quorate','--cwd','/fixture','proof','regression','run','--manifest','manifest.json','--key-dir','../owned-keys']);
- expect(publishRegressionReport).toHaveBeenLastCalledWith('/fixture',expect.anything(),{keyDir:resolve('/fixture','../owned-keys')});
+ expect(publishRegressionReport).toHaveBeenLastCalledWith(resolve('/fixture'),expect.anything(),{keyDir:resolve('/fixture','../owned-keys')});
 });
