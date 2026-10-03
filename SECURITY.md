@@ -30,10 +30,10 @@ part of its design:
 - **No shell.** Providers are spawned directly, never through a shell, so there is
   no shell-injection surface.
 - **Explicit headless args.** Providers require nonempty argv. A configured
-  `headlessAllowlist` additionally requires a normalized argument matching one of
-  its entries; it does not imply every argument is allowlisted. Dangerous flags
-  are checked independently. Standard presets supply their supported headless flags.
-- **Dangerous-flag denylist.** Session/resume and `--dangerously*`/`--yolo`-style
+  `headlessAllowlist` requires every normalized flag to appear in that allowlist.
+  Without one, the dangerous-flag denylist below applies unless the profile opts
+  into `allowDangerousArgs`. Standard presets supply supported headless flags.
+- **Dangerous-flag denylist.** Without an explicit nonempty allowlist, session/resume and `--dangerously*`/`--yolo`-style
   flags are matched by boundary-prefix, so compound flags such as
   `--dangerously-skip-permissions` are rejected too — not just exact tokens —
   unless a profile explicitly opts in with `allowDangerousArgs`.

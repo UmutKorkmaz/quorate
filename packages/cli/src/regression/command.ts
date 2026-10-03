@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { resolve } from 'node:path';
 import { runRegression } from './runner.js';
 import { readRegressionManifest, resolveRegressionInput, gitRead } from './manifest.js';
-import { defaultRegressionKeyDir, publishRegressionReport, readRegressionReport, verifyRegressionReport } from './report.js';
+import { resolveRegressionKeyDir, publishRegressionReport, readRegressionReport, verifyRegressionReport } from './report.js';
 export const regressionExitCode=(state:'verified'|'contradicted'|'inconclusive')=>state==='verified'?0:state==='contradicted'?1:2;
 export function registerRegressionCommands(proof:Command):void {
  const regression=proof.command('regression').description('Reproduce one selected Vitest assertion on BASE and verify its fix on HEAD.');
@@ -12,7 +12,7 @@ export function registerRegressionCommands(proof:Command):void {
  .requiredOption('--manifest <path>','Explicit regression manifest').option('--key-dir <path>','Trusted local signing key directory').option('--json','Print the report JSON')
  .action(async(options)=>{
   const controller=new AbortController(),interrupt=()=>controller.abort();process.on('SIGINT',interrupt);process.on('SIGTERM',interrupt);
-  try{const result=await runRegression({cwd:cwd(),manifestPath:resolve(cwd(),options.manifest),signal:controller.signal});const report=publishRegressionReport(cwd(),result,{keyDir:options.keyDir});console.log(options.json?JSON.stringify(report):`${report.decision.state}: ${report.decision.reason}\nSaved .quorate/regressions/latest.json (local assertion).`);process.exitCode=regressionExitCode(report.decision.state);}
+  try{const result=await runRegression({cwd:cwd(),manifestPath:resolve(cwd(),options.manifest),signal:controller.signal});const report=publishRegressionReport(cwd(),result,{keyDir:resolveRegressionKeyDir(cwd(),options.keyDir)});console.log(options.json?JSON.stringify(report):`${report.decision.state}: ${report.decision.reason}\nSaved .quorate/regressions/latest.json (local assertion).`);process.exitCode=regressionExitCode(report.decision.state);}
   catch{failure();}finally{process.off('SIGINT',interrupt);process.off('SIGTERM',interrupt);}
  });
  regression.command('show').description('Inspect a report without executing or installing anything; inspection does not verify trust.')
@@ -25,7 +25,7 @@ export function registerRegressionCommands(proof:Command):void {
   if(options.keyDir&&options.expectedHash)throw new Error('Choose one trust mode');
   const input=resolveRegressionInput(cwd(),readRegressionManifest(resolve(cwd(),options.manifest)));
   const sha=(ref:string)=>gitRead(cwd(),['rev-parse','--verify','--end-of-options',`${ref}^{commit}`]).toString().trim();
-  const result=verifyRegressionReport({cwd:cwd(),path:resolve(cwd(),options.report),baseSha:sha(options.base),headSha:sha(options.head),manifestDigest:input.manifestDigest,bundleDigest:input.bundleDigest,trust:options.expectedHash?{mode:'digest',expectedHash:options.expectedHash}:{mode:'local',keyDir:options.keyDir??defaultRegressionKeyDir()}});
+  const result=verifyRegressionReport({cwd:cwd(),path:resolve(cwd(),options.report),baseSha:sha(options.base),headSha:sha(options.head),manifestDigest:input.manifestDigest,bundleDigest:input.bundleDigest,trust:options.expectedHash?{mode:'digest',expectedHash:options.expectedHash}:{mode:'local',keyDir:resolveRegressionKeyDir(cwd(),options.keyDir)}});
   console.log(options.json?JSON.stringify(result):`${result.reason}; trust: ${result.trustMode}. Integrity verification does not run tests.`);process.exitCode=result.ok?0:result.reason==='missing'||result.reason==='stale'?1:2;
  }catch{failure();}});
 }

@@ -1,4 +1,6 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+import { getWorktreeFingerprint } from '../src/proof-runner.js';
+afterEach(()=>vi.unstubAllEnvs());
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -59,4 +61,25 @@ it('rejects nonancestor revisions and committed symbolic test assets',()=>{
  expect(()=>resolveRegressionInput(f.root,read({...f.manifest,base:f.head,head:f.base}))).toThrow(/Git query/);
  rmSync(join(f.root,'test/value.test.js'));symlinkSync('../value.js',join(f.root,'test/value.test.js'));git(f.root,'add','.');git(f.root,'commit','-qm','symlink');expect(()=>resolveRegressionInput(f.root,read({...f.manifest,head:git(f.root,'rev-parse','HEAD')}))).toThrow(/Invalid/);
  }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+it('rejects more than 100 selected tests and oversized setup argv before execution',()=>{
+ const f=regressionFixture();try{
+  const testFiles=Array.from({length:101},(_,i)=>`test/case-${i}.test.js`);
+  expect(()=>read({...f.manifest,testFiles,runArgv:['node_modules/.bin/vitest','run',...testFiles,'--reporter=json']})).toThrow(/Invalid/);
+  expect(()=>read({...f.manifest,setupArgv:['npm','ci','--ignore-scripts',...Array(102).fill('--no-audit')]})).toThrow(/Invalid/);
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
+
+it('binds revisions and fingerprints to selected cwd despite inherited Git routing',()=>{
+ const selected=regressionFixture(),other=regressionFixture();try{
+  writeFileSync(join(other.root,'identity.txt'),'other repository');git(other.root,'add','.');git(other.root,'commit','-qm','other identity');
+  const expected=getWorktreeFingerprint(selected.root);
+  vi.stubEnv('GIT_DIR',join(other.root,'.git'));vi.stubEnv('GIT_WORK_TREE',selected.root);
+  vi.stubEnv('GIT_INDEX_FILE',join(other.root,'.git/index'));
+  vi.stubEnv('GIT_OBJECT_DIRECTORY',join(other.root,'.git/objects'));
+  const input=resolveRegressionInput(selected.root,read({...selected.manifest,base:'HEAD',head:'HEAD'}));
+  expect(input.baseSha).toBe(selected.head);expect(input.headSha).toBe(selected.head);
+  expect(getWorktreeFingerprint(selected.root)).toEqual(expected);
+ }finally{vi.unstubAllEnvs();rmSync(selected.root,{recursive:true,force:true});rmSync(other.root,{recursive:true,force:true});}
 });

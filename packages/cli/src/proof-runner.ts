@@ -1,3 +1,4 @@
+import { isolatedGitEnvironment } from "./git-environment.js";
 import { executeBoundedCommand } from "./bounded-command.js";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -124,7 +125,7 @@ function isSafeProofName(name: string): boolean {
 }
 
 function gitText(cwd: string, args: string[]): string | undefined {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8", shell: false, maxBuffer: 2 * 1024 * 1024 });
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", shell: false, env: isolatedGitEnvironment(), maxBuffer: 2 * 1024 * 1024 });
   return result.status === 0 ? result.stdout : undefined;
 }
 

@@ -110,7 +110,7 @@ import { writeSecureWorkspaceState } from "./secure-state.js";
 
 import { registerRegressionCommands } from './regression/command.js';
 import { prepareRegressionAttachment } from './regression/attachment.js';
-import { defaultRegressionKeyDir } from './regression/report.js';
+import { resolveRegressionKeyDir } from './regression/report.js';
 
 interface GlobalOptions {
   config?: string;
@@ -1161,7 +1161,7 @@ export function buildProgram(): Command {
         if (!options.regressionReport || !options.regressionManifest || source.kind !== "git" || !source.baseSha || !source.headSha) {
           console.error("Regression evidence requires explicit report, manifest and Git --base/--head revisions."); process.exitCode = 2; return;
         }
-        const attached = prepareRegressionAttachment({cwd, reportPath:resolve(cwd,options.regressionReport), manifestPath:resolve(cwd,options.regressionManifest), baseSha:source.baseSha,headSha:source.headSha,keyDir:options.regressionKeyDir??defaultRegressionKeyDir(),required:Boolean(options.requireRegression),existingProof:request.proof});
+        const attached = prepareRegressionAttachment({cwd, reportPath:resolve(cwd,options.regressionReport), manifestPath:resolve(cwd,options.regressionManifest), baseSha:source.baseSha,headSha:source.headSha,keyDir:resolveRegressionKeyDir(cwd,options.regressionKeyDir),required:Boolean(options.requireRegression),existingProof:request.proof});
         console.error(attached.detail);
         if(attached.gate !== "allow"){process.exitCode=attached.gate==="error"?2:1;return;}
         request={...request,proof:attached.proof};

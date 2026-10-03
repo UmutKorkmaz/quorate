@@ -1,3 +1,4 @@
+import { isolatedGitEnvironment } from "../git-environment.js";
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, realpathSync } from 'node:fs';
@@ -15,10 +16,12 @@ export function readBoundedJson(path:string,maxBytes:number):unknown {
  const fd=openSync(path,constants.O_RDONLY|(constants.O_NOFOLLOW??0));
  try {const current=fstatSync(fd);if(current.dev!==st.dev||current.ino!==st.ino||current.size>maxBytes)throw new Error('Invalid input: file changed');const raw=readFileSync(fd);if(raw.length>maxBytes)throw new Error('Invalid input: oversized file');return JSON.parse(raw.toString('utf8'));}finally{closeSync(fd);}
 }
+export const MAX_REGRESSION_TEST_FILES = 100;
+export const MAX_REGRESSION_EXECUTION_ARGV = MAX_REGRESSION_TEST_FILES + 4;
 const invalid=():never=>{throw new Error('Invalid regression input');};
 const string=(v:unknown):v is string=>typeof v==='string'&&v.length>0&&!v.includes('\0')&&v.length<=8192;
 function paths(value:unknown,tests:boolean):string[]{
- if(!Array.isArray(value)||value.length>100||(tests&&!value.length))return invalid();
+ if(!Array.isArray(value)||value.length>MAX_REGRESSION_TEST_FILES||(tests&&!value.length))return invalid();
  const result=value as string[];
  if(result.some(p=>!string(p)||isAbsolute(p)||p.includes('\\')||p.includes(':')||p.split('/').some(s=>!s||s==='.'||s==='..')||p.startsWith('-')|| (tests?!/\.(?:test|spec)\.(?:ts|js)$/.test(p):! /^(?:test\/fixtures\/|tests\/fixtures\/|__fixtures__\/).+\.(?:json|txt|csv|md|html|xml|yaml|yml|bin|png|jpg|snap)$/.test(p))))return invalid();
  return result;
@@ -32,13 +35,13 @@ export function normalizeRegressionManifest(value:unknown):RegressionManifest {
  const expected=['node_modules/.bin/vitest','run',...testFiles,'--reporter=json'];
  if(!Array.isArray(v.runArgv)||canonicalJson(v.runArgv)!==canonicalJson(expected))return invalid();
  let setupArgv:string[]|undefined;
- if(v.setupArgv!==undefined){if(!Array.isArray(v.setupArgv)||v.setupArgv.length<3||v.setupArgv.some(a=>!string(a))||v.setupArgv[0]!=='npm'||v.setupArgv[1]!=='ci'||!v.setupArgv.includes('--ignore-scripts')||v.setupArgv.slice(2).some(a=>!['--ignore-scripts','--offline','--no-audit','--no-fund'].includes(a)))return invalid();setupArgv=v.setupArgv as string[];}
+ if(v.setupArgv!==undefined){if(!Array.isArray(v.setupArgv)||v.setupArgv.length<3||v.setupArgv.length>MAX_REGRESSION_EXECUTION_ARGV||v.setupArgv.some(a=>!string(a))||v.setupArgv[0]!=='npm'||v.setupArgv[1]!=='ci'||!v.setupArgv.includes('--ignore-scripts')||v.setupArgv.slice(2).some(a=>!['--ignore-scripts','--offline','--no-audit','--no-fund'].includes(a)))return invalid();setupArgv=v.setupArgv as string[];}
  const budget=(key:string,def:number,max:number)=>{const n=v[key]??def;if(typeof n!=='number'||!Number.isInteger(n)||n<1||n>max)return invalid();return n;};
  return {schemaVersion:1,id:v.id,base:v.base,head:v.head,runner:'vitest',testFiles,supportFiles,assertion:{fullName:assertion.fullName,expectedFailureText:assertion.expectedFailureText},...(setupArgv?{setupArgv}:{}),runArgv:expected,timeoutMs:budget('timeoutMs',120000,600000),setupTimeoutMs:budget('setupTimeoutMs',600000,600000),maxOutputBytes:budget('maxOutputBytes',65536,1048576)};
 }
 export function readRegressionManifest(path:string):RegressionManifest {try{return normalizeRegressionManifest(readBoundedJson(path,1048576));}catch{throw new Error('Invalid regression input: manifest must be bounded regular JSON');}}
 export function gitRead(cwd:string,args:string[],binary=false):Buffer {
- const r=spawnSync('git',args,{cwd,shell:false,maxBuffer:2*1048576,timeout:10000,env:{...process.env,GIT_CONFIG_COUNT:'0',GIT_OPTIONAL_LOCKS:'0',GIT_TERMINAL_PROMPT:'0'}});
+ const r=spawnSync('git',args,{cwd,shell:false,maxBuffer:2*1048576,timeout:10000,env:isolatedGitEnvironment()});
  if(r.status!==0||r.error)throw new Error('Invalid regression input: Git query failed');return binary?r.stdout:Buffer.from(r.stdout.toString());
 }
 export function sourceFingerprint(cwd:string):string {return digest(canonicalJson(getWorktreeFingerprint(cwd,['.quorate/regressions'])));}

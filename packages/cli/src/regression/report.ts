@@ -7,15 +7,16 @@ import { z } from 'zod';
 import { classifyRegressionPair, type RegressionIssue, type RegressionReport, type RegressionRunResult } from '@quorate/core';
 import { preflightSecureWorkspaceState, writeSecureWorkspaceState } from '../secure-state.js';
 import { redactProofText } from '../proof-runner.js';
-import { canonicalJson, digest, readBoundedJson, sourceFingerprint } from './manifest.js';
+import { canonicalJson, digest, readBoundedJson, sourceFingerprint, MAX_REGRESSION_EXECUTION_ARGV } from './manifest.js';
 const hex=z.string().regex(/^[a-f0-9]{64}$/),sha=z.string().regex(/^[a-f0-9]{40}$/);
 const reason=z.enum(['reproduced-and-fixed','not-reproduced','not-fixed','unexpected-failure','setup-failed','environment-delta','missing-assertion','duplicate-assertion','skipped-assertion','invalid-output','incomplete-output','timeout','cancelled','input-mutated','cleanup-failed','unsupported-runner','unsupported-platform','unsupported-config','invalid-input']);
 const issue=z.object({phase:z.enum(['preflight','setup','base','head','cleanup']),reason,detail:z.string().max(8192)}).strict();
 const observation=z.object({execution:z.enum(['complete','incomplete']),assertionStatus:z.enum(['passed','failed','missing','duplicate','skipped']),expectedFailureMatched:z.boolean(),exitCode:z.number().int().nullable(),issues:z.array(issue).max(1000)}).strict();
 const output=z.object({text:z.string().max(1048576),truncated:z.boolean()}).strict();
-const execution=z.object({phase:z.enum(['setup','base','head']),target:z.enum(['base','head']),argv:z.array(z.string().max(8192)).max(100),result:z.object({exitCode:z.number().int().nullable(),timedOut:z.boolean(),aborted:z.boolean(),stdout:output,stderr:output,cleanupFailed:z.boolean(),durationMs:z.number().nonnegative()}).strict(),fingerprint:hex,runnerVersion:z.string().max(80).nullable(),observation:observation.optional()}).strict();
+const execution=z.object({phase:z.enum(['setup','base','head']),target:z.enum(['base','head']),argv:z.array(z.string().max(8192)).max(MAX_REGRESSION_EXECUTION_ARGV),result:z.object({exitCode:z.number().int().nullable(),timedOut:z.boolean(),aborted:z.boolean(),stdout:output,stderr:output,cleanupFailed:z.boolean(),durationMs:z.number().nonnegative()}).strict(),fingerprint:hex,runnerVersion:z.string().max(80).nullable(),observation:observation.optional()}).strict();
 const reportSchema=z.object({schemaVersion:z.literal(1),kind:z.literal('regression'),id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/),baseSha:sha,headSha:sha,sourceFingerprint:hex,manifestDigest:hex,bundleDigest:hex,environmentDigest:hex,nodeVersion:z.string().max(80),decision:z.object({state:z.enum(['verified','contradicted','inconclusive']),reason,issues:z.array(issue).max(1000)}).strict(),executions:z.array(execution).max(4),startedAt:z.string().datetime(),finishedAt:z.string().datetime(),durationMs:z.number().nonnegative(),trustMode:z.literal('local-assertion'),producer:z.literal('quorate-local'),artifactHash:hex,signature:hex}).strict();
 export const defaultRegressionKeyDir=()=>resolve(process.env.QUORATE_REGRESSION_KEY_DIR??join(homedir(),'.quorate/regressions'));
+export const resolveRegressionKeyDir = (cwd:string, explicit?:string):string => explicit === undefined ? defaultRegressionKeyDir() : resolve(cwd,explicit);
 function keyAt(dir:string,create:boolean):Buffer {
  if(create)mkdirSync(dir,{recursive:true,mode:0o700});
  const st=lstatSync(dir);if(!st.isDirectory()||st.isSymbolicLink()||(process.platform!=='win32'&&(st.mode&0o777)!==0o700)||realpathSync(dir)!==resolve(dir))throw new Error('Untrusted regression key directory');
