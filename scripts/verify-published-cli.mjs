@@ -6,7 +6,9 @@ import { pathToFileURL } from 'node:url';
 const transient = /E404|ETARGET|ETIMEDOUT|ECONNRESET|EAI_AGAIN|ENOTFOUND|ECONNREFUSED|E503|E502/i;
 async function run(argv, {cwd, timeoutMs}) {
   return new Promise(resolveResult => {
-    const child = spawn(argv[0], argv.slice(1), {cwd, shell:false, detached:process.platform!=='win32', stdio:['ignore','pipe','pipe']});
+    const executable = argv[0];
+    const arguments_ = argv.slice(1);
+    const child = spawn(executable, arguments_, {cwd, shell:false, detached:process.platform!=='win32', stdio:['ignore','pipe','pipe']});
     let stdout='',stderr='',bytes=0,settled=false,timedOut=false,outputLimit=false;
     const kill=()=>{try{if(child.pid&&process.platform!=='win32')process.kill(-child.pid,'SIGKILL');else child.kill('SIGKILL');}catch{}};
     const timer=setTimeout(()=>{timedOut=true;kill();},timeoutMs);
