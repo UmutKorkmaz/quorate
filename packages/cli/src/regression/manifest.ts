@@ -43,10 +43,10 @@ export function gitRead(cwd:string,args:string[],binary=false):Buffer {
 }
 export function sourceFingerprint(cwd:string):string {return digest(canonicalJson(getWorktreeFingerprint(cwd,['.quorate/regressions'])));}
 export function resolveRegressionInput(cwd:string,rawManifest:RegressionManifest):ResolvedRegressionInput {
- const manifest=normalizeRegressionManifest(rawManifest),sourceRoot=realpathSync(gitRead(cwd,['rev-parse','--show-toplevel']).toString().trim());
- // Git and the native filesystem can spell the same Windows root differently.
+ const manifest=normalizeRegressionManifest(rawManifest),sourceRoot=realpathSync.native(gitRead(cwd,['rev-parse','--show-toplevel']).toString().trim());
+ // Native resolution expands Windows short-name aliases such as RUNNER~1.
  // Both paths are canonical; compare them using the platform's path semantics.
- if(relative(realpathSync(cwd),sourceRoot)!=='')throw new Error('Invalid regression input: select repository root');
+ if(relative(realpathSync.native(cwd),sourceRoot)!=='')throw new Error('Invalid regression input: select repository root');
  const baseSha=gitRead(sourceRoot,['rev-parse','--verify',`${manifest.base}^{commit}`]).toString().trim(),headSha=gitRead(sourceRoot,['rev-parse','--verify',`${manifest.head}^{commit}`]).toString().trim();
  if(!/^[a-f0-9]{40}$/.test(baseSha)||!/^[a-f0-9]{40}$/.test(headSha))return invalid();
  gitRead(sourceRoot,['merge-base','--is-ancestor',baseSha,headSha]);

@@ -8,7 +8,8 @@ function read(value:unknown){const dir=mkdtempSync(join(tmpdir(),'regression-man
 it('canonicalizes the native temporary root and Git root to the same directory',()=>{
  const f=regressionFixture();try{
   const gitRoot=git(f.root,'rev-parse','--show-toplevel');
-  expect(relative(realpathSync(f.root),realpathSync(gitRoot)),JSON.stringify({root:f.root,gitRoot,jsRoot:realpathSync(f.root),jsGitRoot:realpathSync(gitRoot),nativeRoot:realpathSync.native(f.root),nativeGitRoot:realpathSync.native(gitRoot)})).toBe('');
+  expect(relative(realpathSync.native(f.root),realpathSync.native(gitRoot))).toBe('');
+  expect(resolveRegressionInput(f.root,read(f.manifest)).sourceRoot).toBe(realpathSync.native(gitRoot));
  }finally{rmSync(f.root,{recursive:true,force:true});}
 });
 it('normalizes budgets and resolves exact revisions with committed assets',()=>{
