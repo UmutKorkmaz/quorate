@@ -51677,7 +51677,7 @@ function runHeuristicReview(request2, role = "maintainer") {
     for (const [ruleIndex, rule] of heuristicRules.entries()) {
       const skipRequestPathFsRule = rule.title === "Synchronous fs call in a request path" && (testLike || isNonRequestPath(line.file));
       const skipLongLineForPackRule = ruleIndex >= builtInRuleCount && text.length > PACK_RULE_MAX_LINE_LENGTH;
-      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount && rule.title === "await inside a loop (serialized I/O)" && JS_TS_FILE_RE.test(line.file ?? "") && (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
+      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount && rule.title === "await inside a loop (serialized I/O)" && JS_TS_FILE_RE.test(line.file ?? "") && !/\b(?:Infinity|NaN)\b|\bNumber\.(?:POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) && (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
       if (!skipRequestPathFsRule && !skipLongLineForPackRule && !skipBoundedTimerPolling && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }

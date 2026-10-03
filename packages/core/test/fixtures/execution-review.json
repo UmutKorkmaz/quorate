@@ -172,5 +172,23 @@
     "source": "spawn(user_input.argv[0], user_input.argv.slice(1), {shell:false});",
     "title": "Command injection (untrusted input in a shell command)",
     "flagged": true
+  },
+  {
+    "name": "nonfinite timer deadline while(Date.now()<Infinity)await sleep(10);",
+    "source": "while(Date.now()<Infinity)await sleep(10);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  },
+  {
+    "name": "nonfinite timer deadline while(Date.now()<Number.POSITIVE_INFINITY){await new Promise(r=>setTimeout(r,20));}",
+    "source": "while(Date.now()<Number.POSITIVE_INFINITY){await new Promise(r=>setTimeout(r,20));}",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  },
+  {
+    "name": "nonfinite timer deadline while(!ready()){if(Date.now()>NaN)throw Error(\"timeout\");await sleep(10);}",
+    "source": "while(!ready()){if(Date.now()>NaN)throw Error(\"timeout\");await sleep(10);}",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
   }
 ]

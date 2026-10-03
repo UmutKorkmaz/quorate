@@ -255,6 +255,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       const skipBoundedTimerPolling = ruleIndex < builtInRuleCount &&
         rule.title === "await inside a loop (serialized I/O)" &&
         JS_TS_FILE_RE.test(line.file ?? "") &&
+        !/\b(?:Infinity|NaN)\b|\bNumber\.(?:POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) &&
         (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
       if (
         !skipRequestPathFsRule &&
