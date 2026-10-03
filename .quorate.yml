@@ -25,7 +25,7 @@ providers:
     apiKeyEnv: GLM_API_KEY
     roles: [architect, security, performance]
     enabled: true
-    timeoutMs: 180000
+    timeoutMs: 360000
     maxOutputBytes: 1000000
 
   # Claude — the default profile's `--max-budget-usd 0.25` is REMOVED. With a

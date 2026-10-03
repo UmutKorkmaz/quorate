@@ -51666,7 +51666,8 @@ function runHeuristicReview(request2, role = "maintainer") {
     for (const [ruleIndex, rule] of heuristicRules.entries()) {
       const skipRequestPathFsRule = rule.title === "Synchronous fs call in a request path" && (testLike || isNonRequestPath(line.file));
       const skipLongLineForPackRule = ruleIndex >= builtInRuleCount && text.length > PACK_RULE_MAX_LINE_LENGTH;
-      if (!skipRequestPathFsRule && !skipLongLineForPackRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount && rule.title === "await inside a loop (serialized I/O)" && /\bwhile\s*\(/.test(text) && /Date\.now\(\)\s*[<>]/.test(text) && (/\bawait\s+sleep\s*\(/.test(text) || /\bawait\s+new\s+Promise\b[^;]*setTimeout\s*\(/.test(text));
+      if (!skipRequestPathFsRule && !skipLongLineForPackRule && !skipBoundedTimerPolling && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }
@@ -52347,7 +52348,8 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "A server-side HTTP request is constructed from untrusted user input. An attacker can supply an internal URL (e.g. http://169.254.169.254/) to pivot to internal services or cloud metadata. Allow-list permitted hosts/schemes and block private IP ranges before making any server-side request."
       });
     }
-    if (/\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") && /(exec|execSync|spawn|spawnSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text)) {
+    const literalArgvSpawn = /\b(?:spawn|spawnSync)\s*\(/.test(text) && /,\s*\{[^{}]*\bshell\s*:\s*false\b[^{}]*\}\s*\)/.test(text) && (text.match(/\bshell\s*:/g)?.length ?? 0) === 1 && !text.includes("...");
+    if (/\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") && (/(exec|execSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text) || !literalArgvSpawn && /\b(?:spawn|spawnSync)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text))) {
       findings.push({
         ...base,
         severity: "critical",

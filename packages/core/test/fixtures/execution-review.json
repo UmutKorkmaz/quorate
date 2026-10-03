@@ -1,0 +1,80 @@
+[
+  {
+    "name": "literal argv with explicit shell false",
+    "source": "spawn(argv[0], argv.slice(1), {cwd, shell:false, detached:true, stdio:['ignore','pipe','pipe']});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": false
+  },
+  {
+    "name": "synchronous literal argv",
+    "source": "spawnSync(argv[0], argv.slice(1), {cwd, shell: false});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": false
+  },
+  {
+    "name": "shell enabled spawn",
+    "source": "spawn(argv[0], argv.slice(1), {shell:true});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "unknown shell options remain flagged",
+    "source": "spawn(argv[0], argv.slice(1), options);",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "later options spread remains flagged",
+    "source": "spawn(argv[0], argv.slice(1), {shell:false, ...options});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "duplicate shell options remain flagged",
+    "source": "spawn(argv[0], argv.slice(1), {shell:false, shell:true});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "unsafe exec after safe spawn remains flagged",
+    "source": "spawn(argv[0], argv.slice(1), {shell:false}); exec(request.body.command);",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "shell exec remains flagged",
+    "source": "exec(request.body.command);",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "bounded sleep polling",
+    "source": "while(alive() && Date.now()<deadline) await sleep(10);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": false
+  },
+  {
+    "name": "bounded timer promise polling",
+    "source": "while(!ready()){if(Date.now()>deadline)throw Error('timeout');await new Promise(r=>setTimeout(r,20));}",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": false
+  },
+  {
+    "name": "unbounded sleep loop remains flagged",
+    "source": "while(alive()) await sleep(10);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  },
+  {
+    "name": "bounded serialized IO remains flagged",
+    "source": "while(Date.now()<deadline) await fetch(url);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  },
+  {
+    "name": "serialized collection IO remains flagged",
+    "source": "for(const item of items) await fetch(item.url);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  }
+]

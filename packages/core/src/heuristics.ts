@@ -235,9 +235,17 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       // Pack-supplied regexes: skip pathologically long lines (ReDoS guard).
       const skipLongLineForPackRule =
         ruleIndex >= builtInRuleCount && text.length > PACK_RULE_MAX_LINE_LENGTH;
+      // Ordered timer polling with a deadline is intentionally sequential.
+      // Keep arbitrary I/O loops and custom pack rules subject to review.
+      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount &&
+        rule.title === "await inside a loop (serialized I/O)" &&
+        /\bwhile\s*\(/.test(text) && /Date\.now\(\)\s*[<>]/.test(text) &&
+        (/\bawait\s+sleep\s*\(/.test(text) ||
+          /\bawait\s+new\s+Promise\b[^;]*setTimeout\s*\(/.test(text));
       if (
         !skipRequestPathFsRule &&
         !skipLongLineForPackRule &&
+        !skipBoundedTimerPolling &&
         (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) &&
         rule.textRe.test(text)
       ) {
@@ -1429,9 +1437,15 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       });
     }
 
+    // An explicit literal options object with exactly one shell:false and no
+    // spreads cannot reinterpret argv as shell syntax. Other calls stay flagged.
+    const literalArgvSpawn = /\b(?:spawn|spawnSync)\s*\(/.test(text) &&
+      /,\s*\{[^{}]*\bshell\s*:\s*false\b[^{}]*\}\s*\)/.test(text) &&
+      (text.match(/\bshell\s*:/g)?.length ?? 0) === 1 && !text.includes("...");
     if (
       /\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") &&
-      /(exec|execSync|spawn|spawnSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text)
+      (/(exec|execSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text) ||
+        (!literalArgvSpawn && /\b(?:spawn|spawnSync)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text)))
     ) {
       findings.push({
         ...base,
