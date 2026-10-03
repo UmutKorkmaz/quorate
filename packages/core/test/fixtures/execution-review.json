@@ -76,5 +76,59 @@
     "source": "for(const item of items) await fetch(item.url);",
     "title": "await inside a loop (serialized I/O)",
     "flagged": true
+  },
+  {
+    "name": "boolean shell expression remains flagged",
+    "source": "spawn(argv[0], argv.slice(1), {shell:false || true});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "quoted shell override remains flagged",
+    "source": "spawn(argv[0], argv.slice(1), {shell:false, 'shell':true});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "computed shell override remains flagged",
+    "source": "spawn(argv[0], argv.slice(1), {shell:false, [\"shell\"]:true});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "separate unsafe spawn remains flagged",
+    "source": "spawn(argv[0], argv.slice(1), {shell:false}); spawn(request.body.command, [], options);",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "spread before explicit shell remains flagged",
+    "source": "spawn(argv[0], argv.slice(1), {...options, shell:false});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "IO mixed with sleep remains flagged",
+    "source": "while(Date.now()<deadline){await fetch(url);await sleep(10);}",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  },
+  {
+    "name": "unused deadline comparison remains flagged",
+    "source": "while(true){console.log(Date.now()>deadline);await sleep(10);}",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  },
+  {
+    "name": "separate IO loop remains flagged",
+    "source": "while(alive()&&Date.now()<deadline)await sleep(10);for(const item of items)await fetch(item.url);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
+  },
+  {
+    "name": "nonterminating OR condition remains flagged",
+    "source": "while(alive()||Date.now()<deadline)await sleep(10);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": true
   }
 ]

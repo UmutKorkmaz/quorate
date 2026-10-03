@@ -1,6 +1,19 @@
 import type { CouncilRequest, CustomHeuristicRule, Finding, ProviderResult } from "./types.js";
 import { PACK_HEURISTIC_RULES } from "./pack-heuristics.js";
 
+// These conservative whole-line shapes recognize only one known safe operation.
+// Ambiguous syntax, additional calls, spreads, and unknown options stay flagged.
+const MEMBER = String.raw`[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*`;
+const STRING_LITERAL = String.raw`(?:'[^'\\\r\n]*'|"[^"\\\r\n]*")`;
+const SPAWN_PROPERTY = String.raw`(?:shell\s*:\s*false|(?:cwd|env)(?:\s*:\s*${MEMBER})?|detached\s*:\s*(?:true|false)|stdio\s*:\s*\[\s*${STRING_LITERAL}(?:\s*,\s*${STRING_LITERAL})*\s*\])`;
+const LITERAL_ARGV_SPAWN = new RegExp(String.raw`^\s*(?:(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*)?(?:spawn|spawnSync)\s*\(\s*(${MEMBER})\[0\]!?\s*,\s*\1\.slice\(1\)\s*,\s*\{\s*${SPAWN_PROPERTY}(?:\s*,\s*${SPAWN_PROPERTY})*\s*,?\s*\}\s*\)\s*;?\s*$`);
+const BOOLEAN_ATOM = String.raw`!?${MEMBER}(?:\(\))?`;
+const POLLING_CONDITION = String.raw`(?:${BOOLEAN_ATOM}|\(\s*${BOOLEAN_ATOM}(?:\s*(?:\|\||&&)\s*${BOOLEAN_ATOM})+\s*\))`;
+const TIMER_AWAIT = String.raw`await\s+(?:sleep\(\s*\d+\s*\)|new\s+Promise\(\s*([A-Za-z_$][\w$]*)\s*=>\s*setTimeout\(\s*\1\s*,\s*\d+\s*\)\s*\))\s*;`;
+const BOUNDED_TIMER_LOOP = new RegExp(String.raw`^\s*while\s*\(\s*(?:${POLLING_CONDITION}\s*&&\s*)?Date\.now\(\)\s*<\s*${MEMBER}\s*\)\s*(?:${TIMER_AWAIT}|\{\s*${TIMER_AWAIT}\s*\})\s*$`);
+// Separate pattern keeps the timer callback backreference local to this regex.
+const GUARDED_TIMER_LOOP = new RegExp(String.raw`^\s*while\s*\(\s*${POLLING_CONDITION}\s*\)\s*\{\s*if\s*\(\s*Date\.now\(\)\s*>\s*${MEMBER}\s*\)\s*throw\s+(?:new\s+)?Error\(\s*${STRING_LITERAL}\s*\)\s*;\s*${TIMER_AWAIT}\s*\}\s*$`);
+
 export interface DiffLine {
   file?: string;
   line?: number;
@@ -239,9 +252,8 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       // Keep arbitrary I/O loops and custom pack rules subject to review.
       const skipBoundedTimerPolling = ruleIndex < builtInRuleCount &&
         rule.title === "await inside a loop (serialized I/O)" &&
-        /\bwhile\s*\(/.test(text) && /Date\.now\(\)\s*[<>]/.test(text) &&
-        (/\bawait\s+sleep\s*\(/.test(text) ||
-          /\bawait\s+new\s+Promise\b[^;]*setTimeout\s*\(/.test(text));
+        JS_TS_FILE_RE.test(line.file ?? "") &&
+        (BOUNDED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
       if (
         !skipRequestPathFsRule &&
         !skipLongLineForPackRule &&
@@ -1437,11 +1449,9 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       });
     }
 
-    // An explicit literal options object with exactly one shell:false and no
-    // spreads cannot reinterpret argv as shell syntax. Other calls stay flagged.
-    const literalArgvSpawn = /\b(?:spawn|spawnSync)\s*\(/.test(text) &&
-      /,\s*\{[^{}]*\bshell\s*:\s*false\b[^{}]*\}\s*\)/.test(text) &&
-      (text.match(/\bshell\s*:/g)?.length ?? 0) === 1 && !text.includes("...");
+    const literalArgvSpawn = JS_TS_FILE_RE.test(line.file ?? "") &&
+      LITERAL_ARGV_SPAWN.test(text) &&
+      (text.match(/\bshell\s*:/g)?.length ?? 0) === 1;
     if (
       /\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") &&
       (/(exec|execSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text) ||
