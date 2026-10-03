@@ -22,7 +22,7 @@ it.skipIf(process.platform==='win32')('times out a TERM-resistant command',async
 it.skipIf(process.platform==='win32')('cancels owned descendants and preserves a sentinel',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'bounded-command-')),file=join(dir,'pids'),controller=new AbortController();
  const sentinel=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});
- const script=`const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],{stdio:'ignore'});process.on('SIGTERM',()=>{});require('node:fs').writeFileSync(${JSON.stringify(file)},JSON.stringify([process.pid,c.pid]));setInterval(()=>{},1000);`;
+ const script=`const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],{stdio:'ignore'});process.on('SIGTERM',()=>{});const fs=require('node:fs');fs.writeFileSync(${JSON.stringify(file+'.tmp')},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(file+'.tmp')},${JSON.stringify(file)});setInterval(()=>{},1000);`;
  let ids:number[]=[];
  try{
   const promise=executeBoundedCommand({...base,argv:[process.execPath,'-e',script],signal:controller.signal});

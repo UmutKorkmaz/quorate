@@ -33,7 +33,7 @@ it("interrupted seal overrides a provisional done verdict",()=>{
 it.skipIf(process.platform==="win32").each([["SIGINT",130],["SIGTERM",143]] as const)("%s tears down reviewer descendants and preserves an unrelated process",async(signal,exit)=>{
  const root=mkdtempSync(join(tmpdir(),"quorate-cancel-")),marker=join(root,"pids.json");
  const script=join(root,"slow.cjs"),config=join(root,"config.yml");
- writeFileSync(script,`const {spawn}=require('node:child_process');const {writeFileSync}=require('node:fs');process.on('SIGTERM',()=>{});const child=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],{stdio:'ignore'});writeFileSync(${JSON.stringify(marker)},JSON.stringify([process.pid,child.pid]));setInterval(()=>{},1000);`);
+ writeFileSync(script,`const {spawn}=require('node:child_process');const {writeFileSync,renameSync}=require('node:fs');process.on('SIGTERM',()=>{});const child=spawn(process.execPath,['-e',"process.on('SIGTERM',()=>{});setInterval(()=>{},1000)"],{stdio:'ignore'});writeFileSync(${JSON.stringify(marker+'.tmp')},JSON.stringify([process.pid,child.pid]));renameSync(${JSON.stringify(marker+'.tmp')},${JSON.stringify(marker)});setInterval(()=>{},1000);`);
  writeFileSync(config,JSON.stringify({version:1,councils:["maintainer"],providers:[{id:"fixture",type:"cli",enabled:true,command:process.execPath,args:[script],inputMode:"none",roles:["maintainer"],timeoutMs:60000,killGraceMs:100}]}));
  writeFileSync(join(root,"diff.patch"),"diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -0,0 +1 @@\n+const ok = true;\n");
  const sentinel=spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{stdio:"ignore"});
