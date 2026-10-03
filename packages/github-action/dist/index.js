@@ -51509,8 +51509,6 @@ var PACK_HEURISTIC_RULES = RAW_PACK_HEURISTIC_RULES.map((rule) => ({
 // ../core/src/heuristics.ts
 var MEMBER = String.raw`[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*`;
 var STRING_LITERAL = String.raw`(?:'[^'\\\r\n]*'|"[^"\\\r\n]*")`;
-var SPAWN_PROPERTY = String.raw`(?:shell\s*:\s*false|(?:cwd|env)(?:\s*:\s*${MEMBER})?|detached\s*:\s*(?:true|false)|stdio\s*:\s*\[\s*${STRING_LITERAL}(?:\s*,\s*${STRING_LITERAL})*\s*\])`;
-var LITERAL_ARGV_SPAWN = new RegExp(String.raw`^\s*(?:(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*)?(?:spawn|spawnSync)\s*\(\s*(${MEMBER})\[0\]!?\s*,\s*\1\.slice\(1\)\s*,\s*\{\s*${SPAWN_PROPERTY}(?:\s*,\s*${SPAWN_PROPERTY})*\s*,?\s*\}\s*\)\s*;?\s*$`);
 var BOOLEAN_ATOM = String.raw`!?${MEMBER}(?:\(\))?`;
 var POLLING_CONDITION = String.raw`(?:${BOOLEAN_ATOM}|\(\s*${BOOLEAN_ATOM}(?:\s*(?:\|\||&&)\s*${BOOLEAN_ATOM})+\s*\))`;
 var TIMER_AWAIT = String.raw`await\s+(?:sleep\(\s*\d+\s*\)|new\s+Promise\(\s*([A-Za-z_$][\w$]*)\s*=>\s*setTimeout\(\s*\1\s*,\s*\d+\s*\)\s*\))\s*;`;
@@ -51677,7 +51675,7 @@ function runHeuristicReview(request2, role = "maintainer") {
     for (const [ruleIndex, rule] of heuristicRules.entries()) {
       const skipRequestPathFsRule = rule.title === "Synchronous fs call in a request path" && (testLike || isNonRequestPath(line.file));
       const skipLongLineForPackRule = ruleIndex >= builtInRuleCount && text.length > PACK_RULE_MAX_LINE_LENGTH;
-      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount && rule.title === "await inside a loop (serialized I/O)" && JS_TS_FILE_RE.test(line.file ?? "") && !/\b(?:Infinity|NaN)\b|\bNumber\.(?:POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) && (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
+      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount && rule.title === "await inside a loop (serialized I/O)" && JS_TS_FILE_RE.test(line.file ?? "") && text.length <= PACK_RULE_MAX_LINE_LENGTH && /\bwhile\b/.test(text) && /\bawait\b/.test(text) && !/\b(?:Infinity|NaN|POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) && (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
       if (!skipRequestPathFsRule && !skipLongLineForPackRule && !skipBoundedTimerPolling && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
@@ -52359,8 +52357,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "A server-side HTTP request is constructed from untrusted user input. An attacker can supply an internal URL (e.g. http://169.254.169.254/) to pivot to internal services or cloud metadata. Allow-list permitted hosts/schemes and block private IP ranges before making any server-side request."
       });
     }
-    const literalArgvSpawn = JS_TS_FILE_RE.test(line.file ?? "") && LITERAL_ARGV_SPAWN.test(text) && !/\b(?:req|request|params|user_?input)\b/.test(text) && (text.match(/\bshell\s*:/g)?.length ?? 0) === 1;
-    if (/\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") && (/(exec|execSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text) || !literalArgvSpawn && /\b(?:spawn|spawnSync)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text))) {
+    if (/\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") && /(exec|execSync|spawn|spawnSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text)) {
       findings.push({
         ...base,
         severity: "critical",

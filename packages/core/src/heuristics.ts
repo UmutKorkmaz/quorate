@@ -2,11 +2,9 @@ import type { CouncilRequest, CustomHeuristicRule, Finding, ProviderResult } fro
 import { PACK_HEURISTIC_RULES } from "./pack-heuristics.js";
 
 // These conservative whole-line shapes recognize only one known safe operation.
-// Ambiguous syntax, additional calls, spreads, and unknown options stay flagged.
+// Ambiguous syntax and additional awaited work stay flagged.
 const MEMBER = String.raw`[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*`;
 const STRING_LITERAL = String.raw`(?:'[^'\\\r\n]*'|"[^"\\\r\n]*")`;
-const SPAWN_PROPERTY = String.raw`(?:shell\s*:\s*false|(?:cwd|env)(?:\s*:\s*${MEMBER})?|detached\s*:\s*(?:true|false)|stdio\s*:\s*\[\s*${STRING_LITERAL}(?:\s*,\s*${STRING_LITERAL})*\s*\])`;
-const LITERAL_ARGV_SPAWN = new RegExp(String.raw`^\s*(?:(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*)?(?:spawn|spawnSync)\s*\(\s*(${MEMBER})\[0\]!?\s*,\s*\1\.slice\(1\)\s*,\s*\{\s*${SPAWN_PROPERTY}(?:\s*,\s*${SPAWN_PROPERTY})*\s*,?\s*\}\s*\)\s*;?\s*$`);
 const BOOLEAN_ATOM = String.raw`!?${MEMBER}(?:\(\))?`;
 const POLLING_CONDITION = String.raw`(?:${BOOLEAN_ATOM}|\(\s*${BOOLEAN_ATOM}(?:\s*(?:\|\||&&)\s*${BOOLEAN_ATOM})+\s*\))`;
 const TIMER_AWAIT = String.raw`await\s+(?:sleep\(\s*\d+\s*\)|new\s+Promise\(\s*([A-Za-z_$][\w$]*)\s*=>\s*setTimeout\(\s*\1\s*,\s*\d+\s*\)\s*\))\s*;`;
@@ -255,7 +253,9 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       const skipBoundedTimerPolling = ruleIndex < builtInRuleCount &&
         rule.title === "await inside a loop (serialized I/O)" &&
         JS_TS_FILE_RE.test(line.file ?? "") &&
-        !/\b(?:Infinity|NaN)\b|\bNumber\.(?:POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) &&
+        text.length <= PACK_RULE_MAX_LINE_LENGTH &&
+        /\bwhile\b/.test(text) && /\bawait\b/.test(text) &&
+        !/\b(?:Infinity|NaN|POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) &&
         (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
       if (
         !skipRequestPathFsRule &&
@@ -1452,14 +1452,9 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       });
     }
 
-    const literalArgvSpawn = JS_TS_FILE_RE.test(line.file ?? "") &&
-      LITERAL_ARGV_SPAWN.test(text) &&
-      !/\b(?:req|request|params|user_?input)\b/.test(text) &&
-      (text.match(/\bshell\s*:/g)?.length ?? 0) === 1;
     if (
       /\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") &&
-      (/(exec|execSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text) ||
-        (!literalArgvSpawn && /\b(?:spawn|spawnSync)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text)))
+      /(exec|execSync|spawn|spawnSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text)
     ) {
       findings.push({
         ...base,

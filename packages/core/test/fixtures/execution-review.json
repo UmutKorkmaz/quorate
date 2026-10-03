@@ -3,13 +3,13 @@
     "name": "literal argv with explicit shell false",
     "source": "spawn(argv[0], argv.slice(1), {cwd, shell:false, detached:true, stdio:['ignore','pipe','pipe']});",
     "title": "Command injection (untrusted input in a shell command)",
-    "flagged": false
+    "flagged": true
   },
   {
     "name": "synchronous literal argv",
     "source": "spawnSync(argv[0], argv.slice(1), {cwd, shell: false});",
     "title": "Command injection (untrusted input in a shell command)",
-    "flagged": false
+    "flagged": true
   },
   {
     "name": "shell enabled spawn",
@@ -135,7 +135,7 @@
     "name": "production argv options",
     "source": "const child=spawn(options.argv[0]!,options.argv.slice(1),{cwd:options.cwd,env:options.env,shell:false,detached:true,stdio:['ignore','pipe','pipe']});",
     "title": "Command injection (untrusted input in a shell command)",
-    "flagged": false
+    "flagged": true
   },
   {
     "name": "production grouped condition",
