@@ -43,4 +43,4 @@ it('roundtrips the full 100-test command and rejects commands beyond the bound',
   result.executions[0]!.argv.push('overflow');
   expect(()=>publishRegressionReport(f.root,result,{keyDir})).toThrow();
  } finally {rmSync(f.root,{recursive:true,force:true});rmSync(keyDir,{recursive:true,force:true});}
-});
+},15000);

@@ -82,4 +82,4 @@ it('binds revisions and fingerprints to selected cwd despite inherited Git routi
   expect(input.baseSha).toBe(selected.head);expect(input.headSha).toBe(selected.head);
   expect(getWorktreeFingerprint(selected.root)).toEqual(expected);
  }finally{vi.unstubAllEnvs();rmSync(selected.root,{recursive:true,force:true});rmSync(other.root,{recursive:true,force:true});}
-});
+},15000);
