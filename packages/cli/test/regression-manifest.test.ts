@@ -1,10 +1,16 @@
 import { expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readRegressionManifest, resolveRegressionInput } from '../src/regression/manifest.js';
 import { regressionFixture, git } from './regression-fixture.js';
 function read(value:unknown){const dir=mkdtempSync(join(tmpdir(),'regression-manifest-')),file=join(dir,'manifest.json');writeFileSync(file,JSON.stringify(value));try{return readRegressionManifest(file);}finally{rmSync(dir,{recursive:true,force:true});}}
+it('canonicalizes the native temporary root and Git root to the same directory',()=>{
+ const f=regressionFixture();try{
+  const gitRoot=git(f.root,'rev-parse','--show-toplevel');
+  expect(relative(realpathSync(f.root),realpathSync(gitRoot)),JSON.stringify({root:f.root,gitRoot,jsRoot:realpathSync(f.root),jsGitRoot:realpathSync(gitRoot),nativeRoot:realpathSync.native(f.root),nativeGitRoot:realpathSync.native(gitRoot)})).toBe('');
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
 it('normalizes budgets and resolves exact revisions with committed assets',()=>{
  const f=regressionFixture();try{const m=read(f.manifest);expect(m.timeoutMs).toBe(120000);expect(m.setupTimeoutMs).toBe(600000);expect(m.maxOutputBytes).toBe(65536);const input=resolveRegressionInput(f.root,m);expect(input.baseSha).toBe(f.base);expect(input.headSha).toBe(f.head);expect(input.issues).toEqual([]);expect(input.assets[0]?.bytes).toEqual(readFileSync(join(f.root,'test/value.test.js')));expect(input.bundleDigest).toMatch(/^[a-f0-9]{64}$/);}finally{rmSync(f.root,{recursive:true,force:true});}
 });
