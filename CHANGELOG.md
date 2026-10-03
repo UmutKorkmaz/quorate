@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   align report argument bounds with 100 selected tests, and resolve explicit keys
   against the command cwd.
 - Recognize bounded timer-only polling and cancel superseded self-review runs.
+- Upgrade the VS Code packaging tool to remove its vulnerable brace-pattern
+  dependency chain; extension packaging and type checks pass with Node 22.22+.
 
 ### Verification
 
