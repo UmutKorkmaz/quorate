@@ -25,3 +25,37 @@ Final fresh review found three Important issues: inconsistent suite counters, ca
 Final type checks, JS builds, GitHub App build/typecheck, website build, VSIX packaging, shell syntax and diff whitespace checks passed. Fresh candidate tarball journeys again returned 0/verified, 1/not-fixed and 2/setup-failed, each with valid explicit local trust and source/worktree preservation. The updated standalone verifier again installed published npm 1.4.1 successfully; that remains baseline evidence. No lint runner was available to the reviewer. The Git attachment fixture exceeded its original five-second test allowance under full-suite load twice; focused assertions passed, and the final suite passed after its test-only allowance became fifteen seconds. Product timeouts did not change.
 
 The owned native monitor, isolated VS Code profile process and isolated tmux server were stopped after acceptance. The development-host test folder, screenshot and ignored QA records remain available for the pending folder-trust/Fix-terminal check. Workspace trust and user extension state remain unchanged. The main checkout was unchanged throughout implementation acceptance; local integration is recorded separately. Final identity/artifact hashes are in `.superpowers/sdd/2026-10-02-regression-proof/final-candidate-identity.json`.
+
+## Release integration verification (2026-10-03)
+
+The historical acceptance above predates Git integration. The final feature
+candidate `d3900a03d28d2f21e244728fedac8953f666c7ad` aligns all workspaces at 1.5.0 and passed
+[Linux, macOS and Windows CI](https://github.com/UmutKorkmaz/quorate/actions/runs/37105253683).
+The [hosted review](https://github.com/UmutKorkmaz/quorate/actions/runs/37105253695)
+completed all provider lanes on retry but reported a high-severity Windows
+compatibility regression that independent source review rejected: v1.4.1
+already refused that execution in validateOptions. The first attempt also
+incorrectly claimed renameSync was missing, though the import exists. No severity
+gate or runtime containment was weakened to accommodate these findings.
+Independent source reviews also verified the final fixes and deterministic Action.
+
+Fresh local full-suite verification passed 144 files and 1,809 tests, with one
+skip. The tarball installed into an owned temporary directory passed regression
+run/show/verify, fixed (0), unfixed (1), and setup-failed/inconclusive (2) journeys,
+explicit local trust, a required review attachment, relative key paths under
+--cwd, and exact source/worktree preservation. Added boundary tests cover the full
+100-test manifest and rejection beyond its argument bounds. Git provenance is
+bound to the chosen repository despite inherited hook Git environment variables.
+
+Windows short-path aliases use native canonicalization. Git queries retain normal
+machine line-ending configuration while removing inherited Git environment
+overrides. Generic ProofRunner execution already refused Windows
+in 1.4.1, and regression execution retains that platform boundary. Read-only
+regression inspection and verification are exercised in the platform matrix.
+
+The native VS Code Fix-terminal launch remains pending explicit trust for the
+owned fixture folder. Installed-App acceptance remains pending HTTPS hosting,
+private credentials and a test installation; webhook delivery remains inactive
+as previously selected. These gaps are separate from CLI package acceptance.
+The release workflow performs the final clean-main matrix and GitHub-first OIDC
+publication; verify its outcome and the exact registry version for distribution.

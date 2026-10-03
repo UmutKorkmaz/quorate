@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and preserve unrelated processes.
 - Add a recovery verifier that installs an already published npm version without
   repeating publication.
+- Bind proof Git queries to the selected repository despite inherited Git routing,
+  align report argument bounds with 100 selected tests, and resolve explicit keys
+  against the command cwd.
+- Recognize bounded timer-only polling and cancel superseded self-review runs.
 
 ### Verification
 

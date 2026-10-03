@@ -20,12 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
+      - uses: UmutKorkmaz/quorate@d3900a03d28d2f21e244728fedac8953f666c7ad
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-The Action is pinned to the reviewed v1.4.0 bundle commit. Keep the full
+The Action is pinned to the reviewed v1.5.0 bundle commit. Keep the full
 40-character SHA in production workflows so upstream changes cannot alter a run.
 The release verifier proves that this commit is on `main` and its bundled Action
 is byte-identical to the release candidate.
@@ -71,7 +71,7 @@ providers:
 Then pass the key through as an environment variable:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
+      - uses: UmutKorkmaz/quorate@d3900a03d28d2f21e244728fedac8953f666c7ad
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         with:
@@ -119,7 +119,7 @@ committing.
 
 ```yaml
       - id: quorate
-        uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
+        uses: UmutKorkmaz/quorate@d3900a03d28d2f21e244728fedac8953f666c7ad
         with: { github-token: ${{ secrets.GITHUB_TOKEN }} }
       - if: steps.quorate.outputs.verdict == 'fail'
         run: echo "Quorate found ${{ steps.quorate.outputs.findings }} findings"
@@ -210,7 +210,7 @@ integrations:
 Then pass the key as a normal secret:
 
 ```yaml
-      - uses: UmutKorkmaz/quorate@e7d30fd090007fd25183e3bf053a8d9e536d338d
+      - uses: UmutKorkmaz/quorate@d3900a03d28d2f21e244728fedac8953f666c7ad
         env:
           WEBACY_API_KEY: ${{ secrets.WEBACY_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

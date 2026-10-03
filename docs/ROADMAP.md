@@ -1,7 +1,7 @@
 # Quorate Engineering Roadmap
 
 **Canonical status source**
-**As of:** v1.4.1 published · 2026-10-02
+**As of:** v1.5.0 implementation · 2026-10-03
 
 This file is the active engineering sequence. Product concepts in
 [`AI-PRODUCT-SUITE-PLAN.md`](./AI-PRODUCT-SUITE-PLAN.md) are horizon/backlog material, and
@@ -225,6 +225,8 @@ design-partner validation requires actual participants and held-out human labels
 ## Approved regression proof work (2026-10-02)
 
 Integration reliability repairs and the first Vitest regression-proof subsystem
-are being implemented locally. See [integration acceptance](INTEGRATION-ACCEPTANCE.md)
-for observed checks and pending native/platform evidence. This work does not imply
-new publication, hosted App delivery or design-partner validation.
+are merged for v1.5.0. Fresh local and Linux/macOS/Windows CI checks passed.
+See [integration acceptance](INTEGRATION-ACCEPTANCE.md) for exact evidence and
+pending native Fix-terminal and installed-App acceptance. Regression signatures
+remain explicit local assertions. Check the Release workflow and registry for
+distribution status; design-partner validation remains open.

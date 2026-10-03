@@ -1,6 +1,6 @@
 # Quorate Release Checklist
 
-Use this checklist for the v1.4.0 candidate and later releases. The order is
+Use this checklist for the v1.5.0 candidate and later releases. The order is
 deliberate: npm publication is the final distribution step, not the first proof.
 
 ## Automated entry point
@@ -8,7 +8,7 @@ deliberate: npm publication is the final distribution step, not the first proof.
 Run the release helper from the merged, clean `main` branch:
 
 ```bash
-npm run release:verify -- 1.4.0
+npm run release:verify -- 1.5.0
 ```
 
 Verification is the default and has no release side effects. It reproduces
@@ -20,7 +20,7 @@ checks, finalize the changelog date and run the publishing mode with an exact
 version confirmation:
 
 ```bash
-gh workflow run release.yml --ref main -f version=1.4.0
+gh workflow run release.yml --ref main -f version=1.5.0
 ```
 
 The manual workflow requires successful push CI for the exact main revision.
@@ -35,7 +35,7 @@ alone is not publication.
 After a successful run, verify the exact version and its provenance:
 
 ```bash
-npm view quorate@1.4.0 version dist.attestations
+npm view quorate@1.5.0 version dist.attestations
 ```
 
 npm may accept a publish while the version is still processing. The helper waits
@@ -132,7 +132,14 @@ and `origin/main` parity before it creates any release artifact. OIDC availabili
 is not proof of npm authorization; a rejected publish can leave the earlier Git
 tag and GitHub Release in place and requires recovery before another attempt.
 
-### v1.4.1 Action evidence
+### v1.5.0 Action evidence
+
+- Canonical reviewed Action commit: `d3900a03d28d2f21e244728fedac8953f666c7ad`.
+- Bundled runtime SHA-256: `756153f0e3ec125ca93502cff9893b0b17026e93cc3ac69c3bdc050123f5f783`.
+- Final feature CI: [Linux, macOS and Windows](https://github.com/UmutKorkmaz/quorate/actions/runs/37105253683).
+- Final feature review: [hosted findings](https://github.com/UmutKorkmaz/quorate/actions/runs/37105253695) completed all provider lanes on retry. Its high-severity Windows finding was rejected by independent source review against v1.4.1; see [acceptance adjudication](INTEGRATION-ACCEPTANCE.md#release-integration-verification-2026-10-03).
+
+### Historical v1.4.1 Action evidence
 
 - Canonical Action commit: `e7d30fd090007fd25183e3bf053a8d9e536d338d`,
   committed on `main` before the immutable-reference follow-up.
@@ -157,7 +164,7 @@ stage. Do not skip ahead to npm publication.
 After an accepted npm publication, rerun only:
 
 ```sh
-node scripts/verify-published-cli.mjs --version 1.4.1
+node scripts/verify-published-cli.mjs --version 1.5.0
 ```
 
 This verifier uses an isolated exact-version install with lifecycle scripts disabled,
