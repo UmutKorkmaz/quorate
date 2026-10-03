@@ -1,6 +1,19 @@
 import type { CouncilRequest, CustomHeuristicRule, Finding, ProviderResult } from "./types.js";
 import { PACK_HEURISTIC_RULES } from "./pack-heuristics.js";
 
+// These conservative whole-line shapes recognize only one known safe operation.
+// Ambiguous syntax and additional awaited work stay flagged.
+const MEMBER = String.raw`[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*`;
+const STRING_LITERAL = String.raw`(?:'[^'\\\r\n]*'|"[^"\\\r\n]*")`;
+const BOOLEAN_ATOM = String.raw`!?${MEMBER}(?:\(\))?`;
+const POLLING_CONDITION = String.raw`(?:${BOOLEAN_ATOM}|\(\s*${BOOLEAN_ATOM}(?:\s*(?:\|\||&&)\s*${BOOLEAN_ATOM})+\s*\))`;
+const TIMER_AWAIT = String.raw`await\s+(?:sleep\(\s*\d+\s*\)|new\s+Promise\(\s*([A-Za-z_$][\w$]*)\s*=>\s*setTimeout\(\s*\1\s*,\s*\d+\s*\)\s*\))\s*;`;
+const DEADLINE_WHILE = String.raw`^\s*while\s*\(\s*(?:${POLLING_CONDITION}\s*&&\s*)?Date\.now\(\)\s*<\s*${MEMBER}\s*\)\s*`;
+const BOUNDED_TIMER_LOOP = new RegExp(String.raw`${DEADLINE_WHILE}${TIMER_AWAIT}\s*$`);
+const BRACED_TIMER_LOOP = new RegExp(String.raw`${DEADLINE_WHILE}\{\s*${TIMER_AWAIT}\s*\}\s*$`);
+// Separate pattern keeps the timer callback backreference local to this regex.
+const GUARDED_TIMER_LOOP = new RegExp(String.raw`^\s*while\s*\(\s*${POLLING_CONDITION}\s*\)\s*\{\s*if\s*\(\s*Date\.now\(\)\s*>\s*${MEMBER}\s*\)\s*throw\s+(?:new\s+)?Error\(\s*${STRING_LITERAL}\s*\)\s*;\s*${TIMER_AWAIT}\s*\}\s*$`);
+
 export interface DiffLine {
   file?: string;
   line?: number;
@@ -235,9 +248,19 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       // Pack-supplied regexes: skip pathologically long lines (ReDoS guard).
       const skipLongLineForPackRule =
         ruleIndex >= builtInRuleCount && text.length > PACK_RULE_MAX_LINE_LENGTH;
+      // Ordered timer polling with a deadline is intentionally sequential.
+      // Keep arbitrary I/O loops and custom pack rules subject to review.
+      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount &&
+        rule.title === "await inside a loop (serialized I/O)" &&
+        JS_TS_FILE_RE.test(line.file ?? "") &&
+        text.length <= PACK_RULE_MAX_LINE_LENGTH &&
+        /\bwhile\b/.test(text) && /\bawait\b/.test(text) &&
+        !/\b(?:Infinity|NaN|POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) &&
+        (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
       if (
         !skipRequestPathFsRule &&
         !skipLongLineForPackRule &&
+        !skipBoundedTimerPolling &&
         (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) &&
         rule.textRe.test(text)
       ) {
