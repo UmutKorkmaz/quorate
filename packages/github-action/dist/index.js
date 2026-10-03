@@ -51507,6 +51507,15 @@ var PACK_HEURISTIC_RULES = RAW_PACK_HEURISTIC_RULES.map((rule) => ({
 }));
 
 // ../core/src/heuristics.ts
+var MEMBER = String.raw`[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*`;
+var STRING_LITERAL = String.raw`(?:'[^'\\\r\n]*'|"[^"\\\r\n]*")`;
+var BOOLEAN_ATOM = String.raw`!?${MEMBER}(?:\(\))?`;
+var POLLING_CONDITION = String.raw`(?:${BOOLEAN_ATOM}|\(\s*${BOOLEAN_ATOM}(?:\s*(?:\|\||&&)\s*${BOOLEAN_ATOM})+\s*\))`;
+var TIMER_AWAIT = String.raw`await\s+(?:sleep\(\s*\d+\s*\)|new\s+Promise\(\s*([A-Za-z_$][\w$]*)\s*=>\s*setTimeout\(\s*\1\s*,\s*\d+\s*\)\s*\))\s*;`;
+var DEADLINE_WHILE = String.raw`^\s*while\s*\(\s*(?:${POLLING_CONDITION}\s*&&\s*)?Date\.now\(\)\s*<\s*${MEMBER}\s*\)\s*`;
+var BOUNDED_TIMER_LOOP = new RegExp(String.raw`${DEADLINE_WHILE}${TIMER_AWAIT}\s*$`);
+var BRACED_TIMER_LOOP = new RegExp(String.raw`${DEADLINE_WHILE}\{\s*${TIMER_AWAIT}\s*\}\s*$`);
+var GUARDED_TIMER_LOOP = new RegExp(String.raw`^\s*while\s*\(\s*${POLLING_CONDITION}\s*\)\s*\{\s*if\s*\(\s*Date\.now\(\)\s*>\s*${MEMBER}\s*\)\s*throw\s+(?:new\s+)?Error\(\s*${STRING_LITERAL}\s*\)\s*;\s*${TIMER_AWAIT}\s*\}\s*$`);
 function addedLines(diff) {
   const result = [];
   let currentFile;
@@ -51666,7 +51675,8 @@ function runHeuristicReview(request2, role = "maintainer") {
     for (const [ruleIndex, rule] of heuristicRules.entries()) {
       const skipRequestPathFsRule = rule.title === "Synchronous fs call in a request path" && (testLike || isNonRequestPath(line.file));
       const skipLongLineForPackRule = ruleIndex >= builtInRuleCount && text.length > PACK_RULE_MAX_LINE_LENGTH;
-      if (!skipRequestPathFsRule && !skipLongLineForPackRule && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
+      const skipBoundedTimerPolling = ruleIndex < builtInRuleCount && rule.title === "await inside a loop (serialized I/O)" && JS_TS_FILE_RE.test(line.file ?? "") && text.length <= PACK_RULE_MAX_LINE_LENGTH && /\bwhile\b/.test(text) && /\bawait\b/.test(text) && !/\b(?:Infinity|NaN|POSITIVE_INFINITY|NEGATIVE_INFINITY)\b/.test(text) && (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
+      if (!skipRequestPathFsRule && !skipLongLineForPackRule && !skipBoundedTimerPolling && (rule.fileRe === null || rule.fileRe.test(line.file ?? "")) && rule.textRe.test(text)) {
         findings.push({ ...base, severity: rule.severity, title: rule.title, body: rule.body });
       }
     }
