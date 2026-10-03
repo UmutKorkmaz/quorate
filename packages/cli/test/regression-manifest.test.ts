@@ -8,6 +8,12 @@ function read(value:unknown){const dir=mkdtempSync(join(tmpdir(),'regression-man
 it('normalizes budgets and resolves exact revisions with committed assets',()=>{
  const f=regressionFixture();try{const m=read(f.manifest);expect(m.timeoutMs).toBe(120000);expect(m.setupTimeoutMs).toBe(600000);expect(m.maxOutputBytes).toBe(65536);const input=resolveRegressionInput(f.root,m);expect(input.baseSha).toBe(f.base);expect(input.headSha).toBe(f.head);expect(input.issues).toEqual([]);expect(input.assets[0]?.bytes).toEqual(readFileSync(join(f.root,'test/value.test.js')));expect(input.bundleDigest).toMatch(/^[a-f0-9]{64}$/);}finally{rmSync(f.root,{recursive:true,force:true});}
 });
+it('accepts a normalized root spelling but still refuses a nested directory',()=>{
+ const f=regressionFixture();try{
+  expect(resolveRegressionInput(f.root+'/',read(f.manifest)).sourceRoot).toBeTruthy();
+  expect(()=>resolveRegressionInput(join(f.root,'test'),read(f.manifest))).toThrow(/repository root/);
+ }finally{rmSync(f.root,{recursive:true,force:true});}
+});
 it.each(['file','directory'])('rejects %s case aliases against committed trees before overlay',kind=>{
  const f=regressionFixture();
  try{
