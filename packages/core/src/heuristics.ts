@@ -1453,6 +1453,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
 
     const literalArgvSpawn = JS_TS_FILE_RE.test(line.file ?? "") &&
       LITERAL_ARGV_SPAWN.test(text) &&
+      !/\b(?:req|request|params|user_?input)\b/.test(text) &&
       (text.match(/\bshell\s*:/g)?.length ?? 0) === 1;
     if (
       /\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") &&

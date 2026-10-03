@@ -52359,7 +52359,7 @@ function runHeuristicReview(request2, role = "maintainer") {
         body: "A server-side HTTP request is constructed from untrusted user input. An attacker can supply an internal URL (e.g. http://169.254.169.254/) to pivot to internal services or cloud metadata. Allow-list permitted hosts/schemes and block private IP ranges before making any server-side request."
       });
     }
-    const literalArgvSpawn = JS_TS_FILE_RE.test(line.file ?? "") && LITERAL_ARGV_SPAWN.test(text) && (text.match(/\bshell\s*:/g)?.length ?? 0) === 1;
+    const literalArgvSpawn = JS_TS_FILE_RE.test(line.file ?? "") && LITERAL_ARGV_SPAWN.test(text) && !/\b(?:req|request|params|user_?input)\b/.test(text) && (text.match(/\bshell\s*:/g)?.length ?? 0) === 1;
     if (/\.(ts|tsx|js|jsx|mjs|py|java|go|rb|php)$/.test(line.file ?? "") && (/(exec|execSync|os\.system|subprocess\.(call|run|Popen)|Runtime\.getRuntime)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text) || !literalArgvSpawn && /\b(?:spawn|spawnSync)\s*\([^)]*(req\.|request\.|params|argv|user_?input)/.test(text))) {
       findings.push({
         ...base,

@@ -148,5 +148,29 @@
     "source": "while(Date.now()<deadline){await new Promise(r=>setTimeout(r,20));}",
     "title": "await inside a loop (serialized I/O)",
     "flagged": false
+  },
+  {
+    "name": "untrusted executable selection req.body.argv",
+    "source": "spawn(req.body.argv[0], req.body.argv.slice(1), {shell:false});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "untrusted executable selection request.query.argv",
+    "source": "spawn(request.query.argv[0], request.query.argv.slice(1), {shell:false});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "untrusted executable selection params.argv",
+    "source": "spawn(params.argv[0], params.argv.slice(1), {shell:false});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
+  },
+  {
+    "name": "untrusted executable selection user_input.argv",
+    "source": "spawn(user_input.argv[0], user_input.argv.slice(1), {shell:false});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": true
   }
 ]
