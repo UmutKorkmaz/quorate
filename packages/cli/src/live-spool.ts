@@ -323,7 +323,7 @@ export interface LiveSpool extends JsonStreamSink {
   /** Direct event tee for in-process runs (the TUI path). */
   handleEvent(event: CouncilEvent): void;
   /** Seal the registry entry when the run settles outside the event stream. */
-  finish(status: Extract<LiveRunStatus, "done" | "error">): void;
+  finish(status: Extract<LiveRunStatus, "done" | "error">, options?: { interrupted?: boolean }): void;
   /** Last swallowed filesystem error, for diagnostics/tests. */
   readonly lastError: Error | undefined;
 }
@@ -472,11 +472,11 @@ export function createLiveSpoolSink(options: LiveSpoolOptions = {}): LiveSpool {
     writeStderr() {
       // Human progress text — never spooled.
     },
-    finish(status: Extract<LiveRunStatus, "done" | "error">) {
+    finish(status: Extract<LiveRunStatus, "done" | "error">, options?: { interrupted?: boolean }) {
       // Only seal a live run; done/error are terminal (a verdict already
       // settled it). The fd closes here in every case — the verdict event
       // precedes the final report line, so closing on setStatus would drop it.
-      if (entry?.status === "running") setStatus(status);
+      if (entry?.status === "running" || (options?.interrupted && entry?.status === "done" && status === "error")) setStatus(status);
       closeFd();
     }
   };
@@ -494,6 +494,8 @@ export function teeJsonStreamSink(...sinks: JsonStreamSink[]): JsonStreamSink {
   };
 }
 
+export const EXTERNAL_IDLE_STALE_MS = 1_800_000;
+
 export interface ListLiveRunsOptions {
   dir?: string;
   /** Mark `running` entries with dead owner pids as `stale` (default true). */
@@ -505,10 +507,16 @@ export function listLiveRuns(options: ListLiveRunsOptions = {}): LiveRunEntry[] 
   const dir = options.dir ?? defaultLiveDir();
   const reap = options.reap ?? true;
   const runs = scanMetas(dir).map((run) => {
-    if (reap && run.status === "running" && !isPidAlive(run.pid)) {
+    const observedAt = Date.parse(run.updatedAt);
+    const expired = run.kind === "external"
+      ? !Number.isFinite(observedAt) || Date.now() - observedAt > EXTERNAL_IDLE_STALE_MS
+      : !isPidAlive(run.pid);
+    if (reap && run.status === "running" && expired) {
       const stale: LiveRunEntry = { ...run, status: "stale", updatedAt: nowIso() };
       try {
-        // Owner is dead, so this last-write-wins persist cannot race a writer.
+        // Recheck observation identity before persisting a best-effort reap.
+        const current = readRunMeta(run.runId, dir);
+        if (current?.status !== "running" || current.updatedAt !== run.updatedAt) return current ?? run;
         writeMeta(dir, stale);
       } catch {
         // Persisting the reap is best-effort; the returned snapshot is authoritative.

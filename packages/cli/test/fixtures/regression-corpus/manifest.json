@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "frozenAt": "2026-10-02",
+  "purpose": "Regression coverage, not general accuracy measurement",
+  "cases": [
+    {
+      "id": "real-fixed",
+      "group": "correct-fixes",
+      "mode": "live-process",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "verified",
+        "reason": "reproduced-and-fixed"
+      }
+    },
+    {
+      "id": "captured-fixed",
+      "group": "correct-fixes",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "verified",
+        "reason": "reproduced-and-fixed"
+      }
+    },
+    {
+      "id": "nested-name",
+      "group": "correct-fixes",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "verified",
+        "reason": "reproduced-and-fixed"
+      },
+      "fullName": "values fixes value"
+    },
+    {
+      "id": "unicode-name",
+      "group": "correct-fixes",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "verified",
+        "reason": "reproduced-and-fixed"
+      },
+      "fullName": "fixes value \u2713"
+    },
+    {
+      "id": "real-unfixed",
+      "group": "unfixed-bugs",
+      "mode": "live-process",
+      "base": "failed",
+      "head": "failed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-fixed"
+      }
+    },
+    {
+      "id": "captured-unfixed",
+      "group": "unfixed-bugs",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "failed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-fixed"
+      }
+    },
+    {
+      "id": "wrong-head-symptom",
+      "group": "unfixed-bugs",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "failed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-fixed"
+      },
+      "headFailure": "a different error"
+    },
+    {
+      "id": "nested-unfixed",
+      "group": "unfixed-bugs",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "failed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-fixed"
+      },
+      "fullName": "values fixes value"
+    },
+    {
+      "id": "real-weak",
+      "group": "ineffective-tests",
+      "mode": "live-process",
+      "base": "passed",
+      "head": "passed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-reproduced"
+      }
+    },
+    {
+      "id": "captured-weak",
+      "group": "ineffective-tests",
+      "mode": "captured-output",
+      "base": "passed",
+      "head": "passed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-reproduced"
+      }
+    },
+    {
+      "id": "weak-both-pass",
+      "group": "ineffective-tests",
+      "mode": "captured-output",
+      "base": "passed",
+      "head": "passed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-reproduced"
+      }
+    },
+    {
+      "id": "weak-head-fails",
+      "group": "ineffective-tests",
+      "mode": "captured-output",
+      "base": "passed",
+      "head": "failed",
+      "expected": {
+        "state": "contradicted",
+        "reason": "not-reproduced"
+      }
+    },
+    {
+      "id": "setup-failed",
+      "group": "setup-environment",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "setup-failed"
+      },
+      "issue": {
+        "phase": "setup",
+        "reason": "setup-failed",
+        "detail": "Captured refusal"
+      }
+    },
+    {
+      "id": "environment-delta",
+      "group": "setup-environment",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "environment-delta"
+      },
+      "issue": {
+        "phase": "preflight",
+        "reason": "environment-delta",
+        "detail": "Captured refusal"
+      }
+    },
+    {
+      "id": "unsupported-config",
+      "group": "setup-environment",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "unsupported-config"
+      },
+      "issue": {
+        "phase": "preflight",
+        "reason": "unsupported-config",
+        "detail": "Captured refusal"
+      }
+    },
+    {
+      "id": "timeout",
+      "group": "setup-environment",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "timeout"
+      },
+      "issue": {
+        "phase": "setup",
+        "reason": "timeout",
+        "detail": "Captured refusal"
+      }
+    },
+    {
+      "id": "real-import-error",
+      "group": "skipped-empty-unsupported",
+      "mode": "live-process",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "unexpected-failure"
+      }
+    },
+    {
+      "id": "selected-skipped",
+      "group": "skipped-empty-unsupported",
+      "mode": "captured-output",
+      "base": "skipped",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "skipped-assertion"
+      }
+    },
+    {
+      "id": "no-selected-assertion",
+      "group": "skipped-empty-unsupported",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "missing-assertion"
+      },
+      "mutation": "missing"
+    },
+    {
+      "id": "unsupported-vitest",
+      "group": "skipped-empty-unsupported",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "unsupported-runner"
+      },
+      "issue": {
+        "phase": "preflight",
+        "reason": "unsupported-runner",
+        "detail": "Captured unsupported major"
+      }
+    },
+    {
+      "id": "malformed-json",
+      "group": "interrupted-malformed",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "invalid-output"
+      },
+      "mutation": "malformed"
+    },
+    {
+      "id": "truncated-output",
+      "group": "interrupted-malformed",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "incomplete-output"
+      },
+      "mutation": "truncated"
+    },
+    {
+      "id": "aborted-process",
+      "group": "interrupted-malformed",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "cancelled"
+      },
+      "mutation": "aborted"
+    },
+    {
+      "id": "failed-teardown",
+      "group": "interrupted-malformed",
+      "mode": "captured-output",
+      "base": "failed",
+      "head": "passed",
+      "expected": {
+        "state": "inconclusive",
+        "reason": "cleanup-failed"
+      },
+      "mutation": "cleanup"
+    }
+  ]
+}

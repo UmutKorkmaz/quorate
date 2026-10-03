@@ -1,6 +1,6 @@
 import { parse as parseToml } from "smol-toml";
 import { readCodexConfig, updateCodexNotify } from "./codex-notify.js";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, lstatSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -184,10 +184,11 @@ export function computeSetupPlan(options: {
 }): SetupPlan {
   const claudePath = options.claudePath ?? claudeSettingsPath();
   const codexPath = options.codexPath ?? codexConfigPath();
-  const claudeExists = existsSync(claudePath);
+  const snapshot = readClaudeSnapshot(claudePath);
+  const claudeExists = snapshot.exists;
   const codexNotifyOccupied = options.codexNotifyOccupied ?? codexNotifySlotOccupied(codexPath);
   // Count only events not already Quorate-tagged — the dry-run number must be honest.
-  const existing = claudeExists ? readClaudeSettings(claudePath) : {};
+  const existing = snapshot.settings;
   const installed = countInstalledClaudeEvents(existing);
   return {
     claude: {
@@ -228,15 +229,54 @@ export function codexConfigPath(): string {
   return join(homedir(), ".codex", "config.toml");
 }
 
-/** Read+parse Claude settings; returns `{}` if absent/corrupt. */
-export function readClaudeSettings(path: string = claudeSettingsPath()): ClaudeSettings {
+interface ClaudeSnapshot { exists: boolean; raw: Buffer; settings: ClaudeSettings; identity?: string }
+
+function settingsIdentity(path: string): string | undefined {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as ClaudeSettings;
-  } catch {
-    // Absent or corrupt — start fresh.
+    const st = lstatSync(path);
+    if (!st.isFile() || st.isSymbolicLink()) throw new Error("not a regular file");
+    return `${st.dev}:${st.ino}:${st.size}:${st.mtimeMs}:${st.ctimeMs}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
   }
-  return {};
+}
+
+function readClaudeSnapshot(path: string): ClaudeSnapshot {
+  try {
+    const identity = settingsIdentity(path);
+    if (identity === undefined) return { exists: false, raw: Buffer.alloc(0), settings: {} };
+    const raw = readFileSync(path);
+    if (identity !== settingsIdentity(path)) throw new Error("file changed while reading");
+    const settings: unknown = JSON.parse(raw.toString("utf8"));
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("expected JSON object");
+    return { exists: true, raw, settings: settings as ClaudeSettings, identity };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    throw new Error(`Cannot safely read Claude settings (${code && /^[A-Z]+$/.test(code) ? code : "invalid or changed file"})`);
+  }
+}
+
+/** Absent settings are empty; existing unreadable or invalid settings are refused. */
+export function readClaudeSettings(path: string = claudeSettingsPath()): ClaudeSettings {
+  return readClaudeSnapshot(path).settings;
+}
+
+function writeClaudeSnapshot(path: string, before: ClaudeSnapshot, after: ClaudeSettings): string | undefined {
+  mkdirSync(dirname(path), { recursive: true });
+  const backup = before.exists ? `${path}.quorate-backup-${isoTimestamp()}-${crypto.randomUUID()}.json` : undefined;
+  if (backup) writeFileSync(backup, before.raw, { mode: 0o600, flag: "wx" });
+  const temp = `${path}.${crypto.randomUUID()}.tmp`;
+  try {
+    writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    if (settingsIdentity(path) !== before.identity || (before.exists && !readFileSync(path).equals(before.raw))) {
+      throw new Error("Cannot safely read Claude settings (destination changed)");
+    }
+    renameSync(temp, path);
+    return backup;
+  } finally {
+    try { unlinkSync(temp); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  }
 }
 
 export function codexNotifySlotOccupied(path: string = codexConfigPath()): boolean {
@@ -261,22 +301,9 @@ export function applySetup(plan: SetupPlan, quorateBinary?: string): { applied: 
   let claudeApplied = false;
   // Claude — parse → merge → backup → atomic write.
   try {
-    const before = readClaudeSettings(plan.claude.path);
-    const after = mergeClaudeHooks(before, binary);
-    if (plan.claude.exists) {
-      backup = `${plan.claude.path}.quorate-backup-${isoTimestamp()}.json`;
-      writeFileSync(backup, JSON.stringify(before, null, 2), { encoding: "utf8", mode: 0o600 });
-    } else {
-      try {
-        // Best-effort: ensure the parent dir exists for a fresh install.
-        mkdirSync(dirname(plan.claude.path), { recursive: true });
-      } catch {
-        // Ignore — the write below will surface the real error.
-      }
-    }
-    const temp = `${plan.claude.path}.${process.pid}.tmp`;
-    writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-    renameSync(temp, plan.claude.path);
+    const before = readClaudeSnapshot(plan.claude.path);
+    const after = mergeClaudeHooks(before.settings, binary);
+    backup = writeClaudeSnapshot(plan.claude.path, before, after);
     claudeApplied = true;
     const codexNote = plan.codex.action === "skip"
       ? " Codex notify slot occupied or unreadable — preserved."
@@ -295,14 +322,10 @@ export function applyRemove(plan: SetupPlan): { applied: boolean; partial?: bool
   }
   let claudeRemoved = false;
   try {
-    if (!plan.claude.exists) return { applied: true, message: updateCodexNotify(plan.codex.path) };
-    const before = readClaudeSettings(plan.claude.path);
-    const after = stripClaudeHooks(before);
-    const backup = `${plan.claude.path}.quorate-backup-${isoTimestamp()}.json`;
-    writeFileSync(backup, JSON.stringify(before, null, 2), { encoding: "utf8", mode: 0o600 });
-    const temp = `${plan.claude.path}.${process.pid}.tmp`;
-    writeFileSync(temp, `${JSON.stringify(after, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
-    renameSync(temp, plan.claude.path);
+    const before = readClaudeSnapshot(plan.claude.path);
+    if (!before.exists) return { applied: true, message: updateCodexNotify(plan.codex.path) };
+    const after = stripClaudeHooks(before.settings);
+    const backup = writeClaudeSnapshot(plan.claude.path, before, after);
     claudeRemoved = true;
     return { applied: true, backup, message: `Quorate hooks removed from ${plan.claude.path}. ${updateCodexNotify(plan.codex.path)}` };
   } catch (error: unknown) {

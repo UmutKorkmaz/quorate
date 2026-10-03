@@ -1,5 +1,7 @@
+import { isolatedGitEnvironment } from "./git-environment.js";
+import { executeBoundedCommand } from "./bounded-command.js";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { StringDecoder } from "node:string_decoder";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -123,7 +125,7 @@ function isSafeProofName(name: string): boolean {
 }
 
 function gitText(cwd: string, args: string[]): string | undefined {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8", shell: false, maxBuffer: 2 * 1024 * 1024 });
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", shell: false, env: isolatedGitEnvironment(), maxBuffer: 2 * 1024 * 1024 });
   return result.status === 0 ? result.stdout : undefined;
 }
 
@@ -374,67 +376,15 @@ function validateOptions(options: RunProofOptions): void {
 }
 
 async function runDirect(command: string[], cwd: string, timeoutMs: number, maxOutputBytes: number): Promise<{ exitCode: number; timedOut: boolean; stdout: ProofOutput; stderr: ProofOutput; cleanup: () => Promise<void> }> {
-  return new Promise((resolveRun) => {
-    const stdoutCapture: BoundedCapture = { chunks: [], bytes: 0, truncated: false };
-    const stderrCapture: BoundedCapture = { chunks: [], bytes: 0, truncated: false };
-    let finished = false;
-    let timedOut = false;
-    let timer: NodeJS.Timeout | undefined;
-    const finish = (exitCode: number): void => {
-      if (finished) return;
-      finished = true;
-      if (timer) clearTimeout(timer);
-      resolveRun({ exitCode, timedOut, stdout: boundedText(stdoutCapture, maxOutputBytes), stderr: boundedText(stderrCapture, maxOutputBytes), cleanup: shutdown });
-    };
-    const grouped = process.platform !== "win32";
-    const child = spawn(command[0], command.slice(1), {
-      cwd,
-      shell: false,
-      windowsHide: true,
-      detached: grouped,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    child.stdout?.on("data", (chunk: Buffer) => appendBounded(stdoutCapture, Buffer.from(chunk), maxOutputBytes));
-    child.stderr?.on("data", (chunk: Buffer) => appendBounded(stderrCapture, Buffer.from(chunk), maxOutputBytes));
-    child.once("error", (error) => {
-      appendBounded(stderrCapture, Buffer.from(error.message), maxOutputBytes);
-      finish(127);
-    });
-    child.once("close", (code) => finish(timedOut ? 124 : (code ?? 1)));
-    const terminate = (signal: NodeJS.Signals): void => {
-      if (grouped && child.pid) {
-        try {
-          process.kill(-child.pid, signal);
-          return;
-        } catch {
-          // Fall through to a direct-child kill if the process group is gone.
-        }
-      }
-      child.kill(signal);
-    };
-    const groupAlive = (): boolean => {
-      if (!grouped || !child.pid) return false;
-      try {
-        process.kill(-child.pid, 0);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    const shutdown = async (): Promise<void> => {
-      terminate("SIGTERM");
-      const until = Date.now() + 250;
-      while (groupAlive() && Date.now() < until) {
-        await new Promise<void>((resolveWait) => setTimeout(resolveWait, 10));
-      }
-      if (groupAlive()) terminate("SIGKILL");
-    };
-    timer = setTimeout(() => {
-      timedOut = true;
-      terminate("SIGTERM");
-      setTimeout(() => terminate("SIGKILL"), 1_000).unref();
-    }, timeoutMs);
-  });
+  const result = await executeBoundedCommand({ argv: command, cwd, timeoutMs, maxOutputBytes });
+  if (result.cleanupFailed) throw new Error("Proof command process-group cleanup failed");
+  const sanitize = (output: typeof result.stdout): ProofOutput => {
+    const capture: BoundedCapture = { chunks: [], bytes: 0, truncated: output.truncated };
+    appendBounded(capture, Buffer.from(output.text), maxOutputBytes);
+    return boundedText(capture, maxOutputBytes);
+  };
+  return { exitCode: result.timedOut ? 124 : (result.exitCode ?? 1), timedOut: result.timedOut,
+    stdout: sanitize(result.stdout), stderr: sanitize(result.stderr), cleanup: async () => {} };
 }
 
 export async function runProof(options: RunProofOptions, retainHistory = true): Promise<RunProofResult> {

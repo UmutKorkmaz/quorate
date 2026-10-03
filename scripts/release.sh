@@ -249,28 +249,7 @@ run gh release create "$TAG" --verify-tag --target "$(git rev-parse HEAD)" \
   --title "Quorate $TAG" --notes-file "$NOTES_FILE"
 run npm publish --workspace quorate "${PUBLISH_ARGS[@]}"
 
-# npm can accept a publish before the new version reaches registry readers.
-REGISTRY_ERROR="$SMOKE_DIR/registry-error.log"
-for attempt in {1..30}; do
-  if [[ "$(npm view "quorate@$VERSION" version --prefer-online --fetch-retries=0 --fetch-timeout=10000 2>"$REGISTRY_ERROR")" == "$VERSION" ]]; then
-    break
-  fi
-  [[ "$attempt" -lt 30 ]] || fail "npm accepted publication, but the CLI version is not visible after registry retries; verify registry status before any further publish. Last registry error: $(cat "$REGISTRY_ERROR")"
-  printf 'Waiting for registry visibility (%s/30)...\n' "$attempt"
-  sleep 10
-done
-
-PUBLISHED_CLI=(npm exec --yes --prefer-online --package "quorate@$VERSION" -- quorate)
-run "${PUBLISHED_CLI[@]}" --version
-run "${PUBLISHED_CLI[@]}" --help
-run "${PUBLISHED_CLI[@]}" supply-chain scan --help
-run "${PUBLISHED_CLI[@]}" --cwd "$SMOKE_DIR" supply-chain scan \
-  --diff "$SMOKE_DIR/clean.diff" --json --gate \
-  --write-json "$SMOKE_DIR/published-clean.json" --write-md "$SMOKE_DIR/published-clean.md"
-if "${PUBLISHED_CLI[@]}" --cwd "$SMOKE_DIR" supply-chain scan \
-  --diff "$SMOKE_DIR/unsafe.diff" --json --gate --fail-on medium \
-  --write-json "$SMOKE_DIR/published-unsafe.json" --write-md "$SMOKE_DIR/published-unsafe.md"; then
-  fail "published CLI unsafe smoke unexpectedly passed"
-fi
+# Retry package availability independently; recovery never reruns publication.
+run node scripts/verify-published-cli.mjs --version "$VERSION"
 
 printf '\nReleased %s: Git tag, GitHub Release, and quorate are live.\n' "$TAG"

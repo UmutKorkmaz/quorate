@@ -2,7 +2,9 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import * as fs from "node:fs";
+import fsActual from "node:fs";
+import { describe, expect, it, vi } from "vitest";
 import {
   applyRemove,
   applySetup,
@@ -15,6 +17,11 @@ import {
   renderCapabilityTable,
   stripClaudeHooks
 } from "../src/monitor-setup.js";
+
+vi.mock("node:fs", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, readFileSync: vi.fn(actual.readFileSync), writeFileSync: vi.fn(actual.writeFileSync) };
+});
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "quorate-setup-"));
@@ -224,4 +231,58 @@ it("reports partial setup when Claude succeeds but Codex configuration fails", (
   expect(result.message).toContain("Claude hooks installed; Codex setup failed");
   expect(readClaudeSettings(claudePath).hooks).toBeDefined();
   expect(readFileSync(codexPath,"utf8")).toBe("notify = [");
+});
+
+
+describe("safe settings preservation", () => {
+  function fixture(raw: string) {
+    const dir = tempDir(), path = join(dir, "settings.json"), codex = join(dir, "config.toml");
+    writeFileSync(path, raw); writeFileSync(codex, "model = \"keep\"\n");
+    const plan = { claude: { path, exists: true, changes: 10 }, codex: { path: codex, notifyOccupied: false, action: "shim" as const, note: "" }, dryRun: false };
+    return { dir, path, codex, plan };
+  }
+  it.each(['{"env":1,}', 'null', '[]', '42'])("refuses invalid settings %s without writing either config", raw => {
+    const f = fixture(raw);
+    try {
+      expect(() => readClaudeSettings(f.path)).toThrow("Cannot safely read Claude settings");
+      expect(() => computeSetupPlan({ claudePath:f.path, codexPath:f.codex, dryRun:true })).toThrow();
+      for (const apply of [() => applySetup(f.plan, "/fixture/quorate"), () => applyRemove(f.plan)]) {
+        expect(apply().applied).toBe(false);
+        expect(readFileSync(f.path, "utf8")).toBe(raw);
+        expect(readFileSync(f.codex, "utf8")).toBe('model = "keep"\n');
+      }
+    } finally { rmSync(f.dir, {recursive:true, force:true}); }
+  });
+  it("backs up exact bytes and preserves unrelated keys through setup/remove", () => {
+    const raw = ' { "env" : { "KEEP":"yes" } }\n\n', f=fixture(raw);
+    try {
+      const setup=applySetup(f.plan,"/fixture/quorate");
+      expect(setup.applied).toBe(true); expect(readFileSync(setup.backup!,"utf8")).toBe(raw);
+      const installed=readFileSync(f.path);
+      const removed=applyRemove(f.plan);
+      expect(removed.applied).toBe(true); expect(readFileSync(removed.backup!)).toEqual(installed);
+      expect(readClaudeSettings(f.path).env).toEqual({KEEP:"yes"});
+    } finally { rmSync(f.dir,{recursive:true,force:true}); }
+  });
+  it("refuses an unreadable file rather than treating it as absent", () => {
+    const f=fixture('{}'), read=fsActual.readFileSync;
+    const spy=vi.spyOn(fs,'readFileSync').mockImplementation(((path:unknown,...args:unknown[])=> {
+      if(path===f.path) throw Object.assign(new Error('denied'),{code:'EACCES'});
+      return (read as Function)(path,...args);
+    }) as typeof fs.readFileSync);
+    try { expect(applySetup(f.plan,"/fixture/quorate").applied).toBe(false); }
+    finally { spy.mockRestore(); expect(readFileSync(f.path,"utf8")).toBe('{}'); rmSync(f.dir,{recursive:true,force:true}); }
+  });
+  it("refuses a destination changed between snapshot and rename", () => {
+    const f=fixture('{}'), write=fsActual.writeFileSync;
+    const spy=vi.spyOn(fs,'writeFileSync').mockImplementation(((path:unknown,...args:unknown[])=>{
+      (write as Function)(path,...args);
+      if(typeof path==='string' && path.endsWith('.tmp')) { rmSync(f.path); write(f.path,'{"replacement":true}'); }
+    }) as typeof fs.writeFileSync);
+    try {
+      expect(applySetup(f.plan,"/fixture/quorate").applied).toBe(false);
+      expect(readFileSync(f.path,"utf8")).toBe('{"replacement":true}');
+      expect(readFileSync(f.codex,"utf8")).toBe('model = "keep"\n');
+    } finally { spy.mockRestore(); rmSync(f.dir,{recursive:true,force:true}); }
+  });
 });

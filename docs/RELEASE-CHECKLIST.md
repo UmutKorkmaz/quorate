@@ -151,3 +151,15 @@ single commit, that it is an ancestor of the release commit, and that its
 
 If any stage fails, fix it and restart verification from the earliest affected
 stage. Do not skip ahead to npm publication.
+
+### Recover published-package verification
+
+After an accepted npm publication, rerun only:
+
+```sh
+node scripts/verify-published-cli.mjs --version 1.4.1
+```
+
+This verifier uses an isolated exact-version install with lifecycle scripts disabled,
+a shared ten-minute deadline, and clean/unsafe gate smoke checks. It neither tags nor
+publishes. Do not rerun release `--execute` to recover a verification failure.

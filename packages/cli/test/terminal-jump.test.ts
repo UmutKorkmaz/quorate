@@ -40,3 +40,21 @@ describe("resolveTty (injected exec)", () => {
     expect(calls).toBeGreaterThan(0);
   });
 });
+
+
+it("normalizes complete tty tokens and refuses malformed suffixes", async () => {
+  const m=await import("../src/terminal-jump.js");
+  expect(m.normalizeTty("/dev/ttys006")).toBe("ttys006");
+  expect(m.normalizeTty("pts/3")).toBe("pts/3");
+  expect(m.normalizeTty("/dev/ttys006junk")).toBeUndefined();
+});
+it("selects exact tmux session window and pane instead of a tty prefix", async () => {
+  const m=await import("../src/terminal-jump.js"), calls:string[][]=[];
+  const exec:import("../src/terminal-jump.js").Exec=(_cmd,args)=>{
+    calls.push(args);
+    return {status:0,stderr:"",stdout:args[0]==="list-panes" ? "/dev/ttys0060 owned:0.1\n/dev/ttys006 owned:0.0\n" : ""};
+  };
+  expect(m.selectTmuxPane("ttys006",exec)).toBe(true);
+  expect(calls.slice(1)).toEqual([["switch-client","-t","owned"],["select-window","-t","owned:0"],["select-pane","-t","owned:0.0"]]);
+  expect(m.selectTmuxPane("ttys006",()=>({status:1,stdout:"",stderr:"fail"}))).toBe(false);
+});

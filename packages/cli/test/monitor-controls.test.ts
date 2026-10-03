@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { CouncilEvent } from "@quorate/core";
-import { createLiveSpoolSink } from "../src/live-spool.js";
+import { writeRunMeta, createLiveSpoolSink } from "../src/live-spool.js";
 import { abortLiveRun, isGateLane, rerunLiveRun, runControl } from "../src/monitor-controls.js";
 
 function tempDir(): string {
@@ -204,4 +204,13 @@ describe("runControl", () => {
     expect(runControl("abort", "missing", dir).message).toContain("Unknown run");
     expect(runControl("rerun", "missing", dir).message).toContain("Unknown run");
   });
+});
+
+
+it("external sessions cannot be aborted by hook PID", () => {
+  const dir=tempDir();
+  writeRunMeta({runId:"external",pid:process.pid,cwd:"/repo",repo:"repo",mode:"agent",subject:"external",startedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),planned:[],status:"running",kind:"external",source:"claude"},dir);
+  const kill=vi.spyOn(process,"kill").mockReturnValue(true);
+  try { expect(abortLiveRun("external",dir).ok).toBe(false); expect(kill).not.toHaveBeenCalled(); }
+  finally { kill.mockRestore(); }
 });

@@ -30,3 +30,5 @@ export * from "./supply-chain.js";
 export * from "./theme.js";
 export * from "./types.js";
 export * from "./web3-dd.js";
+export * from "./regression/types.js";
+export { classifyRegressionPair } from "./regression/classify.js";

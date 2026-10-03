@@ -82,12 +82,12 @@ function renderFindingRow(f: Finding, globalIndex: number): string {
     : "";
   const clickable = f.file ? ` finding-link` : "";
 
-  return `<div class="finding${clickable}" ${fileAttr} role="listitem">
+  return `<div class="finding${clickable}" ${fileAttr} ${f.file ? 'data-action="open"' : ""} role="listitem">
     <div class="finding-header">
       <span class="sev-chip" style="background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44">${escHtml(sev.toUpperCase())}</span>
       <span class="finding-title">${title}</span>
       ${hasMeta ? `<span class="finding-meta">${[role, agreedBy].filter(Boolean).join(" · ")}</span>` : ""}
-      ${hasDetails ? `<button class="toggle-btn" aria-expanded="false" aria-controls="${detailsId}" onclick="toggleDetail('${detailsId}',this)">▸</button>` : ""}
+      ${hasDetails ? `<button class="toggle-btn" aria-expanded="false" aria-controls="${detailsId}" data-action="toggle-detail">▸</button>` : ""}
     </div>
     ${hasDetails ? `<div class="finding-details" id="${detailsId}" hidden>
       ${body ? `<p class="finding-body">${body}</p>` : ""}
@@ -101,7 +101,7 @@ function renderFileGroup(group: FileGroup, startIndex: number): string {
   const isGeneral = group.file === "General";
   const fileHeader = isGeneral
     ? `<div class="file-header"><span class="file-icon">&#9632;</span><span class="file-name">${file}</span></div>`
-    : `<button class="file-header file-link" data-file="${file}" data-line="1" onclick="openFile(this)" title="Open ${file}">
+    : `<button class="file-header file-link" data-file="${file}" data-line="1" data-action="open" title="Open ${file}">
         <span class="file-icon">&#9632;</span><span class="file-name">${file}</span>
         <span class="file-count">${group.findings.length}</span>
        </button>`;
@@ -116,7 +116,7 @@ function renderFileGroup(group: FileGroup, startIndex: number): string {
   </section>`;
 }
 
-function buildHtml(report: CouncilReport, n: string): string {
+export function buildVerdictHtml(report: CouncilReport, n: string): string {
   const v = report.verdict;
   const vColor = VERDICT_COLOR[v] ?? "#7c8597";
   const vLabel = escHtml(v.toUpperCase());
@@ -432,8 +432,8 @@ function buildHtml(report: CouncilReport, n: string): string {
   <footer class="footer">
     <span class="footer-note">Quorate multi-agent review &mdash; results are advisory</span>
     <div class="footer-actions">
-      <button class="btn btn-secondary" onclick="postMsg('fix')">Fix a finding&hellip;</button>
-      <button class="btn btn-primary" onclick="postMsg('rerun')">Re-run review</button>
+      <button class="btn btn-secondary" data-action="fix">Fix a finding&hellip;</button>
+      <button class="btn btn-primary" data-action="rerun">Re-run review</button>
     </div>
   </footer>
 
@@ -464,11 +464,16 @@ function buildHtml(report: CouncilReport, n: string): string {
     }
 
     document.addEventListener('click', (e) => {
-      const el = e.target && e.target.closest ? e.target.closest('.finding-link') : null;
+      const el = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
       if (!el) return;
-      const file = el.dataset.file;
-      const line = parseInt(el.dataset.line ?? '1', 10);
-      if (file) vscode.postMessage({ type: 'open', file, line });
+      const action = el.dataset.action;
+      if (action === 'toggle-detail') {
+        e.stopPropagation();
+        toggleDetail(el.getAttribute('aria-controls'), el);
+        return;
+      }
+      if (action === 'open') { openFile(el); return; }
+      if (action === 'fix' || action === 'rerun') postMsg(action);
     });
   </script>
 </body>
@@ -525,7 +530,7 @@ export class VerdictPanel {
       });
     }
     const n = nonce();
-    this.panel.webview.html = buildHtml(report, n);
+    this.panel.webview.html = buildVerdictHtml(report, n);
   }
 
   dispose(): void {
