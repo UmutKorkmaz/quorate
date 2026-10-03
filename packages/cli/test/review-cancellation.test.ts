@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,7 +8,13 @@ import { createDefaultConfig } from "@quorate/core";
 import { createLiveSpoolSink, listLiveRuns } from "../src/live-spool.js";
 import { createJsonStreamSink, isCouncilReportLine, runCouncilWithJsonStream } from "../src/json-stream.js";
 import { createMonitorServer, listenMonitorServer } from "../src/monitor-server.js";
-const wait=async (check:()=>boolean)=>{const end=Date.now()+6000;while(!check()){if(Date.now()>end)throw new Error("fixture deadline");await new Promise(r=>setTimeout(r,25));}};
+const wait = async (check: () => boolean) => {
+  const deadline = Date.now() + 6000;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error("fixture deadline");
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+};
 const alive=(pid:number)=>{try{process.kill(pid,0);return true;}catch{return false;}};
 it("aborted JSON review emits no authoritative final report or transform",async()=>{
   const c=new AbortController(),sink=createJsonStreamSink(),config=createDefaultConfig([]);config.councils=["maintainer"];
@@ -33,14 +40,15 @@ it.skipIf(process.platform==="win32").each([["SIGINT",130],["SIGTERM",143]] as c
  const cli=spawn(process.execPath,[resolve("packages/cli/dist/index.js"),"--cwd",root,"--config",config,"review","--diff",join(root,"diff.patch"),"--json"],{env:{...process.env,HOME:root,QUORATE_LIVE:"1"},stdio:["ignore","pipe","pipe"]});
  let stdout="",stderr="";cli.stdout.on("data",d=>stdout+=d);cli.stderr.on("data",d=>stderr+=d);
  const exited=new Promise<number|null>(r=>cli.once("exit",code=>r(code)));
- const dir=join(root,".quorate/live"),server=createMonitorServer({dir,token:"owned-cancellation",scan:()=>[]});
+ const monitorToken = randomBytes(32).toString("hex");
+ const dir=join(root,".quorate/live"),server=createMonitorServer({dir,token:monitorToken,scan:()=>[]});
  let ids:number[]=[];
  try{
  await wait(()=>existsSync(marker)).catch(error=>{throw new Error(`${error.message}: ${stderr}`);});ids=JSON.parse(readFileSync(marker,"utf8"));
  const runs=listLiveRuns({dir});expect(runs).toHaveLength(1);
  const base=(await listenMonitorServer(server)).split('/?')[0];
  if(signal==='SIGINT'){
- const response=await fetch(`${base}/control?token=owned-cancellation`,{method:"POST",signal:AbortSignal.timeout(5000),headers:{"content-type":"application/json"},body:JSON.stringify({action:"abort",runId:runs[0]!.runId})});expect(response.status).toBe(200);
+ const response=await fetch(`${base}/control?token=${monitorToken}`,{method:"POST",signal:AbortSignal.timeout(5000),headers:{"content-type":"application/json"},body:JSON.stringify({action:"abort",runId:runs[0]!.runId})});expect(response.status).toBe(200);
  }else{cli.kill('SIGTERM');cli.kill('SIGTERM');}
  expect(await exited,stderr).toBe(exit);
  await wait(()=>ids.every(pid=>!alive(pid)));

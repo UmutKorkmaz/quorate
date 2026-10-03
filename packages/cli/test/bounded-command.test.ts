@@ -26,7 +26,11 @@ it.skipIf(process.platform==='win32')('cancels owned descendants and preserves a
  let ids:number[]=[];
  try{
   const promise=executeBoundedCommand({...base,argv:[process.execPath,'-e',script],signal:controller.signal});
-  const end=Date.now()+3000;while(!existsSync(file)){if(Date.now()>end)throw new Error('marker');await new Promise(r=>setTimeout(r,20));}
+  const deadline = Date.now() + 3000;
+  while (!existsSync(file)) {
+    if (Date.now() > deadline) throw new Error('marker');
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
   ids=JSON.parse(readFileSync(file,'utf8'));controller.abort();const result=await promise;
   expect(result.aborted).toBe(true);expect(result.cleanupFailed).toBe(false);
   for(const pid of ids)expect(()=>process.kill(pid,0)).toThrow();
