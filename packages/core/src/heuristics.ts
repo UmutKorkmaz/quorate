@@ -10,7 +10,9 @@ const LITERAL_ARGV_SPAWN = new RegExp(String.raw`^\s*(?:(?:const|let|var)\s+[A-Z
 const BOOLEAN_ATOM = String.raw`!?${MEMBER}(?:\(\))?`;
 const POLLING_CONDITION = String.raw`(?:${BOOLEAN_ATOM}|\(\s*${BOOLEAN_ATOM}(?:\s*(?:\|\||&&)\s*${BOOLEAN_ATOM})+\s*\))`;
 const TIMER_AWAIT = String.raw`await\s+(?:sleep\(\s*\d+\s*\)|new\s+Promise\(\s*([A-Za-z_$][\w$]*)\s*=>\s*setTimeout\(\s*\1\s*,\s*\d+\s*\)\s*\))\s*;`;
-const BOUNDED_TIMER_LOOP = new RegExp(String.raw`^\s*while\s*\(\s*(?:${POLLING_CONDITION}\s*&&\s*)?Date\.now\(\)\s*<\s*${MEMBER}\s*\)\s*(?:${TIMER_AWAIT}|\{\s*${TIMER_AWAIT}\s*\})\s*$`);
+const DEADLINE_WHILE = String.raw`^\s*while\s*\(\s*(?:${POLLING_CONDITION}\s*&&\s*)?Date\.now\(\)\s*<\s*${MEMBER}\s*\)\s*`;
+const BOUNDED_TIMER_LOOP = new RegExp(String.raw`${DEADLINE_WHILE}${TIMER_AWAIT}\s*$`);
+const BRACED_TIMER_LOOP = new RegExp(String.raw`${DEADLINE_WHILE}\{\s*${TIMER_AWAIT}\s*\}\s*$`);
 // Separate pattern keeps the timer callback backreference local to this regex.
 const GUARDED_TIMER_LOOP = new RegExp(String.raw`^\s*while\s*\(\s*${POLLING_CONDITION}\s*\)\s*\{\s*if\s*\(\s*Date\.now\(\)\s*>\s*${MEMBER}\s*\)\s*throw\s+(?:new\s+)?Error\(\s*${STRING_LITERAL}\s*\)\s*;\s*${TIMER_AWAIT}\s*\}\s*$`);
 
@@ -253,7 +255,7 @@ export function runHeuristicReview(request: CouncilRequest, role = "maintainer")
       const skipBoundedTimerPolling = ruleIndex < builtInRuleCount &&
         rule.title === "await inside a loop (serialized I/O)" &&
         JS_TS_FILE_RE.test(line.file ?? "") &&
-        (BOUNDED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
+        (BOUNDED_TIMER_LOOP.test(text) || BRACED_TIMER_LOOP.test(text) || GUARDED_TIMER_LOOP.test(text));
       if (
         !skipRequestPathFsRule &&
         !skipLongLineForPackRule &&

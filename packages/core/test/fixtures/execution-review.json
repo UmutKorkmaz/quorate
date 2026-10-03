@@ -130,5 +130,23 @@
     "source": "while(alive()||Date.now()<deadline)await sleep(10);",
     "title": "await inside a loop (serialized I/O)",
     "flagged": true
+  },
+  {
+    "name": "production argv options",
+    "source": "const child=spawn(options.argv[0]!,options.argv.slice(1),{cwd:options.cwd,env:options.env,shell:false,detached:true,stdio:['ignore','pipe','pipe']});",
+    "title": "Command injection (untrusted input in a shell command)",
+    "flagged": false
+  },
+  {
+    "name": "production grouped condition",
+    "source": "while((alive()||!closed)&&Date.now()<deadline)await sleep(10);",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": false
+  },
+  {
+    "name": "braced bounded promise polling",
+    "source": "while(Date.now()<deadline){await new Promise(r=>setTimeout(r,20));}",
+    "title": "await inside a loop (serialized I/O)",
+    "flagged": false
   }
 ]
