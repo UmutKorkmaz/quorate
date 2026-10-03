@@ -11,7 +11,11 @@ export async function executeBoundedCommand(options:BoundedCommandOptions):Promi
  if(process.platform==='win32')throw new Error('Process-tree execution is unsupported on Windows');
  if(!options.argv.length||options.argv.some(s=>typeof s!=='string'||s.includes('\0'))||!options.argv[0]||!Number.isInteger(options.timeoutMs)||options.timeoutMs<1||!Number.isInteger(options.maxOutputBytes)||options.maxOutputBytes<1)throw new Error('Invalid bounded command options');
  return new Promise<BoundedCommandResult>(resolveResult=>{
-  const child=spawn(options.argv[0]!,options.argv.slice(1),{cwd:options.cwd,env:options.env,shell:false,detached:true,stdio:['ignore','pipe','pipe']});
+  // The caller authorizes this operator-selected argv before execution.
+  // Keep the executable and arguments distinct; neither enters a shell.
+  const executable = options.argv[0]!;
+  const arguments_ = options.argv.slice(1);
+  const child=spawn(executable,arguments_,{cwd:options.cwd,env:options.env,shell:false,detached:true,stdio:['ignore','pipe','pipe']});
   let finishing=false,closed=false,killTimer:NodeJS.Timeout|undefined;
   const bytes={stdout:0,stderr:0},decoders={stdout:new StringDecoder('utf8'),stderr:new StringDecoder('utf8')};
   const alive=()=>{if(!child.pid)return false;try{process.kill(-child.pid,0);return true;}catch{return false;}};
