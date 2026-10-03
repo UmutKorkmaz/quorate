@@ -26,7 +26,7 @@ Store the manifest outside the source checkout or in its ignored `.quorate/regre
 }
 ```
 
-Setup is optional and explicit. Only `npm ci --ignore-scripts` and the documented no-audit/no-fund/offline options are accepted. There is no implicit dependency installation. BASE and HEAD use the same committed lockfile and an owned HOME/cache. Installation can access the configured npm registry and selected tests can access the network. Runner results, stream sizes, timeouts, process-group teardown and immutable input hashes are checked. Setup/import failures, missing or skipped assertions, truncated/malformed output, cancellation, mutation and failed cleanup cannot verify a fix.
+Setup is optional and explicit. Only `npm ci --ignore-scripts` and the documented no-audit/no-fund/offline options are accepted. There is no implicit dependency installation. BASE and HEAD use the same committed lockfile and an owned HOME/cache. Installation uses https://registry.npmjs.org with an isolated environment; user npm registry and proxy settings are not inherited. Selected tests can access the network. Runner results, stream sizes, timeouts, process-group teardown and immutable input hashes are checked. Setup/import failures, missing or skipped assertions, truncated/malformed output, cancellation, mutation and failed cleanup cannot verify a fix.
 
 Selected asset paths and their parent components must not alias differently spelled committed paths in either revision, including case-only renames. Suite totals must reconcile with file outcomes and nested assertion ancestors. Empty or duplicate-named nested suites that cannot be reconstructed from reporter JSON remain inconclusive; suite counters are never assumed to be trustworthy on their own.
 
