@@ -13,7 +13,7 @@ export function validateDocsManifest(value:unknown):DocsManifest {
   if(step.timeoutMs!==undefined&&(!Number.isInteger(step.timeoutMs)||Number(step.timeoutMs)<1||Number(step.timeoutMs)>120000))throw new Error('Invalid step timeout');
   if(step.stdoutIncludes!==undefined&&(!Array.isArray(step.stdoutIncludes)||step.stdoutIncludes.length>32||step.stdoutIncludes.some(x=>typeof x!=='string'||x.length>8192)))throw new Error('Invalid output expectation');
  }
- if(artifact.mode==='published-package'&&!m.steps.some(s=>record(s).argv instanceof Array&&(record(s).argv as unknown[]).includes('{cli}')))throw new Error('Published journey must execute its selected artifact');
+ if(!m.steps.some(s=>(record(s).argv as unknown[])[0]==='{cli}'))throw new Error('Docs journey must directly execute its selected artifact');
  if(m.files!==undefined){if(!Array.isArray(m.files)||m.files.length>32)throw new Error('Invalid fixture files');const paths=new Set<string>();for(const value of m.files){const f=record(value);if(!safeFixturePath(f.path)||paths.has(f.path)||typeof f.content!=='string'||Buffer.byteLength(f.content)>65536)throw new Error('Invalid fixture path/content');paths.add(f.path);}}
  if(m.documentation!==undefined){const d=record(m.documentation);if(typeof d.path!=='string'||!d.path||!shaPattern.test(String(d.sha256)))throw new Error('Invalid docs digest expectation');}
  if(m.advertisedOptions!==undefined){if(!Array.isArray(m.advertisedOptions)||m.advertisedOptions.length>128)throw new Error('Invalid command metadata');for(const value of m.advertisedOptions){const c=record(value);if(typeof c.command!=='string'||!Array.isArray(c.flags)||c.flags.some(f=>typeof f!=='string'||!/^--?[-A-Za-z0-9]+$/.test(f)))throw new Error('Invalid advertised option');}}

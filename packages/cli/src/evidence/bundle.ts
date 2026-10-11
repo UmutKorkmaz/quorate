@@ -34,7 +34,9 @@ export function evidenceSafePath(root: string, path: string): string {
     }
     return current;
 }
-export function readEvidenceBytes(root: string, path: string, maxBytes = MAX_EVIDENCE_ARTIFACT_BYTES): Buffer {
+interface EvidenceReadBudget { remainingBytes: number; }
+export function readEvidenceBytes(root: string, path: string, maxBytes = MAX_EVIDENCE_ARTIFACT_BYTES, budget?: EvidenceReadBudget): Buffer {
+    maxBytes = Math.min(maxBytes, budget?.remainingBytes ?? maxBytes);
     const filename = evidenceSafePath(root, path), before = lstatSync(filename);
     if (!before.isFile() || before.size > maxBytes)
         throw new Error('Evidence must be a bounded regular file');
@@ -68,8 +70,12 @@ export function readEvidenceBytes(root: string, path: string, maxBytes = MAX_EVI
             throw new Error('Evidence changed during read');
         const bytes = Buffer.alloc(info.size + 1);
         let n = 0;
-        while (n < bytes.length) {
-            const count = readSync(fd, bytes, n, bytes.length - n, null);
+        while (n < bytes.length && n < maxBytes) {
+            // The safety byte for growth detection must also fit the allowance.
+            // fstat below still rejects growth when the initial file fills it.
+            const count = readSync(fd, bytes, n, Math.min(bytes.length - n, maxBytes - n), null);
+            if (budget)
+                budget.remainingBytes -= count;
             if (!count)
                 break;
             n += count;
@@ -162,9 +168,8 @@ export function exportEvidenceBundle(options: {
     inputs: EvidenceInput[];
 }): EvidenceBundle {
     const inputs = z.array(z.object({ id: z.string().min(1).max(160), path: z.string().min(1).max(8192), references: z.array(z.string()).max(256).optional() }).strict()).min(1).max(MAX_EVIDENCE_RECORDS).parse(options.inputs);
-    let total = 0;
-    const artifacts = new Map<string, Buffer>(), records = inputs.map(input => { const bytes = readEvidenceBytes(options.root, input.path); total += bytes.length; if (total > MAX_EVIDENCE_BUNDLE_BYTES)
-        throw new Error('Evidence bundle byte limit exceeded'); if (!Buffer.from(bytes.toString('utf8'), 'utf8').equals(bytes))
+    const budget = { remainingBytes: MAX_EVIDENCE_BUNDLE_BYTES };
+    const artifacts = new Map<string, Buffer>(), records = inputs.map(input => { const bytes = readEvidenceBytes(options.root, input.path, MAX_EVIDENCE_ARTIFACT_BYTES, budget); if (!Buffer.from(bytes.toString('utf8'), 'utf8').equals(bytes))
         throw new Error('Evidence must be UTF-8 JSON'); const hash = evidenceDigest(bytes), v = derive(JSON.parse(bytes.toString('utf8'))); artifacts.set(hash, bytes); return { id: input.id, kind: v.kind, schemaVersion: v.schemaVersion, sourceRevision: v.sourceRevision, subjectDigest: v.subjectDigest, producer: v.producer, checks: v.checks.length ? v.checks : [{ id: input.id, outcome: 'inconclusive' as const, requirements: [] }], artifact: { path: `artifacts/${hash}.json`, sha256: hash, bytes: bytes.length }, references: input.references ?? [] }; });
     const bundle = validateEvidenceBundle({ schemaVersion: 1, kind: 'quorate-evidence-bundle', records });
     const manifestContent = JSON.stringify(bundle, null, 2) + '\n';
@@ -189,9 +194,13 @@ export function inspectEvidenceBundle(options: {
     policy: EvidencePolicy | unknown;
 }): EvidenceInspection {
     const bundleRoot = evidenceSafePath(options.root, options.bundle), bundle = validateEvidenceBundle(readEvidenceJson(bundleRoot, 'manifest.json', MAX_EVIDENCE_MANIFEST_BYTES)), policy = evidencePolicySchema.parse(options.policy);
+    const budget = { remainingBytes: MAX_EVIDENCE_BUNDLE_BYTES };
     const observations: EvidenceObservation[] = bundle.records.map(record => {
         try {
-            const bytes = readEvidenceBytes(bundleRoot, record.artifact.path);
+            // A declared length is only an upper bound for the read, never a claim
+            // of bytes already consumed. Every actual read charges the shared budget,
+            // including reads that later fail integrity or race checks.
+            const bytes = readEvidenceBytes(bundleRoot, record.artifact.path, record.artifact.bytes, budget);
             if (bytes.length !== record.artifact.bytes || evidenceDigest(bytes) !== record.artifact.sha256)
                 throw new Error('Artifact digest mismatch');
             const derived = derive(JSON.parse(bytes.toString('utf8')));

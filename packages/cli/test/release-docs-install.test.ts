@@ -1,5 +1,5 @@
 import { expect,it } from 'vitest';
-import { mkdirSync,writeFileSync,existsSync } from 'node:fs';
+import { mkdirSync,writeFileSync,existsSync,readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ownedScratch } from '../src/release/scratch.js';
 import { executeBoundedCommand } from '../src/bounded-command.js';
@@ -26,5 +26,7 @@ it.skipIf(process.platform==='win32')('packs and installs a real owned fixture t
    {id:'corrected',argv:['{cli}','supply-chain','scan','--diff','{workspace}/clean.diff','--json','--gate'],expectedExit:0,expectedJson:{findings:[]}}
   ]}));
   const report=await checkDocs({cwd:scratch.cwd,manifestPath});expect(report.decision.state).toBe('verified');expect(report.checks).toHaveLength(6);expect(report.checks.every(c=>c.outcome==='passed')).toBe(true);
+  const sourceManifest=JSON.parse(readFileSync(manifestPath,'utf8'));sourceManifest.artifact={mode:'source-candidate',entrypoint:join(scratch.cwd,'dist/index.js')};sourceManifest.steps=sourceManifest.steps.slice(1);const sourcePath=join(scratch.cwd,'source-docs.json');writeFileSync(sourcePath,JSON.stringify(sourceManifest));
+  const sourceReport=await checkDocs({cwd:scratch.cwd,manifestPath:sourcePath});expect(sourceReport.artifactMode).toBe('source-candidate');expect(sourceReport.decision.state).toBe('verified');expect(sourceReport.checks).toHaveLength(5);expect(sourceReport.checks.every(c=>c.outcome==='passed')).toBe(true);
  }finally{scratch.cleanup();}
 },120000);

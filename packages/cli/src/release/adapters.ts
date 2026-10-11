@@ -27,6 +27,9 @@ async function digestDownload(url:string,timeoutMs:number,deps:NativeDeps,maxByt
   if(!response.ok||!response.body)throw new Error('Artifact download unavailable');
   const declared=Number(response.headers.get('content-length'));if(declared>maxBytes)throw new Error('Artifact too large');
   const digest=createHash('sha256'),reader=response.body.getReader();let bytes=0;
+  // One response reader yields ordered chunks; concurrent reads cannot replace this sequence.
+  // maxBytes, the shared deadline, and the abort signal bound the download.
+  // quorate-ignore-next-line serialized
   try{for(;;){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>maxBytes)throw new Error('Artifact too large');digest.update(value);}return digest.digest('hex');}finally{await reader.cancel();}
  }
  throw new Error('Artifact redirect limit exceeded');
