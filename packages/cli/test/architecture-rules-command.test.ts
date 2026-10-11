@@ -31,6 +31,20 @@ describe('read-only audit command journeys', () => {
         symlinkSync(join(external, 'graph.json'), join(cwd, 'graph.json'));
         expect((await invoke(['--cwd', cwd, 'arch', 'check', '--input', 'graph.json', '--subject', sha, '--json'])).exitCode).toBe(2);
     });
+    it('returns incomplete exit 2 and full-suite recommendations when an imported policy amplifies diagnostics', async () => {
+        const cwd = root();
+        const modules = Array.from({ length: 101 }, (_, index) => ({ source: `src/${index}.ts`, dependencies: index ? [] : Array.from({ length: 100 }, (_, target) => ({ resolved: `src/${target + 1}.ts` })) }));
+        const graph = JSON.stringify({ version: 1, revision: sha, scope: ['src'], complete: true, modules });
+        writeFileSync(join(cwd, 'graph.json'), graph);
+        writeFileSync(join(cwd, 'policy.json'), JSON.stringify({ version: 1, boundaries: Array.from({ length: 100 }, (_, index) => ({ id: `rule-${index}`, from: '.', to: '.' })), fullSuite: ['all-tests'] }));
+        const result = await invoke(['--cwd', cwd, 'arch', 'check', '--input', 'graph.json', '--subject', sha, '--policy', 'policy.json', '--json']);
+        expect(result.exitCode).toBe(2);
+        expect(result.report.complete).toBe(false);
+        expect(result.report.unknown).toContainEqual({ code: 'resource-budget-exceeded', source: '.' });
+        expect(result.report.impact.fullSuiteFallback).toBe(true);
+        expect(result.report.impact.recommendedChecks).toEqual(['all-tests']);
+        expect(readFileSync(join(cwd, 'graph.json'), 'utf8')).toBe(graph);
+    });
     it('audits literal permission conflicts and preserves every original byte', async () => {
         const cwd = root();
         mkdirSync(join(cwd, '.cursor'));

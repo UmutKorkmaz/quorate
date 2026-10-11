@@ -85,4 +85,51 @@ describe('architecture import and impact', () => {
         expect(analyzeArchitecture({ ...input, policy: { ...input.policy, contracts: [...contracts].reverse() } })).toEqual(report);
     });
 
+    it('bounds amplified policy diagnostics and returns incomplete with the full suite', () => {
+        const modules = Array.from({ length: 101 }, (_, index) => ({ source: `src/${index}.ts`, dependencies: index ? [] : Array.from({ length: 100 }, (_, target) => ({ resolved: `src/${target + 1}.ts` })) }));
+        const report = analyzeArchitecture({ subject: { ...graph(), modules }, subjectRevision: head, policy: { ...policy, boundaries: Array.from({ length: 100 }, (_, index) => ({ id: `rule-${index}`, from: '.', to: '.' })) } });
+        expect(report.exitCode).toBe(2);
+        expect(report.complete).toBe(false);
+        expect(report.unknown).toContainEqual({ code: 'resource-budget-exceeded', source: '.' });
+        expect(report.impact.fullSuiteFallback).toBe(true);
+        expect(report.impact.recommendedChecks).toContain('all-tests');
+        expect(Buffer.byteLength(JSON.stringify(report))).toBeLessThan(4 * 1024 * 1024);
+    });
+
+    it('bounds contract work even when no mapping matches an affected node', () => {
+        const modules = Array.from({ length: 1100 }, (_, index) => ({ source: `src/${index}.ts`, dependencies: [] }));
+        const report = analyzeArchitecture({ subject: { ...graph(), modules }, subjectRevision: head, changed: modules.map(module => module.source), policy: { ...policy, boundaries: [], contracts: Array.from({ length: 1000 }, (_, index) => ({ path: `absent/${index}`, consumers: [], checks: [] })) } });
+        expect(report.exitCode).toBe(2);
+        expect(report.unknown).toContainEqual({ code: 'resource-budget-exceeded', source: '.' });
+        expect(report.impact.recommendedChecks).toEqual(['all-tests']);
+    });
+
+    it('deduplicates scheduled consumers and caches repeated prefix matching', () => {
+        const modules = Array.from({ length: 100 }, (_, index) => ({ source: `src/${index}.ts`, dependencies: [] }));
+        const mapping = { path: 'src', consumers: Array<string>(100).fill('.'), checks: ['consumer-api'] };
+        const report = analyzeArchitecture({ subject: { ...graph(), modules }, subjectRevision: head, changed: ['src/0.ts'], policy: { ...policy, boundaries: [], contracts: Array.from({ length: 100 }, () => mapping) } });
+        expect(report.exitCode).toBe(0);
+        expect(report.impact.affected).toEqual(modules.map(module => module.source).sort());
+        expect(report.impact.recommendedChecks).toEqual(['consumer-api']);
+    });
+
+    it('shares the diagnostic budget across baseline and subject instead of declaring all violations historical', () => {
+        const modules = Array.from({ length: 51 }, (_, index) => ({ source: `src/${index}.ts`, dependencies: index ? [] : Array.from({ length: 50 }, (_, target) => ({ resolved: `src/${target + 1}.ts` })) }));
+        const report = analyzeArchitecture({ subject: { ...graph(), modules }, subjectRevision: head, baseline: { ...graph(base), modules }, baseRevision: base, policy: { ...policy, boundaries: Array.from({ length: 21 }, (_, index) => ({ id: `rule-${index}`, from: '.', to: '.' })) } });
+        expect(report.exitCode).toBe(2);
+        expect(report.historicalViolations).toEqual([]);
+        expect(report.unknown).toContainEqual({ code: 'resource-budget-exceeded', source: '.' });
+    });
+
+    it('bounds retained report bytes independently of operation and diagnostic counts', () => {
+        const modules = Array.from({ length: 2500 }, (_, index) => ({ source: `src/${'a'.repeat(900)}${index}.ts`, dependencies: [] }));
+        const subject = { ...graph(), modules };
+        expect(Buffer.byteLength(JSON.stringify(subject))).toBeLessThan(8 * 1024 * 1024);
+        const report = analyzeArchitecture({ subject, subjectRevision: head, changed: modules.map(module => module.source), policy: { version: 1, fullSuite: ['all-tests'] } });
+        expect(report.exitCode).toBe(2);
+        expect(report.unknown).toContainEqual({ code: 'resource-budget-exceeded', source: '.' });
+        expect(Buffer.byteLength(JSON.stringify(report))).toBeLessThan(4 * 1024 * 1024);
+        expect(report.impact.fullSuiteFallback).toBe(true);
+    });
+
 });

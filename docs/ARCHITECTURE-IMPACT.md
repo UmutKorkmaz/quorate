@@ -20,4 +20,6 @@ Exact subject/base revisions must match independently. No baseline means every o
 
 Input files must be regular files inside the selected working directory, maximum 8 MiB. Imports reject unsafe paths, duplicate module identifiers, invalid metadata and malformed structures. Symbol-level runtime behavior, external service consumers, generated relationships and unsupported languages remain unknown.
 
+Analysis shares deterministic limits across the subject, baseline and impact traversal: 1,000,000 work operations, 2,000 diagnostic/violation records and 4 MiB of retained report data. Consumer prefixes are cached, and each affected path is scheduled only once. A policy that exceeds a limit returns exit 2, `complete: false`, a `resource-budget-exceeded` diagnostic and configured full-suite recommendations. Partial violation, cycle, hotspot and changed/affected lists are discarded after exhaustion; empty lists in that report do not imply no violations or no impact. These limits also apply to policy comparisons and graph traversal, including cases with no matching rule.
+
 Dependency-cruiser module shape is grounded in its [official result types](https://github.com/sverweij/dependency-cruiser/blob/main/types/cruise-result.d.mts). Explicit revision/coverage metadata is a Quorate envelope rather than an upstream field.

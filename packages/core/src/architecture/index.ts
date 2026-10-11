@@ -82,6 +82,39 @@ function validateGraph(input: unknown): DependencyCruiserImport {
     }
     return graph;
 }
+// Shared across subject, baseline and impact: imported policies cannot amplify
+// a small input into unbounded work or retained report data.
+export const ARCHITECTURE_OPERATION_LIMIT = 1_000_000;
+export const ARCHITECTURE_DIAGNOSTIC_LIMIT = 2_000;
+export const ARCHITECTURE_OUTPUT_LIMIT = 4 * 1024 * 1024;
+class ArchitectureBudgetExceeded extends Error {}
+class ArchitectureBudget {
+    private operations = 0;
+    private diagnostics = 0;
+    private outputBytes = 1024; // Fixed report fields and the exhaustion diagnostic.
+    tick(): void {
+        if (++this.operations > ARCHITECTURE_OPERATION_LIMIT)
+            throw new ArchitectureBudgetExceeded();
+    }
+    retain(value: unknown, diagnostic = false): void {
+        this.tick();
+        if (diagnostic && ++this.diagnostics > ARCHITECTURE_DIAGNOSTIC_LIMIT)
+            throw new ArchitectureBudgetExceeded();
+        this.outputBytes += Buffer.byteLength(JSON.stringify(value), 'utf8') + 1;
+        if (this.outputBytes > ARCHITECTURE_OUTPUT_LIMIT)
+            throw new ArchitectureBudgetExceeded();
+    }
+    within(path: string, prefix: string): boolean {
+        this.tick();
+        return within(path, prefix);
+    }
+    checkOutput(report: ArchitectureReport): void {
+        // Includes final field names and baseline diagnostic prefixes, which can
+        // add bytes after individual retained records were counted.
+        if (Buffer.byteLength(JSON.stringify(report), 'utf8') > ARCHITECTURE_OUTPUT_LIMIT)
+            throw new ArchitectureBudgetExceeded();
+    }
+}
 const within = (path: string, prefix: string) => prefix === '.' || path === prefix || path.startsWith(prefix + '/');
 const sorted = (values: Iterable<string>) => [...new Set(values)].sort();
 const cmp = (a: {
@@ -89,32 +122,35 @@ const cmp = (a: {
 }, b: {
     id: string;
 }) => a.id.localeCompare(b.id, 'en');
-function inspect(graph: DependencyCruiserImport, policy: ArchitecturePolicy) {
+function inspect(graph: DependencyCruiserImport, policy: ArchitecturePolicy, budget: ArchitectureBudget) {
     const adjacency = new Map<string, string[]>(), reverse = new Map<string, string[]>(), unknown: ArchitectureUnknown[] = [];
     const names = new Set(graph.modules.map(m => m.source));
+    const addUnknown = (value: ArchitectureUnknown) => { budget.retain(value, true); unknown.push(value); };
     for (const name of names) {
+        budget.tick();
         adjacency.set(name, []);
         reverse.set(name, []);
     }
     if (!graph.complete)
-        unknown.push({ code: 'producer-incomplete', source: '.' });
+        addUnknown({ code: 'producer-incomplete', source: '.' });
     for (const reason of graph.unknown ?? [])
-        unknown.push({ code: 'producer-gap', source: reason });
+        addUnknown({ code: 'producer-gap', source: reason });
     for (const node of graph.modules) {
-        if (!graph.scope.some(scope => within(node.source, scope)))
-            unknown.push({ code: 'outside-declared-scope', source: node.source });
+        if (!graph.scope.some(scope => budget.within(node.source, scope)))
+            addUnknown({ code: 'outside-declared-scope', source: node.source });
         if (node.generated || node.couldNotResolve || node.followable === false)
-            unknown.push({ code: 'module-coverage-gap', source: node.source });
+            addUnknown({ code: 'module-coverage-gap', source: node.source });
         for (const dep of node.dependencies) {
+            budget.tick();
             const types = dep.dependencyTypes ?? [];
-            if (types.some(type => type === 'unknown' || type === 'undetermined'))
-                unknown.push({ code: 'unknown-dependency-type', source: node.source, target: dep.resolved });
-            const unsupported = dep.dynamic ? 'dynamic-relationship' : dep.generated ? 'generated-relationship' : dep.couldNotResolve ? 'unresolved-relationship' : dep.coreModule || types.some(x => x === 'core' || x.startsWith('npm')) ? 'external-relationship' : dep.followable === false || dep.matchesDoNotFollow ? 'unfollowed-relationship' : null;
+            if (types.some(type => { budget.tick(); return type === 'unknown' || type === 'undetermined'; }))
+                addUnknown({ code: 'unknown-dependency-type', source: node.source, target: dep.resolved });
+            const unsupported = dep.dynamic ? 'dynamic-relationship' : dep.generated ? 'generated-relationship' : dep.couldNotResolve ? 'unresolved-relationship' : dep.coreModule || types.some(x => { budget.tick(); return x === 'core' || x.startsWith('npm'); }) ? 'external-relationship' : dep.followable === false || dep.matchesDoNotFollow ? 'unfollowed-relationship' : null;
             if (unsupported)
-                unknown.push({ code: unsupported, source: node.source, target: dep.resolved });
+                addUnknown({ code: unsupported, source: node.source, target: dep.resolved });
             if (!names.has(dep.resolved)) {
                 if (!unsupported)
-                    unknown.push({ code: 'missing-node', source: node.source, target: dep.resolved });
+                    addUnknown({ code: 'missing-node', source: node.source, target: dep.resolved });
                 continue;
             }
             adjacency.get(node.source)!.push(dep.resolved);
@@ -136,6 +172,7 @@ function inspect(graph: DependencyCruiserImport, policy: ArchitecturePolicy) {
         }[] = [{ name, offset: 0 }];
         seen.add(name);
         while (stack.length) {
+            budget.tick();
             const top = stack[stack.length - 1], edges = adjacency.get(top.name)!;
             if (top.offset < edges.length) {
                 const next = edges[top.offset++];
@@ -157,33 +194,47 @@ function inspect(graph: DependencyCruiserImport, policy: ArchitecturePolicy) {
         const component: string[] = [], stack = [name];
         assigned.add(name);
         while (stack.length) {
+            budget.tick();
             const next = stack.pop()!;
             component.push(next);
-            for (const predecessor of reverse.get(next)!)
+            for (const predecessor of reverse.get(next)!) {
+                budget.tick();
                 if (!assigned.has(predecessor)) {
                     assigned.add(predecessor);
                     stack.push(predecessor);
                 }
+            }
         }
         component.sort();
-        if (component.length > 1 || adjacency.get(name)!.includes(name))
+        if (component.length > 1 || adjacency.get(name)!.includes(name)) {
+            budget.retain(component);
             cycles.push(component);
+        }
     }
     cycles.sort((a, b) => a.join('|').localeCompare(b.join('|'), 'en'));
     const violations: ArchitectureViolation[] = [];
-    const add = (kind: ArchitectureViolation['kind'], rule: string, from: string, to: string) => violations.push({ id: JSON.stringify([kind, rule, from, to]), kind, rule, from, to });
+    const add = (kind: ArchitectureViolation['kind'], rule: string, from: string, to: string) => {
+        const violation = { id: JSON.stringify([kind, rule, from, to]), kind, rule, from, to };
+        budget.retain(violation, true);
+        violations.push(violation);
+    };
     for (const [from, targets] of adjacency)
         for (const to of targets) {
+            budget.tick();
             for (const rule of policy.boundaries)
-                if (within(from, rule.from) && within(to, rule.to))
+                if (budget.within(from, rule.from) && budget.within(to, rule.to))
                     add('boundary', rule.id, from, to);
-            const a = policy.layers.findIndex(p => within(from, p)), b = policy.layers.findIndex(p => within(to, p));
+            const a = policy.layers.findIndex(p => budget.within(from, p)), b = policy.layers.findIndex(p => budget.within(to, p));
             if (a >= 0 && b > a)
                 add('layer', `${policy.layers[a]} -> ${policy.layers[b]}`, from, to);
         }
     for (const cycle of cycles)
         add('cycle', JSON.stringify(cycle), cycle[0], cycle[0]);
-    const hotspots = sorted(names).map(path => ({ path, inbound: reverse.get(path)!.length, outbound: adjacency.get(path)!.length, degree: reverse.get(path)!.length + adjacency.get(path)!.length })).sort((a, b) => b.degree - a.degree || a.path.localeCompare(b.path, 'en'));
+    const hotspots = sorted(names).map(path => {
+        const hotspot = { path, inbound: reverse.get(path)!.length, outbound: adjacency.get(path)!.length, degree: reverse.get(path)!.length + adjacency.get(path)!.length };
+        budget.retain(hotspot);
+        return hotspot;
+    }).sort((a, b) => b.degree - a.degree || a.path.localeCompare(b.path, 'en'));
     return { reverse, names, unknown, cycles, violations: violations.sort(cmp), hotspots };
 }
 export function analyzeArchitecture(input: ArchitectureInput): ArchitectureReport {
@@ -200,41 +251,80 @@ export function analyzeArchitecture(input: ArchitectureInput): ArchitectureRepor
     }
     else if (input.baseRevision)
         throw new Error('Base revision requires baseline');
-    const result = inspect(subject, policy), previous = baseline ? inspect(baseline, policy) : undefined, old = new Set(previous?.violations.map(v => v.id) ?? []), unknown = [...result.unknown, ...(previous?.unknown.map(x => ({ ...x, code: `baseline-${x.code}` })) ?? [])];
-    const changed = sorted(z.array(pathSchema).max(10000).parse(input.changed ?? [])), affected = new Set<string>(), queue = [...changed];
-    for (const path of changed)
-        if (!result.names.has(path))
-            unknown.push({ code: 'changed-node-missing', source: path });
-    const checks = new Set<string>(), activatedMappings = new Set<number>();
-    // Process graph dependents and explicit consumers in one fixed-point worklist.
-    // A mapping activates once when its contract becomes affected, regardless of order.
-    while (queue.length) {
-        const path = queue.pop()!;
-        if (affected.has(path))
-            continue;
-        affected.add(path);
-        for (const source of result.reverse.get(path) ?? [])
-            queue.push(source);
-        for (const [index, mapping] of policy.contracts.entries()) {
-            if (activatedMappings.has(index) || !within(path, mapping.path))
-                continue;
-            activatedMappings.add(index);
-            for (const check of mapping.checks)
-                checks.add(check);
-            for (const consumer of mapping.consumers) {
-                const matching = [...result.names].filter(name => within(name, consumer));
-                if (!matching.length)
-                    unknown.push({ code: 'mapped-consumer-missing', source: mapping.path, target: consumer });
-                queue.push(...matching);
+    const changed = sorted(z.array(pathSchema).max(10000).parse(input.changed ?? []));
+    const budget = new ArchitectureBudget();
+    try {
+        budget.retain(subject.scope);
+        const result = inspect(subject, policy, budget), previous = baseline ? inspect(baseline, policy, budget) : undefined, old = new Set(previous?.violations.map(v => v.id) ?? []), unknown = [...result.unknown, ...(previous?.unknown.map(x => ({ ...x, code: `baseline-${x.code}` })) ?? [])];
+        const affected = new Set<string>(), queue = [...changed], scheduled = new Set(changed);
+        budget.retain(changed);
+        const addUnknown = (value: ArchitectureUnknown) => { budget.retain(value, true); unknown.push(value); };
+        const enqueue = (path: string) => {
+            budget.tick();
+            if (!scheduled.has(path)) { scheduled.add(path); queue.push(path); }
+        };
+        const matches = new Map<string, string[]>();
+        const matchingConsumers = (prefix: string) => {
+            budget.tick();
+            let matching = matches.get(prefix);
+            if (!matching) {
+                matching = [...result.names].filter(name => budget.within(name, prefix));
+                matches.set(prefix, matching);
             }
-            if (!mapping.checks.length)
-                unknown.push({ code: 'contract-checks-missing', source: mapping.path });
+            return matching;
+        };
+        for (const path of changed)
+            if (!result.names.has(path))
+                addUnknown({ code: 'changed-node-missing', source: path });
+        const checks = new Set<string>(), remainingMappings = new Map(policy.contracts.map((mapping, index) => [index, mapping])), expandedConsumers = new Set<string>();
+        // Process graph dependents and explicit consumers in one fixed-point worklist.
+        // A mapping activates once when its contract becomes affected, regardless of order.
+        while (queue.length) {
+            budget.tick();
+            const path = queue.pop()!;
+            if (affected.has(path))
+                continue;
+            budget.retain(path);
+            affected.add(path);
+            for (const source of result.reverse.get(path) ?? [])
+                enqueue(source);
+            for (const [index, mapping] of remainingMappings) {
+                budget.tick();
+                if (!budget.within(path, mapping.path))
+                    continue;
+                remainingMappings.delete(index);
+                for (const check of mapping.checks) {
+                    budget.tick();
+                    if (!checks.has(check)) budget.retain(check);
+                    checks.add(check);
+                }
+                for (const consumer of sorted(mapping.consumers)) {
+                    const matching = matchingConsumers(consumer);
+                    if (!matching.length)
+                        addUnknown({ code: 'mapped-consumer-missing', source: mapping.path, target: consumer });
+                    if (!expandedConsumers.has(consumer)) {
+                        expandedConsumers.add(consumer);
+                        for (const name of matching) enqueue(name);
+                    }
+                }
+                if (!mapping.checks.length)
+                    addUnknown({ code: 'contract-checks-missing', source: mapping.path });
+            }
         }
+        const diagnostics = [...new Map(unknown.map(x => [JSON.stringify(x), x])).values()].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'en')), complete = diagnostics.length === 0;
+        if (!complete)
+            for (const check of policy.fullSuite) {
+                if (!checks.has(check)) budget.retain(check);
+                checks.add(check);
+            }
+        const newViolations = result.violations.filter(v => !old.has(v.id));
+        const report: ArchitectureReport = { version: 1, adapter: 'dependency-cruiser', subjectRevision: subject.revision, baseRevision: baseline?.revision ?? null, scope: sorted(subject.scope), complete, exitCode: !complete ? 2 : newViolations.length ? 1 : 0, historicalViolations: result.violations.filter(v => old.has(v.id)), newViolations, cycles: result.cycles, unknown: diagnostics, impact: { changed, affected: sorted(affected), recommendedChecks: sorted(checks), mode: 'recommend-only', fullSuiteFallback: !complete }, hotspots: result.hotspots };
+        budget.checkOutput(report);
+        return report;
+    } catch (error) {
+        if (!(error instanceof ArchitectureBudgetExceeded)) throw error;
+        // Partial observations are discarded: they cannot support an exhaustive
+        // architecture or affected-test claim after a shared budget is exhausted.
+        return { version: 1, adapter: 'dependency-cruiser', subjectRevision: subject.revision, baseRevision: baseline?.revision ?? null, scope: sorted(subject.scope), complete: false, exitCode: 2, historicalViolations: [], newViolations: [], cycles: [], unknown: [{ code: 'resource-budget-exceeded', source: '.' }], impact: { changed: [], affected: [], recommendedChecks: sorted(policy.fullSuite), mode: 'recommend-only', fullSuiteFallback: true }, hotspots: [] };
     }
-    const diagnostics = [...new Map(unknown.map(x => [JSON.stringify(x), x])).values()].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'en')), complete = diagnostics.length === 0;
-    if (!complete)
-        for (const check of policy.fullSuite)
-            checks.add(check);
-    const newViolations = result.violations.filter(v => !old.has(v.id));
-    return { version: 1, adapter: 'dependency-cruiser', subjectRevision: subject.revision, baseRevision: baseline?.revision ?? null, scope: sorted(subject.scope), complete, exitCode: !complete ? 2 : newViolations.length ? 1 : 0, historicalViolations: result.violations.filter(v => old.has(v.id)), newViolations, cycles: result.cycles, unknown: diagnostics, impact: { changed, affected: sorted(affected), recommendedChecks: sorted(checks), mode: 'recommend-only', fullSuiteFallback: !complete }, hotspots: result.hotspots };
 }

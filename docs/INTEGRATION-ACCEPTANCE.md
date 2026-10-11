@@ -36,13 +36,14 @@ The owned native monitor, isolated VS Code profile process and isolated tmux ser
 
 P2–P8 have implemented command surfaces and independent source reviews. Corrective
 regressions cover immutable GitHub asset identity, recovery deadlines, pinned
-regression bytes, manifest budgets, consumer impact closure, inline rule imports,
+regression bytes, manifest budgets, export root identity and create-only writes,
+architecture resource budgets, consumer impact closure, inline rule imports,
 and Windows path confinement. Native process execution in release/docs adapters
 is explicitly unavailable on Windows; read-only report and evidence flows remain
 in the CI matrix. Fixture observations and supplied installed-version metadata
 do not establish native agent enforcement or model quality.
 
-Final local verification passed 163 files and 1,964 tests, with one skipped.
+Final local verification passed 163 files and 1,979 tests, with one skipped.
 Builds, type checks, all 14 ContractCourt fixtures and the dependency audit passed.
 The final source review has no remaining Critical or Important findings.
 

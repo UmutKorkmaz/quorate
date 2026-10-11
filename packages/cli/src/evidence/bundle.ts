@@ -162,11 +162,30 @@ function derive(value: unknown): Derived {
     }
     return unsupported();
 }
+interface EvidenceDirectoryIdentity { path: string; dev: number; ino: number; }
+function evidenceDirectoryIdentity(path: string): EvidenceDirectoryIdentity {
+    const stat = lstatSync(path);
+    if (!stat.isDirectory() || stat.isSymbolicLink())
+        throw new Error('Evidence export directory is not a real directory');
+    return { path, dev: stat.dev, ino: stat.ino };
+}
+function assertEvidenceDirectories(directories: EvidenceDirectoryIdentity[]): void {
+    for (const expected of directories) {
+        const current = evidenceDirectoryIdentity(expected.path);
+        if (current.dev !== expected.dev || current.ino !== expected.ino)
+            throw new Error('Evidence export directory changed');
+    }
+}
 export function exportEvidenceBundle(options: {
     root: string;
     output: string;
     inputs: EvidenceInput[];
 }): EvidenceBundle {
+    const selectedRoot = evidenceDirectoryIdentity(resolve(options.root));
+    const canonicalRoot = realpathSync(selectedRoot.path);
+    const rootIdentity = evidenceDirectoryIdentity(canonicalRoot);
+    if (rootIdentity.dev !== selectedRoot.dev || rootIdentity.ino !== selectedRoot.ino)
+        throw new Error('Evidence export root changed');
     const inputs = z.array(z.object({ id: z.string().min(1).max(160), path: z.string().min(1).max(8192), references: z.array(z.string()).max(256).optional() }).strict()).min(1).max(MAX_EVIDENCE_RECORDS).parse(options.inputs);
     const budget = { remainingBytes: MAX_EVIDENCE_BUNDLE_BYTES };
     const artifacts = new Map<string, Buffer>(), records = inputs.map(input => { const bytes = readEvidenceBytes(options.root, input.path, MAX_EVIDENCE_ARTIFACT_BYTES, budget); if (!Buffer.from(bytes.toString('utf8'), 'utf8').equals(bytes))
@@ -178,14 +197,36 @@ export function exportEvidenceBundle(options: {
     const output = options.output;
     if (!output || output.includes('\\') || isAbsolute(output) || win32.isAbsolute(output) || output.split('/').some(p => !p || p === '.' || p === '..'))
         throw new Error('Unsafe evidence output');
-    const parent = dirname(output);
-    if (parent !== '.')
-        evidenceSafePath(options.root, parent);
-    const destination = join(realpathSync(options.root), output);
+    const directories = [rootIdentity];
+    let parent = canonicalRoot;
+    for (const part of output.split('/').slice(0, -1)) {
+        parent = join(parent, part);
+        directories.push(evidenceDirectoryIdentity(parent));
+    }
+    const destination = join(canonicalRoot, output);
+    assertEvidenceDirectories(directories);
     mkdirSync(destination, { mode: 0o700 });
+    assertEvidenceDirectories(directories);
+    directories.push(evidenceDirectoryIdentity(destination));
+    assertEvidenceDirectories(directories);
+    const artifactDirectory = join(destination, 'artifacts');
+    mkdirSync(artifactDirectory, { mode: 0o700 });
+    assertEvidenceDirectories(directories);
+    directories.push(evidenceDirectoryIdentity(artifactDirectory));
+    const publish = (target: string, content: string): void => {
+        assertEvidenceDirectories(directories);
+        // Keep the original root as the trust boundary. The newly created output
+        // directory must never become a fresh root after an ancestor swap.
+        writeSecureWorkspaceState(canonicalRoot, `${output}/${target}`, content, {
+            expectedWorkspaceIdentity: { dev: rootIdentity.dev, ino: rootIdentity.ino },
+            preserveExistingDirectoryModes: true,
+            refuseExistingDestination: true
+        });
+        assertEvidenceDirectories(directories);
+    };
     for (const [hash, bytes] of artifacts)
-        writeSecureWorkspaceState(destination, `artifacts/${hash}.json`, bytes.toString('utf8'));
-    writeSecureWorkspaceState(destination, 'manifest.json', manifestContent);
+        publish(`artifacts/${hash}.json`, bytes.toString('utf8'));
+    publish('manifest.json', manifestContent);
     return bundle;
 }
 export function inspectEvidenceBundle(options: {

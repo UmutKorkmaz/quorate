@@ -19,6 +19,30 @@ afterEach(() => {
 });
 
 describe("writeSecureWorkspaceState", () => {
+  it("checks the caller's pinned workspace before creating any export directories", () => {
+    const identity = statSync(workspace);
+    expect(() => writeSecureWorkspaceState(workspace, "exports/manifest.json", "report\n", {
+      expectedWorkspaceIdentity: { dev: identity.dev, ino: identity.ino + 1 }
+    })).toThrow(/workspace.*identity/i);
+    expect(existsSync(join(workspace, "exports"))).toBe(false);
+  });
+
+  it("refuses an existing export destination without replacing its contents", () => {
+    writeSecureWorkspaceState(workspace, "exports/manifest.json", "original\n");
+    expect(() => writeSecureWorkspaceState(workspace, "exports/manifest.json", "new\n", { refuseExistingDestination: true })).toThrow(/already exists/i);
+    expect(readFileSync(join(workspace, "exports", "manifest.json"), "utf8")).toBe("original\n");
+  });
+
+  it.skipIf(platform() === "win32")("preserves existing export parent modes while creating private descendants", () => {
+    const parent = join(workspace, "exports");
+    mkdirSync(parent);
+    chmodSync(parent, 0o755);
+    writeSecureWorkspaceState(workspace, "exports/bundle/manifest.json", "report\n", { preserveExistingDirectoryModes: true });
+    expect(statSync(parent).mode & 0o777).toBe(0o755);
+    expect(statSync(join(parent, "bundle")).mode & 0o777).toBe(0o700);
+    expect(statSync(join(parent, "bundle", "manifest.json")).mode & 0o777).toBe(0o600);
+  });
+
   it("rejects a symlinked state directory without changing the outside victim", () => {
     const victim = join(outside, "latest.json");
     writeFileSync(victim, "outside remains intact\n", "utf8");

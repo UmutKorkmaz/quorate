@@ -8,6 +8,7 @@ import {
   fstatSync,
   ftruncateSync,
   lstatSync,
+  linkSync,
   mkdirSync,
   openSync,
   realpathSync,
@@ -32,8 +33,14 @@ export interface SecureStateFaultContext {
   destinationPath: string;
 }
 
-/** Test-only interruption points for publication-race and directory-sync coverage. */
+/** Publication options and test-only interruption points. */
 export interface SecureStateWriteOptions {
+  /** Export ancestors are user-owned; newly created directories remain private. */
+  preserveExistingDirectoryModes?: boolean;
+  /** Export artifacts are created once and never replace an existing file. */
+  refuseExistingDestination?: boolean;
+  /** Multi-file exporters pin their original root across separate publications. */
+  expectedWorkspaceIdentity?: { dev: number; ino: number };
   fault?: (point: SecureStateFaultPoint, context: SecureStateFaultContext) => void;
 }
 
@@ -94,9 +101,9 @@ function directoryIdentity(path: string, label: string): DirectoryIdentity {
   return { path, dev: entry.dev, ino: entry.ino };
 }
 
-function privateDescendantDirectory(path: string, label: string): DirectoryIdentity {
+function privateDescendantDirectory(path: string, label: string, preserveMode = false): DirectoryIdentity {
   const identity = directoryIdentity(path, label);
-  if (platform() !== "win32") chmodSync(path, DIRECTORY_MODE);
+  if (platform() !== "win32" && !preserveMode) chmodSync(path, DIRECTORY_MODE);
   return identity;
 }
 
@@ -109,15 +116,16 @@ function assertDirectoryIdentity(directory: DirectoryIdentity, workspace: string
   if (!isInside(workspace, resolved)) throw stateError("a state directory resolves outside the workspace.");
 }
 
-function ensurePrivateParent(workspace: string, parts: string[]): { parent: string; directories: DirectoryIdentity[] } {
+function ensurePrivateParent(workspace: string, parts: string[], preserveExistingDirectoryModes = false): { parent: string; directories: DirectoryIdentity[] } {
   // The caller's workspace is only revalidated: its permissions are user-owned.
   const directories = [directoryIdentity(workspace, "workspace root")];
   let current = workspace;
   for (const part of parts.slice(0, -1)) {
     const next = join(current, part);
     if (!isInside(workspace, next)) throw stateError("state directory resolves outside the workspace.");
-    if (!optionalLstat(next)) mkdirSync(next, { mode: DIRECTORY_MODE });
-    const identity = privateDescendantDirectory(next, `state directory '${part}'`);
+    const existed = Boolean(optionalLstat(next));
+    if (!existed) mkdirSync(next, { mode: DIRECTORY_MODE });
+    const identity = privateDescendantDirectory(next, `state directory '${part}'`, existed && preserveExistingDirectoryModes);
     const resolved = realpathSync(next);
     if (!isInside(workspace, resolved)) throw stateError(`state directory '${part}' resolves outside the workspace.`);
     directories.push(identity);
@@ -234,7 +242,8 @@ export function preflightSecureWorkspaceState(workspaceCwd: string, targets: rea
 
 /**
  * Atomically replace one Quorate-owned, fixed state file beneath a canonical
- * workspace. Arbitrary user-selected export paths intentionally do not use it.
+ * workspace. Export callers retain the original workspace root and may preserve
+ * existing ancestor permissions while publishing their fixed artifact targets.
  */
 export function writeSecureWorkspaceState(
   workspaceCwd: string,
@@ -244,9 +253,18 @@ export function writeSecureWorkspaceState(
 ): void {
   const parts = assertRelativeTarget(target);
   const workspace = canonicalWorkspace(workspaceCwd);
-  const { parent, directories } = ensurePrivateParent(workspace, parts);
+  if (options.expectedWorkspaceIdentity) {
+    const supplied = assertDirectory(resolve(workspaceCwd), "workspace root");
+    const actual = assertDirectory(workspace, "workspace root");
+    const expected = options.expectedWorkspaceIdentity;
+    if (supplied.dev !== expected.dev || supplied.ino !== expected.ino || actual.dev !== expected.dev || actual.ino !== expected.ino) {
+      throw stateError("workspace root identity changed before publication.");
+    }
+  }
+  const { parent, directories } = ensurePrivateParent(workspace, parts, options.preserveExistingDirectoryModes);
   const destination = join(parent, parts.at(-1)!);
   const expectedDestination = destinationIdentity(destination);
+  if (options.refuseExistingDestination && expectedDestination) throw stateError("state destination already exists.");
   const temporary = join(parent, `.quorate-state-${process.pid}-${randomBytes(12).toString("hex")}.tmp`);
   const context: SecureStateFaultContext = { temporaryPath: temporary, parentPath: parent, destinationPath: destination };
   let fd: number | undefined;
@@ -264,7 +282,15 @@ export function writeSecureWorkspaceState(
     assertTemporaryPathBound(temporary, temp);
     for (const directory of directories) assertDirectoryIdentity(directory, workspace);
     assertDestinationIdentity(destination, expectedDestination);
-    renameSync(temporary, destination);
+    if (options.refuseExistingDestination) {
+      // Creating a hard link fails atomically if a destination appeared after
+      // the identity check, so create-only publication never overwrites it.
+      linkSync(temporary, destination);
+      removeTemporaryIfStillOwned(temporary, temp);
+      if (optionalLstat(temporary)) throw stateError("temporary export file could not be removed.");
+    } else {
+      renameSync(temporary, destination);
+    }
     assertTemporaryDescriptor(fd, temp);
     assertDestinationMatchesTemporary(destination, temp);
     let directorySyncError: unknown;

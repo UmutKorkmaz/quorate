@@ -2,8 +2,8 @@ import { it,expect,afterEach,vi } from 'vitest';
 import fs from 'node:fs';import { join } from 'node:path';import { tmpdir } from 'node:os';
 import { evidenceCanonical,evidenceDigest,MAX_EVIDENCE_ARTIFACT_BYTES,MAX_EVIDENCE_BUNDLE_BYTES } from '../../../core/src/evidence/index.js';
 import { exportEvidenceBundle,inspectEvidenceBundle,readEvidenceBytes } from '../../src/evidence/bundle.js';
-const interception=vi.hoisted(()=>({onClose:undefined as undefined|((path:unknown)=>void),onRead:undefined as undefined|((path:unknown,count:number)=>void)}));
-vi.mock('node:fs',async importOriginal=>{const actual=await importOriginal<typeof import('node:fs')>();const descriptors=new Map<number,unknown>();return {...actual,openSync:(...args:Parameters<typeof actual.openSync>)=>{const fd=actual.openSync(...args);descriptors.set(fd,args[0]);return fd;},readSync:(...args:Parameters<typeof actual.readSync>)=>{const count=actual.readSync(...args);interception.onRead?.(descriptors.get(args[0]),count);return count;},closeSync:(fd:number)=>{const path=descriptors.get(fd);descriptors.delete(fd);actual.closeSync(fd);interception.onClose?.(path);}};});
+const interception=vi.hoisted(()=>({onClose:undefined as undefined|((path:unknown)=>void),onRead:undefined as undefined|((path:unknown,count:number)=>void),onMkdir:undefined as undefined|((path:unknown,phase:'before'|'after')=>void),onRealpath:undefined as undefined|((path:unknown)=>void)}));
+vi.mock('node:fs',async importOriginal=>{const actual=await importOriginal<typeof import('node:fs')>();const descriptors=new Map<number,unknown>();return {...actual,realpathSync:(...args:Parameters<typeof actual.realpathSync>)=>{interception.onRealpath?.(args[0]);return actual.realpathSync(...args);},mkdirSync:(...args:Parameters<typeof actual.mkdirSync>)=>{interception.onMkdir?.(args[0],'before');const result=actual.mkdirSync(...args);interception.onMkdir?.(args[0],'after');return result;},openSync:(...args:Parameters<typeof actual.openSync>)=>{const fd=actual.openSync(...args);descriptors.set(fd,args[0]);return fd;},readSync:(...args:Parameters<typeof actual.readSync>)=>{const count=actual.readSync(...args);interception.onRead?.(descriptors.get(args[0]),count);return count;},closeSync:(fd:number)=>{const path=descriptors.get(fd);descriptors.delete(fd);actual.closeSync(fd);interception.onClose?.(path);}};});
 const roots:string[]=[];afterEach(()=>roots.splice(0).forEach(root=>fs.rmSync(root,{recursive:true,force:true})));
 const fixture=()=>{const root=fs.mkdtempSync(join(tmpdir(),'quorate-evidence-review-'));roots.push(root);return root;};
 const revision='a'.repeat(40),digest='b'.repeat(64);
@@ -48,4 +48,44 @@ it('does not read beyond the allowance if a file grows while its descriptor is o
  interception.onRead=(filename,count)=>{if(typeof filename==='string'&&filename.endsWith('growing.json')){actualBytes+=count;if(count>0&&!grown){grown=true;fs.appendFileSync(path,'x');}}};
  try{expect(()=>readEvidenceBytes(root,'growing.json',MAX_EVIDENCE_ARTIFACT_BYTES)).toThrow(/size changed/);expect(grown).toBe(true);expect(actualBytes).toBe(MAX_EVIDENCE_ARTIFACT_BYTES);}
  finally{interception.onRead=undefined;}
+});
+
+it.each(['before','after'] as const)('refuses an export parent swap %s directory creation without outside payloads or overwrite',phase=>{
+ const root=fs.realpathSync(fixture()),outside=fs.realpathSync(fixture()),parent=join(root,'nested'),destination=join(parent,'bundle');
+ const content=JSON.stringify({schemaVersion:1,kind:'check-observation',sourceRevision:revision,subjectDigest:digest,producer:{id:'fixture'},checks:[{id:'unit',outcome:'passed',requirements:[]}]}),hash=evidenceDigest(content);
+ fs.mkdirSync(parent);fs.writeFileSync(join(root,'check.json'),content);fs.writeFileSync(join(outside,'sentinel'),'keep');
+ if(phase==='after'){fs.mkdirSync(join(outside,'bundle','artifacts'),{recursive:true});fs.writeFileSync(join(outside,'bundle','manifest.json'),'foreign manifest');fs.writeFileSync(join(outside,'bundle','artifacts',`${hash}.json`),'foreign artifact');}
+ let swapped=false,rejected=false;
+ interception.onMkdir=(path,currentPhase)=>{if(path===destination&&currentPhase===phase&&!swapped){swapped=true;fs.renameSync(parent,join(root,'nested-before'));fs.symlinkSync(outside,parent,'dir');}};
+ try{try{exportEvidenceBundle({root,output:'nested/bundle',inputs:[{id:'unit',path:'check.json'}]});}catch{rejected=true;}
+ expect(swapped).toBe(true);expect(readonlyOutside('manifest.json')).toBe(phase==='after'?'foreign manifest':undefined);expect(readonlyOutside(`artifacts/${hash}.json`)).toBe(phase==='after'?'foreign artifact':undefined);expect(fs.readFileSync(join(outside,'sentinel'),'utf8')).toBe('keep');expect(rejected).toBe(true);
+ }finally{interception.onMkdir=undefined;}
+ function readonlyOutside(path:string){const file=join(outside,'bundle',path);return fs.existsSync(file)?fs.readFileSync(file,'utf8'):undefined;}
+});
+
+it.skipIf(process.platform==='win32')('preserves existing export parent permissions',()=>{
+ const root=fixture();fs.mkdirSync(join(root,'nested'),{mode:0o755});const mode=fs.statSync(join(root,'nested')).mode&0o777;
+ fs.writeFileSync(join(root,'check.json'),JSON.stringify({schemaVersion:1,kind:'check-observation',sourceRevision:revision,subjectDigest:digest,producer:{id:'fixture'},checks:[{id:'unit',outcome:'passed',requirements:[]}]}));
+ exportEvidenceBundle({root,output:'nested/bundle',inputs:[{id:'unit',path:'check.json'}]});expect(fs.statSync(join(root,'nested')).mode&0o777).toBe(mode);
+});
+
+it.each(['artifact','manifest'] as const)('refuses a foreign %s planted in the newly created export directory',kind=>{
+ const root=fs.realpathSync(fixture()),content=JSON.stringify({schemaVersion:1,kind:'check-observation',sourceRevision:revision,subjectDigest:digest,producer:{id:'fixture'},checks:[{id:'unit',outcome:'passed',requirements:[]}]}),hash=evidenceDigest(content);
+ fs.writeFileSync(join(root,'check.json'),content);const artifactDirectory=join(root,'bundle','artifacts'),foreign=kind==='artifact'?join(artifactDirectory,`${hash}.json`):join(root,'bundle','manifest.json');let planted=false;
+ interception.onMkdir=(path,phase)=>{if(path===artifactDirectory&&phase==='after'&&!planted){planted=true;fs.writeFileSync(foreign,'foreign owned content');}};
+ try{let rejected=false;try{exportEvidenceBundle({root,output:'bundle',inputs:[{id:'unit',path:'check.json'}]});}catch{rejected=true;}
+ expect(planted).toBe(true);expect(fs.readFileSync(foreign,'utf8')).toBe('foreign owned content');expect(rejected).toBe(true);
+ }finally{interception.onMkdir=undefined;}
+});
+
+it('refuses root retargeting at secure-writer entry before any outside payload is written',()=>{
+ const root=fs.realpathSync(fixture()),outside=fs.realpathSync(fixture()),retained=`${root}-before`;roots.push(retained);
+ const content=JSON.stringify({schemaVersion:1,kind:'check-observation',sourceRevision:revision,subjectDigest:digest,producer:{id:'fixture'},checks:[{id:'unit',outcome:'passed',requirements:[]}]}),hash=evidenceDigest(content);
+ fs.writeFileSync(join(root,'check.json'),content);fs.mkdirSync(join(outside,'bundle','artifacts'),{recursive:true});fs.writeFileSync(join(outside,'bundle','manifest.json'),'foreign manifest');fs.writeFileSync(join(outside,'sentinel'),'keep');
+ let armed=false,swapped=false,rejected=false;
+ interception.onMkdir=(path,phase)=>{if(path===join(root,'bundle','artifacts')&&phase==='after')armed=true;};
+ interception.onRealpath=path=>{if(path===root&&armed&&!swapped){swapped=true;fs.renameSync(root,retained);fs.symlinkSync(outside,root,'dir');}};
+ try{try{exportEvidenceBundle({root,output:'bundle',inputs:[{id:'unit',path:'check.json'}]});}catch{rejected=true;}
+ expect(swapped).toBe(true);expect(fs.existsSync(join(outside,'bundle','artifacts',`${hash}.json`))).toBe(false);expect(fs.readFileSync(join(outside,'bundle','manifest.json'),'utf8')).toBe('foreign manifest');expect(fs.readFileSync(join(outside,'sentinel'),'utf8')).toBe('keep');expect(rejected).toBe(true);
+ }finally{interception.onMkdir=undefined;interception.onRealpath=undefined;}
 });
