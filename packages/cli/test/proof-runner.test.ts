@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -186,26 +186,60 @@ describe("ProofRunner Lite", () => {
     expect(tampered.note).toMatch(/tampered/i);
   });
 
-  it.skipIf(process.platform === "win32")("kills a successful proof command's background swapper before artifact publication", async () => {
-    const cwd = workspace();
-    await runProof({ cwd, name: "seed", command: [process.execPath, "-e", ""] });
-    const external = mkdtempSync(join(tmpdir(), "quorate-proof-external-"));
-    roots.push(external);
-    const target = proofPaths(cwd).dir;
-    const script = [
-      "const { spawn } = require('node:child_process');",
-      `const target = ${JSON.stringify(target)};`,
-      `const external = ${JSON.stringify(external)};`,
-      "const child = spawn(process.execPath, ['-e', `const fs=require('node:fs'); setTimeout(() => { fs.rmSync(process.argv[1], {recursive:true,force:true}); fs.symlinkSync(process.argv[2], process.argv[1]); }, 40)`, target, external], { stdio: 'ignore' });",
-      "child.unref();"
-    ].join(" ");
+  it.skipIf(process.platform === "win32").each(["pending", "already-swapped"] as const)(
+    "contains a successful proof command's %s background swapper before artifact publication", async (state) => {
+      const cwd = workspace();
+      await runProof({ cwd, name: "seed", command: [process.execPath, "-e", ""] });
+      const external = mkdtempSync(join(tmpdir(), "quorate-proof-external-"));
+      roots.push(external);
+      writeFileSync(join(external, "sentinel.txt"), "keep\n");
+      const target = proofPaths(cwd).dir;
+      const childPidPath = join(cwd, "swapper.pid");
+      const childScript = [
+        "const fs = require('node:fs');",
+        "const swap = () => { fs.rmSync(process.argv[1], { recursive: true, force: true }); fs.symlinkSync(process.argv[2], process.argv[1]); };",
+        state === "already-swapped" ? "swap();" : "process.once('message', swap);",
+        "setInterval(() => {}, 1000);",
+        "process.send('ready');"
+      ].join(" ");
+      const script = [
+        "const { spawn } = require('node:child_process');",
+        "const fs = require('node:fs');",
+        `const child = spawn(process.execPath, ['-e', ${JSON.stringify(childScript)}, ${JSON.stringify(target)}, ${JSON.stringify(external)}], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });`,
+        `fs.writeFileSync(${JSON.stringify(childPidPath)}, String(child.pid));`,
+        // Keep the command alive until the child has reached the requested state.
+        // Parent scheduling cannot turn the pending case into an early swap.
+        "child.once('message', () => { child.disconnect(); child.unref(); });"
+      ].join(" ");
 
-    await runProof({ cwd, name: "swapper", command: [process.execPath, "-e", script] });
-    await new Promise((resolveWait) => setTimeout(resolveWait, 120));
-
-    expect(lstatSync(target).isSymbolicLink()).toBe(false);
-    expect(existsSync(join(external, "latest.json"))).toBe(false);
-  });
+      try {
+        const execution = runProof({ cwd, name: "swapper", command: [process.execPath, "-e", script] });
+        if (state === "already-swapped") {
+          await expect(execution).rejects.toThrow(/^Refusing proof path that is not a real directory: \.quorate\/proofs\.$/);
+          expect(lstatSync(target).isSymbolicLink()).toBe(true);
+        } else {
+          const result = await execution;
+          expect(result.exitCode).toBe(0);
+          expect(result.artifact.name).toBe("swapper");
+          expect(verifyLatestProof(cwd)).toMatchObject({ ok: true, reason: "verified" });
+          expect(lstatSync(target).isSymbolicLink()).toBe(false);
+        }
+        const childPid = Number(readFileSync(childPidPath, "utf8"));
+        expect(Number.isSafeInteger(childPid) && childPid > 0).toBe(true);
+        expect(() => process.kill(childPid, 0)).toThrow();
+        expect(readdirSync(external)).toEqual(["sentinel.txt"]);
+        expect(readFileSync(join(external, "sentinel.txt"), "utf8")).toBe("keep\n");
+      } finally {
+        // Avoid leaving a live test child behind if a containment assertion fails.
+        if (existsSync(childPidPath)) {
+          const childPid = Number(readFileSync(childPidPath, "utf8"));
+          if (Number.isSafeInteger(childPid) && childPid > 0) {
+            try { process.kill(childPid, "SIGKILL"); } catch { /* Already stopped. */ }
+          }
+        }
+      }
+    }
+  );
 
   it.skipIf(process.platform === "win32")("fails closed when proofs.key is a pre-planted symlink, without writing through it", async () => {
     // Arrange — a fresh key dir whose proofs.key is a symlink to a victim file.

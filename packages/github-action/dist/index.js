@@ -7031,8 +7031,8 @@ var require_client_h2 = __commonJS({
       this[kSocket][kError] = err;
       this[kClient][kOnError](err);
     }
-    function onHttp2FrameError(type, code, id) {
-      if (id === 0) {
+    function onHttp2FrameError(type, code, id3) {
+      if (id3 === 0) {
         const err = new InformationalError(`HTTP/2: "frameError" received - type ${type}, code ${code}`);
         this[kSocket][kError] = err;
         this[kClient][kOnError](err);
@@ -17226,8 +17226,8 @@ var require_connection = __commonJS({
             return;
           }
           const secWSAccept = response.headersList.get("Sec-WebSocket-Accept");
-          const digest2 = crypto2.createHash("sha1").update(keyValue + uid).digest("base64");
-          if (secWSAccept !== digest2) {
+          const digest3 = crypto2.createHash("sha1").update(keyValue + uid).digest("base64");
+          if (secWSAccept !== digest3) {
             failWebsocketConnection(ws, "Incorrect hash received in Sec-WebSocket-Accept header.");
             return;
           }
@@ -38990,42 +38990,42 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     }
     doc.write(`const newResult = {};`);
     for (const key of normalized.keys) {
-      const id = ids[key];
+      const id3 = ids[key];
       const k = esc(key);
       const schema = shape[key];
       const isOptionalIn = schema?._zod?.optin === "optional";
       const isOptionalOut = schema?._zod?.optout === "optional";
-      doc.write(`const ${id} = ${parseStr(key)};`);
+      doc.write(`const ${id3} = ${parseStr(key)};`);
       if (isOptionalIn && isOptionalOut) {
         doc.write(`
-        if (${id}.issues.length) {
+        if (${id3}.issues.length) {
           if (${k} in input) {
-            payload.issues = payload.issues.concat(${id}.issues.map(iss => ({
+            payload.issues = payload.issues.concat(${id3}.issues.map(iss => ({
               ...iss,
               path: iss.path ? [${k}, ...iss.path] : [${k}]
             })));
           }
         }
         
-        if (${id}.value === undefined) {
+        if (${id3}.value === undefined) {
           if (${k} in input) {
             newResult[${k}] = undefined;
           }
         } else {
-          newResult[${k}] = ${id}.value;
+          newResult[${k}] = ${id3}.value;
         }
         
       `);
       } else if (!isOptionalIn) {
         doc.write(`
-        const ${id}_present = ${k} in input;
-        if (${id}.issues.length) {
-          payload.issues = payload.issues.concat(${id}.issues.map(iss => ({
+        const ${id3}_present = ${k} in input;
+        if (${id3}.issues.length) {
+          payload.issues = payload.issues.concat(${id3}.issues.map(iss => ({
             ...iss,
             path: iss.path ? [${k}, ...iss.path] : [${k}]
           })));
         }
-        if (!${id}_present && !${id}.issues.length) {
+        if (!${id3}_present && !${id3}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
@@ -39034,30 +39034,30 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
           });
         }
 
-        if (${id}_present) {
-          if (${id}.value === undefined) {
+        if (${id3}_present) {
+          if (${id3}.value === undefined) {
             newResult[${k}] = undefined;
           } else {
-            newResult[${k}] = ${id}.value;
+            newResult[${k}] = ${id3}.value;
           }
         }
 
       `);
       } else {
         doc.write(`
-        if (${id}.issues.length) {
-          payload.issues = payload.issues.concat(${id}.issues.map(iss => ({
+        if (${id3}.issues.length) {
+          payload.issues = payload.issues.concat(${id3}.issues.map(iss => ({
             ...iss,
             path: iss.path ? [${k}, ...iss.path] : [${k}]
           })));
         }
         
-        if (${id}.value === undefined) {
+        if (${id3}.value === undefined) {
           if (${k} in input) {
             newResult[${k}] = undefined;
           }
         } else {
-          newResult[${k}] = ${id}.value;
+          newResult[${k}] = ${id3}.value;
         }
         
       `);
@@ -47389,26 +47389,26 @@ function extractDefs(ctx, schema) {
     throw new Error("Unprocessed schema. This is a bug in Zod.");
   const idToSchema = /* @__PURE__ */ new Map();
   for (const entry of ctx.seen.entries()) {
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
-      const existing = idToSchema.get(id);
+    const id3 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id3) {
+      const existing = idToSchema.get(id3);
       if (existing && existing !== entry[0]) {
-        throw new Error(`Duplicate schema id "${id}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
+        throw new Error(`Duplicate schema id "${id3}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
       }
-      idToSchema.set(id, entry[0]);
+      idToSchema.set(id3, entry[0]);
     }
   }
   const makeURI = (entry) => {
     const defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
     if (ctx.external) {
       const externalId = ctx.external.registry.get(entry[0])?.id;
-      const uriGenerator = ctx.external.uri ?? ((id2) => id2);
+      const uriGenerator = ctx.external.uri ?? ((id4) => id4);
       if (externalId) {
         return { ref: uriGenerator(externalId) };
       }
-      const id = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
-      entry[1].defId = id;
-      return { defId: id, ref: `${uriGenerator("__shared")}#/${defsSegment}/${id}` };
+      const id3 = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
+      entry[1].defId = id3;
+      return { defId: id3, ref: `${uriGenerator("__shared")}#/${defsSegment}/${id3}` };
     }
     if (entry[1] === root) {
       return { ref: "#" };
@@ -47456,8 +47456,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         continue;
       }
     }
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
+    const id3 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id3) {
       extractToDef(entry);
       continue;
     }
@@ -47553,10 +47553,10 @@ function finalize(ctx, schema) {
   } else {
   }
   if (ctx.external?.uri) {
-    const id = ctx.external.registry.get(schema)?.id;
-    if (!id)
+    const id3 = ctx.external.registry.get(schema)?.id;
+    if (!id3)
       throw new Error("Schema is missing an `id` property");
-    result.$id = ctx.external.uri(id);
+    result.$id = ctx.external.uri(id3);
   }
   Object.assign(result, root.def ?? root.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
@@ -50206,8 +50206,8 @@ function convertBaseSchema(schema, ctx) {
           break;
         }
         const objectSchema2 = z.object(shape).passthrough();
-        const recordSchema = z.looseRecord(keySchema, valueSchema);
-        zodSchema = z.intersection(objectSchema2, recordSchema);
+        const recordSchema2 = z.looseRecord(keySchema, valueSchema);
+        zodSchema = z.intersection(objectSchema2, recordSchema2);
         break;
       }
       if (schema.patternProperties) {
@@ -53128,7 +53128,7 @@ function detectPacks(signals) {
       matched.add("mlops");
     }
   }
-  return PACK_IDS.filter((id) => matched.has(id));
+  return PACK_IDS.filter((id3) => matched.has(id3));
 }
 
 // ../core/src/merge.ts
@@ -53207,7 +53207,7 @@ function parseMergeResult(text, findings) {
       SEVERITY_RANK[raw.severity] >= SEVERITY_RANK[base.severity] ? raw.severity : base.severity
     ) : base.severity;
     const agreedBy = [
-      ...new Set(members.flatMap((member) => [member.providerId, ...member.agreedBy ?? []]).filter((id) => Boolean(id)))
+      ...new Set(members.flatMap((member) => [member.providerId, ...member.agreedBy ?? []]).filter((id3) => Boolean(id3)))
     ].sort();
     merged.push({
       ...base,
@@ -54750,7 +54750,7 @@ function clusterFindings(findings) {
     )[0];
     const agreedBy = [
       ...new Set(
-        cluster.flatMap((member) => [member.providerId, ...member.agreedBy ?? []]).filter((id) => Boolean(id))
+        cluster.flatMap((member) => [member.providerId, ...member.agreedBy ?? []]).filter((id3) => Boolean(id3))
       )
     ].sort();
     const agreement = agreedBy.length > 0 ? agreedBy.length : 1;
@@ -56019,9 +56019,9 @@ function buildReviewGraph(report) {
   }));
   const edges = [];
   report.findings.forEach((finding, index) => {
-    const id = findingId(index, finding.fingerprint);
+    const id3 = findingId(index, finding.fingerprint);
     const agreedBy = finding.agreedBy && finding.agreedBy.length > 0 ? finding.agreedBy : finding.providerId ? [finding.providerId] : [];
-    for (const providerId of agreedBy) edges.push({ providerId, findingId: id });
+    for (const providerId of agreedBy) edges.push({ providerId, findingId: id3 });
   });
   return {
     reviewId: report.metadata.reviewId,
@@ -56280,6 +56280,49 @@ var VERDICT_COLOR = {
 };
 var SEVERITY_COLOR = PALETTE.severity;
 
+// ../core/src/evidence/index.ts
+var MAX_EVIDENCE_RECORDS = 256;
+var MAX_EVIDENCE_ARTIFACT_BYTES = 4 * 1024 * 1024;
+var MAX_EVIDENCE_MANIFEST_BYTES = 4 * 1024 * 1024;
+var MAX_EVIDENCE_BUNDLE_BYTES = 16 * 1024 * 1024;
+var digest2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var revision = external_exports.string().regex(/^[a-f0-9]{40,64}$/);
+var id = external_exports.string().min(1).max(160).regex(/^[A-Za-z0-9][A-Za-z0-9:._/-]*$/);
+var evidenceCheckSchema = external_exports.object({ id, outcome: external_exports.enum(["passed", "failed", "inconclusive", "missing"]), requirements: external_exports.array(id).max(256) }).strict();
+var recordSchema = external_exports.object({ id, kind: external_exports.string().min(1).max(80), schemaVersion: external_exports.number().int().positive(), sourceRevision: revision.nullable(), subjectDigest: digest2, producer: external_exports.object({ id: external_exports.string().min(1).max(160), trust: external_exports.enum(["unattested", "local-authenticated", "trusted-signer"]) }).strict(), checks: external_exports.array(evidenceCheckSchema).max(256), artifact: external_exports.object({ path: external_exports.string().regex(/^artifacts\/[a-f0-9]{64}\.json$/), sha256: digest2, bytes: external_exports.number().int().min(1).max(MAX_EVIDENCE_ARTIFACT_BYTES) }).strict(), references: external_exports.array(id).max(256) }).strict();
+var evidencePolicySchema = external_exports.object({ schemaVersion: external_exports.literal(1), sourceRevision: revision, requiredChecks: external_exports.array(id).min(1).max(256), acceptedDigests: external_exports.array(digest2).max(256), requireAuthenticatedProducer: external_exports.boolean().default(false), trustedProofKeys: external_exports.array(external_exports.object({ id: external_exports.string().min(1).max(160), publicKeyPem: external_exports.string().min(1).max(8192) }).strict()).max(32).default([]) }).strict();
+var bundleSchema = external_exports.object({ schemaVersion: external_exports.literal(1), kind: external_exports.literal("quorate-evidence-bundle"), records: external_exports.array(recordSchema).min(1).max(MAX_EVIDENCE_RECORDS) }).strict();
+
+// ../core/src/architecture/index.ts
+var ARCHITECTURE_IMPORT_LIMIT = 8 * 1024 * 1024;
+function architecturePath(value) {
+  return value.length > 0 && value.length <= 1024 && !/[\\\x00-\x1f]/.test(value) && !value.startsWith("/") && !/^[A-Za-z]:/.test(value) && !value.split("/").some((p) => p === ".." || p === "." || p === "");
+}
+var pathSchema = external_exports.string().refine(architecturePath, "Unsafe relative path");
+var scopeSchema = external_exports.union([external_exports.literal("."), pathSchema]);
+var revisionSchema = external_exports.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/, "Expected full revision");
+var dependencySchema = external_exports.object({ resolved: pathSchema, dynamic: external_exports.boolean().optional(), couldNotResolve: external_exports.boolean().optional(), coreModule: external_exports.boolean().optional(), followable: external_exports.boolean().optional(), matchesDoNotFollow: external_exports.boolean().optional(), dependencyTypes: external_exports.array(external_exports.string()).max(30).optional(), generated: external_exports.boolean().optional() }).passthrough();
+var moduleSchema = external_exports.object({ source: pathSchema, dependencies: external_exports.array(dependencySchema).max(2e4), generated: external_exports.boolean().optional(), couldNotResolve: external_exports.boolean().optional(), followable: external_exports.boolean().optional() }).passthrough();
+var graphSchema = external_exports.object({ version: external_exports.literal(1), revision: revisionSchema, scope: external_exports.array(scopeSchema).min(1).max(100), complete: external_exports.boolean(), modules: external_exports.array(moduleSchema).max(1e4), unknown: external_exports.array(external_exports.string().max(500)).max(1e3).optional() }).strict();
+var policySchema2 = external_exports.object({ version: external_exports.literal(1), boundaries: external_exports.array(external_exports.object({ id: external_exports.string().min(1).max(100), from: scopeSchema, to: scopeSchema }).strict()).max(1e3).default([]), layers: external_exports.array(scopeSchema).max(100).default([]), contracts: external_exports.array(external_exports.object({ path: pathSchema, consumers: external_exports.array(scopeSchema).max(100), checks: external_exports.array(external_exports.string().min(1).max(200)).max(100) }).strict()).max(1e3).default([]), fullSuite: external_exports.array(external_exports.string().min(1).max(200)).max(100).default([]) }).strict();
+var ARCHITECTURE_OUTPUT_LIMIT = 4 * 1024 * 1024;
+
+// ../core/src/rules-audit/index.ts
+var import_yaml6 = __toESM(require_dist2(), 1);
+var RULES_AUDIT_LIMIT = 1024 * 1024;
+var pathSchema2 = external_exports.string().refine(architecturePath, "Unsafe relative path");
+var toolSchema = external_exports.enum(["claude-code", "cursor"]);
+var descriptorSchema = external_exports.object({ tool: toolSchema, path: pathSchema2, kind: external_exports.enum(["settings", "instructions", "rules"]), scope: external_exports.enum(["managed", "session", "local", "project", "user"]) }).strict();
+var manifestSchema = external_exports.object({ version: external_exports.literal(1), tools: external_exports.object({ "claude-code": external_exports.string().min(1).max(100).optional(), cursor: external_exports.string().min(1).max(100).optional() }).strict(), files: external_exports.array(descriptorSchema).min(1).max(200), generated: external_exports.array(external_exports.object({ path: pathSchema2, expectedDigest: external_exports.string().regex(/^[a-f0-9]{64}$/) }).strict()).max(200).optional(), translations: external_exports.array(external_exports.object({ source: pathSchema2, targetTool: toolSchema, capability: external_exports.enum(["advisory", "runtime-control"]) }).strict()).max(200).optional() }).strict();
+
+// ../core/src/acceptance/index.ts
+var id2 = external_exports.string().regex(/^[A-Z][A-Z0-9_-]{0,79}$/);
+var acceptanceMappingSchema = external_exports.object({ schemaVersion: external_exports.literal(1), specDigest: external_exports.string().regex(/^[a-f0-9]{64}$/), sourceRevision: external_exports.string().regex(/^[a-f0-9]{40,64}$/).optional(), origin: external_exports.enum(["human", "ai-advisory"]), criteria: external_exports.array(external_exports.object({ id: id2, checks: external_exports.array(external_exports.string().min(1).max(160)).max(256) }).strict()).max(256) }).strict();
+
+// ../core/src/adjudication/index.ts
+var attachmentSchema = external_exports.object({ reviewId: external_exports.string().min(1).max(160), reportGeneratedAt: external_exports.string().datetime(), reportHash: external_exports.string().regex(/^[a-f0-9]{64}$/), fingerprint: external_exports.string().regex(/^[a-f0-9]{16}$/), evidenceId: external_exports.string().min(1).max(160), checkId: external_exports.string().min(1).max(160) }).strict();
+var adjudicationAttachmentSchema = external_exports.object({ schemaVersion: external_exports.literal(1), sourceRevision: external_exports.string().regex(/^[a-f0-9]{40,64}$/), attachments: external_exports.array(attachmentSchema).max(256) }).strict();
+
 // src/index.ts
 var import_promises3 = require("node:fs/promises");
 var import_node_path5 = require("node:path");
@@ -56288,7 +56331,7 @@ var import_node_os2 = require("node:os");
 // package.json
 var package_default = {
   name: "@quorate/github-action",
-  version: "1.5.0",
+  version: "1.6.0",
   main: "./dist/index.js",
   private: true,
   files: [
@@ -56301,7 +56344,7 @@ var package_default = {
   dependencies: {
     "@actions/core": "^3.0.1",
     "@actions/github": "^9.1.1",
-    "@quorate/core": "1.5.0"
+    "@quorate/core": "1.6.0"
   }
 };
 
@@ -56533,10 +56576,10 @@ async function loadBaseRepositoryLockfiles(client, params) {
 function applyPacks(config2, packInput, changedFiles) {
   const raw = (packInput ?? "").trim();
   if (!raw) return config2;
-  const ids = raw.toLowerCase() === "auto" ? detectPacks({ files: changedFiles }) : raw.split(",").map((id) => id.trim()).filter(Boolean);
-  const packs = ids.map((id) => {
-    const pack = PACKS[id];
-    if (!pack) throw new Error(`Unknown pack "${id}". Available: ${PACK_IDS.join(", ")}.`);
+  const ids = raw.toLowerCase() === "auto" ? detectPacks({ files: changedFiles }) : raw.split(",").map((id3) => id3.trim()).filter(Boolean);
+  const packs = ids.map((id3) => {
+    const pack = PACKS[id3];
+    if (!pack) throw new Error(`Unknown pack "${id3}". Available: ${PACK_IDS.join(", ")}.`);
     return pack;
   });
   if (packs.length === 0) return config2;

@@ -17,6 +17,8 @@ export const DOC_DESCRIPTIONS: Record<DocPath, string> = {
     "Run the Quorate council on every pull request with GitHub Action release gates, SARIF, baselines, suppressions, and Solana pack support.",
   "/docs/contract":
     "Deterministic OpenAPI 3 contract breaking-change detection. Block releases on removed operations, newly required fields, incompatible types, removed enum values. Privacy-preserving metrics track verdicts and agreement locally.",
+  "/docs/evidence":
+    "Verify releases, inspect portable evidence, connect acceptance criteria to checks, validate executable docs, and audit architecture and agent rules.",
   "/docs/faq":
     "Frequently asked questions about Quorate — install, providers, degraded reviews, and the GitHub Action.",
   "/docs/manual-testing":

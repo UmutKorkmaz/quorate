@@ -35,6 +35,12 @@ function validDecision(report:RegressionReport):boolean {
  if(report.decision.state==='verified'&&(runs.length!==2||runs.some(e=>!/^4\.\d+\.\d+$/.test(e.runnerVersion??''))||base[0]?.runnerVersion!==head[0]?.runnerVersion))return false;
  const decision=classifyRegressionPair({base:base[0]?.observation,head:head[0]?.observation,issues});return decision.state===report.decision.state&&decision.reason===report.decision.reason;
 }
+/** Validate exactly the already-read payload; content integrity does not authenticate its local producer. */
+export function validateRegressionReportContent(value:unknown):RegressionReport {
+ const report=reportSchema.parse(value) as RegressionReport;
+ if(!validIntegrity(report)||!validDecision(report))throw new Error('Invalid regression report content');
+ return report;
+}
 export function readRegressionReport(path:string):RegressionReport {return reportSchema.parse(readBoundedJson(path,16*1048576)) as RegressionReport;}
 export function publishRegressionReport(cwd:string,result:RegressionRunResult,options:{keyDir?:string}={}):RegressionReport {
  const input=result.input;

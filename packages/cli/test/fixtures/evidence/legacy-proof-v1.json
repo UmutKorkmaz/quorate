@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "name": "unit",
+  "command": [
+    "node",
+    "-e",
+    "process.stdout.write('ok')"
+  ],
+  "cwd": ".",
+  "startedAt": "2026-10-11T06:37:03.811Z",
+  "finishedAt": "2026-10-11T06:37:03.886Z",
+  "durationMs": 76,
+  "exitCode": 0,
+  "timedOut": false,
+  "fingerprint": {
+    "gitHead": "49c1a0f978c29474b86474dc6904889bf72d871b",
+    "worktreeHash": "d8b4eb9c6ce630ad6ea1dec5904a5a5c1e6fe91271bf96d88bb73e3545c7117d"
+  },
+  "stdout": {
+    "text": "ok",
+    "truncated": false
+  },
+  "stderr": {
+    "text": "",
+    "truncated": false
+  },
+  "markdownHash": "a09cc08b9e4abec443a4fa5c5312d26396c8c2c1c3ca9819230c0b93381b670f",
+  "artifactHash": "f5b902d614ef256c14c2b6a29b34020ffd87eccbc29f39d3c213787616c141e1",
+  "signature": "2140573bf5f83092431e1bbcb55892935ebfe69834fa65060e9c165daee8d686"
+}

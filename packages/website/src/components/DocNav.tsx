@@ -9,6 +9,7 @@ export const DOC_PATHS = [
   "/docs/config",
   "/docs/github-action",
   "/docs/contract",
+  "/docs/evidence",
   "/docs/faq",
   // Blockchain & Web3
   "/docs/solana",
@@ -50,6 +51,7 @@ export const DOC_LABELS: Record<DocPath, string> = {
   "/docs/config": "Configuration",
   "/docs/github-action": "GitHub Action",
   "/docs/contract": "Contract checks",
+  "/docs/evidence": "Evidence workflows",
   "/docs/faq": "FAQ",
   "/docs/solana": "Solana / Anchor",
   "/docs/evm": "EVM / Solidity",
@@ -93,6 +95,7 @@ const SECTIONS = [
       { to: "/docs/config", label: "Configuration" },
       { to: "/docs/github-action", label: "GitHub Action" },
       { to: "/docs/contract", label: "Contract checks" },
+      { to: "/docs/evidence", label: "Evidence workflows" },
       { to: "/docs/faq", label: "FAQ" }
     ]
   },

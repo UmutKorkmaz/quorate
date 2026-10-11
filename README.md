@@ -698,3 +698,7 @@ workflow is documented in [`docs/RELEASE-CHECKLIST.md`](./docs/RELEASE-CHECKLIST
 ## License
 
 MIT © Umut Korkmaz
+
+## Evidence workflows
+
+Quorate 1.6 adds explicit [release verification](docs/RELEASE-VERIFICATION.md), [portable evidence inspection](docs/EVIDENCE-INSPECTOR.md), [acceptance checks](docs/ACCEPTANCE-EVIDENCE.md), [executable docs](docs/EXECUTABLE-DOCS.md), [architecture impact](docs/ARCHITECTURE-IMPACT.md), [rules audit](docs/POLICY-COMPATIBILITY.md) and [finding adjudication](docs/FINDING-ADJUDICATION.md). In VS Code, run **Quorate: Inspect Evidence** with a selected bundle and policy. Imported content, producer identity, revision and coverage remain separate; these commands do not silently run imported checks.

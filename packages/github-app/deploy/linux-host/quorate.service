@@ -1,0 +1,37 @@
+[Unit]
+Description=Quorate GitHub App
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=quorate
+Group=quorate
+WorkingDirectory=/opt/quorate/current
+EnvironmentFile=/etc/quorate/app.env
+ExecStartPre=/usr/bin/test -s /etc/quorate/private-key.pem
+ExecStart=/usr/bin/node /opt/quorate/current/dist/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+UMask=0077
+StateDirectory=quorate
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/quorate
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

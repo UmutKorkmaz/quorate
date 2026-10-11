@@ -1,7 +1,7 @@
 # Quorate Engineering Roadmap
 
 **Canonical status source**
-**As of:** v1.5.0 implementation · 2026-10-03
+**As of:** v1.6.0 candidate implementation · 2026-10-11
 
 This file is the active engineering sequence. Product concepts in
 [`AI-PRODUCT-SUITE-PLAN.md`](./AI-PRODUCT-SUITE-PLAN.md) are horizon/backlog material, and
@@ -10,6 +10,22 @@ This file is the active engineering sequence. Product concepts in
 Quorate currently includes the multi-provider council, VerdictGate, PlanCourt,
 ReviewGraph, 19 domain packs, 15 provider presets, GitHub Action, GitHub App, CLI,
 and VS Code surfaces.
+
+## Evidence-suite delivery
+
+The approved program phases P2–P8 are implemented in the 1.6.0 candidate. Their guides specify supported inputs and trust limits:
+
+| Phase | Guide |
+| --- | --- |
+| P2 Release verification and recovery | [Release verification](RELEASE-VERIFICATION.md) |
+| P3 Portable evidence inspection | [Evidence inspector](EVIDENCE-INSPECTOR.md) |
+| P4 Acceptance evidence | [Acceptance checks](ACCEPTANCE-EVIDENCE.md) |
+| P5 Executable adoption docs | [Executable docs](EXECUTABLE-DOCS.md) |
+| P6 Architecture and impact | [Architecture](ARCHITECTURE-IMPACT.md) |
+| P7 Policy compatibility and drift | [Rules audit](POLICY-COMPATIBILITY.md) |
+| P8 Finding adjudication | [Adjudication](FINDING-ADJUDICATION.md) |
+
+Native and packaged acceptance and release distribution are tracked in [integration acceptance](INTEGRATION-ACCEPTANCE.md). The earlier 1.5.0 release and native Fix-terminal journey are complete. The umutkorkmaz.net host is selected and its isolated candidate is staged; credential-backed activation and an authorized installation remain pending. Real partner validation still requires opted-in repositories and human labels. P9 domain extensions remain conditional on those results.
 
 ## Active sequence
 
