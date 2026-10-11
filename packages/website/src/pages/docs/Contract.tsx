@@ -221,7 +221,7 @@ jobs:
             --base origin/main \\
             --head HEAD \\
             --gate
-      - uses: UmutKorkmaz/quorate@d3900a03d28d2f21e244728fedac8953f666c7ad
+      - uses: UmutKorkmaz/quorate@e965d46901ca910389f2733a6adf5224f609b7f5
         with:
           github-token: \${{ secrets.GITHUB_TOKEN }}`}</CodeBlock>
       <p>
