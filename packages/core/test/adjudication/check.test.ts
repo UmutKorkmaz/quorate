@@ -1,0 +1,14 @@
+import { it,expect } from 'vitest';import { evidenceDigest } from '../../src/evidence/index.js';import { fingerprintFinding } from '../../src/identity.js';
+const api=await import('../../src/adjudication/index.js').catch(()=>({})) as any;const rev='a'.repeat(40);
+const finding={severity:'high',title:'unsafe input',body:'details',file:'src/a.ts',providerId:'minority',agreedBy:['minority'],agreement:1};const fp=fingerprintFinding(finding as any);
+const report={verdict:'warn',summary:'x',findings:[{...finding,fingerprint:fp},{...finding,title:'other',fingerprint:fingerprintFinding({...finding,title:'other'} as any),providerId:'majority',agreedBy:['majority','second'],agreement:2}],providerResults:[],metadata:{reviewId:'review1',generatedAt:'2026-10-11T00:00:00.000Z',providers:['minority','majority'],requestedProviders:['minority','majority'],ranProviders:['minority','majority'],degraded:false,mode:'review',subject:'diff'}};
+const attach=()=>({schemaVersion:1,sourceRevision:rev,attachments:[{reviewId:'review1',reportGeneratedAt:report.metadata.generatedAt,reportHash:evidenceDigest(JSON.stringify(report)),fingerprint:fp,evidenceId:'proof',checkId:'repro'}]});
+const evidence=(outcome='passed')=>({schemaVersion:1,kind:'evidence-inspection',sourceRevision:rev,state:'verified',issues:[],records:[{id:'proof',sourceRevision:rev,accepted:true,integrity:'valid',checks:[{id:'repro',outcome,requirements:[`finding:${fp}`]}]}]});
+const run=(opts={})=>api.adjudicateFindings?.({report,attachments:attach(),evidence:evidence(),...opts});
+it('consensus alone remains unverified and minority evidence is retained',()=>{const r=run();expect(r?.findings.map((f:any)=>f.state)).toEqual(['supported','unverified']);expect(r?.findings[0].finding.agreedBy).toEqual(['minority']);expect(r?.report).toEqual(report);});
+it('rejects altered exact report identity',()=>expect(()=>run({attachments:{...attach(),attachments:[{...attach().attachments[0],reportHash:'b'.repeat(64)}]}})).toThrow());
+it('rejects attachment to another stable finding',()=>expect(()=>run({attachments:{...attach(),attachments:[{...attach().attachments[0],fingerprint:'c'.repeat(16)}]}})).toThrow());
+it('contradiction is preserved',()=>expect(run({evidence:evidence('failed')})?.findings[0].state).toBe('contradicted'));
+it('unrelated check cannot support a finding',()=>{const e=evidence();e.records[0].checks[0].requirements=[];expect(run({evidence:e})?.findings[0].state).toBe('unverified');});
+it('unaccepted or stale evidence cannot support a finding',()=>{const e=evidence();e.records[0].accepted=false;expect(run({evidence:e})?.findings[0].state).toBe('unverified');expect(run({evidence:{...evidence(),sourceRevision:'b'.repeat(40)}})?.findings[0].state).toBe('unverified');});
+it('false duplicate fingerprints fail closed rather than consolidate differences',()=>expect(()=>run({report:{...report,findings:[report.findings[0],{...report.findings[0],body:'different'}]}})).toThrow());

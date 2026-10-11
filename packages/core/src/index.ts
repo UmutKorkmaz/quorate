@@ -32,3 +32,13 @@ export * from "./types.js";
 export * from "./web3-dd.js";
 export * from "./regression/types.js";
 export { classifyRegressionPair } from "./regression/classify.js";
+
+export * from "./evidence/index.js";
+
+export * from "./architecture/index.js";
+
+export * from "./rules-audit/index.js";
+
+export * from "./acceptance/index.js";
+
+export * from "./adjudication/index.js";

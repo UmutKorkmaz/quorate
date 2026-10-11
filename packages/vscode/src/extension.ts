@@ -17,6 +17,7 @@ import { diffSourceLabel, pickDiffSource, toReviewArgs, type DiffSource } from "
 import { CouncilTree, findingDiagnostics, ResultsTree, StatusTree } from "./trees";
 import { FindingDecorations, findingHover } from "./decorations";
 import { VerdictPanel } from "./verdict-panel";
+import { evidenceInspectionArgs, formatEvidenceInspection } from "./evidence";
 
 interface Preset {
   name: string;
@@ -674,6 +675,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       VerdictPanel.instance.show(lastReport, context.extensionUri);
     }),
     vscode.commands.registerCommand("quorate.refresh", () => reload()),
+    vscode.commands.registerCommand("quorate.inspectEvidence", async () => {
+      const workspace = vscode.workspace.workspaceFolders?.[0]?.uri;
+      if (!workspace) {
+        void vscode.window.showWarningMessage("Open the workspace whose evidence you want to inspect.");
+        return;
+      }
+      const { version } = await resolveCli(true);
+      if (!version || cmpVersion(version, "1.6.0") < 0) {
+        void vscode.window.showErrorMessage("Evidence inspection requires Quorate CLI 1.6.0 or later.");
+        return;
+      }
+      const bundles = await vscode.window.showOpenDialog({
+        canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+        defaultUri: workspace, openLabel: "Select evidence bundle"
+      });
+      if (!bundles?.[0]) return;
+      const policies = await vscode.window.showOpenDialog({
+        canSelectFiles: true, canSelectFolders: false, canSelectMany: false,
+        defaultUri: workspace, filters: { "Evidence policy": ["json"] }, openLabel: "Select inspection policy"
+      });
+      if (!policies?.[0]) return;
+      try {
+        const result = await runCli(evidenceInspectionArgs(workspace.fsPath, bundles[0].fsPath, policies[0].fsPath));
+        if (!result.stdout.trim()) throw new Error(messageTail(result.stderr, "Evidence inspection failed."));
+        const document = await vscode.workspace.openTextDocument({
+          language: "json", content: formatEvidenceInspection(result.stdout)
+        });
+        await vscode.window.showTextDocument(document);
+      } catch (error) {
+        void vscode.window.showErrorMessage(`Quorate: ${error instanceof Error ? error.message : "Evidence inspection failed."}`);
+      }
+    }),
     vscode.commands.registerCommand("quorate.runDoctor", () => reload()),
     vscode.commands.registerCommand("quorate.addProvider", async () => {
       await addProviderFlow();

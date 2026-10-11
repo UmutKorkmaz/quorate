@@ -1,0 +1,3 @@
+import { it,expect } from 'vitest';import { Command } from 'commander';
+const api=await import('../../src/adjudication/command.js').catch(()=>({})) as any;
+it('requires exact report, attachment manifest, evidence and explicit operator policy',()=>{const p=new Command().option('--cwd <path>');api.registerAdjudicationCommands?.(p);const c=p.commands.find(c=>c.name()==='adjudication')?.commands.find(c=>c.name()==='check');expect(c?.options.map(o=>o.long)).toEqual(expect.arrayContaining(['--report','--attachments','--evidence','--policy','--json']));expect(c?.options.filter(o=>o.mandatory).length).toBe(4);});

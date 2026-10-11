@@ -461,6 +461,16 @@ function checkArtifactIntegrity(artifact: ProofArtifact, trustedSigner = false):
   return undefined;
 }
 
+/** Validate the original proof content and rendered Markdown without authenticating
+ * its producer, creating a signing key, or executing the recorded command. */
+export function validateProofArtifactContent(value: unknown): boolean {
+  try {
+    return checkArtifactIntegrity(value as ProofArtifact, true) === undefined;
+  } catch {
+    return false;
+  }
+}
+
 /** True when the workspace no longer matches the fingerprint a proof was recorded against. */
 function fingerprintIsStale(cwd: string, fingerprint: WorktreeFingerprint): boolean {
   const current = getWorktreeFingerprint(cwd);

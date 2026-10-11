@@ -57,6 +57,9 @@ jobs:
       - name: Verify bundled ContractCourt fixture verdicts and exit codes
         run: node scripts/verify-contract-fixtures.mjs
 
+      - name: Verify evidence suite CLI outcomes and read-only fixtures
+        run: node scripts/verify-evidence-fixtures.mjs
+
       - name: Build and smoke-test GitHub App container
         if: runner.os == 'Linux'
         shell: bash

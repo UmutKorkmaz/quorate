@@ -109,6 +109,13 @@ import { runMetrics } from "./metrics-command.js";
 import { writeSecureWorkspaceState } from "./secure-state.js";
 
 import { registerRegressionCommands } from './regression/command.js';
+import { registerAdjudicationCommands } from "./adjudication/command.js";
+import { registerAcceptanceCommands } from "./acceptance/command.js";
+import { registerEvidenceCommands } from "./evidence/command.js";
+import { registerRulesCommands } from "./rules-audit/command.js";
+import { registerArchitectureCommands } from "./architecture/command.js";
+import { registerDocsCommands } from "./docs-check/command.js";
+import { registerReleaseCommands } from "./release/command.js";
 import { prepareRegressionAttachment } from './regression/attachment.js';
 import { resolveRegressionKeyDir } from './regression/report.js';
 
@@ -1536,6 +1543,13 @@ export function buildProgram(): Command {
     .description("Run, inspect, and verify bounded local verification proof artifacts.");
 
   registerRegressionCommands(proofCmd);
+  registerAdjudicationCommands(program);
+  registerAcceptanceCommands(program);
+  registerEvidenceCommands(program);
+  registerRulesCommands(program);
+  registerArchitectureCommands(program);
+  registerDocsCommands(program);
+  registerReleaseCommands(program);
 
   proofCmd
     .command("run")

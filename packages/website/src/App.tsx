@@ -33,6 +33,7 @@ import Embedded from "./pages/docs/Embedded";
 import Performance from "./pages/docs/Performance";
 import Graphql from "./pages/docs/Graphql";
 import Contract from "./pages/docs/Contract";
+import EvidenceSuite from "./pages/docs/EvidenceSuite";
 
 export function App() {
   return (
@@ -49,6 +50,7 @@ export function App() {
           <Route path="config" element={<Config />} />
           <Route path="github-action" element={<GithubAction />} />
           <Route path="contract" element={<Contract />} />
+          <Route path="evidence" element={<EvidenceSuite />} />
           <Route path="faq" element={<Faq />} />
           <Route path="manual-testing" element={<ManualTesting />} />
           <Route path="solana" element={<Solana />} />

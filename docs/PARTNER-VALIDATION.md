@@ -6,11 +6,11 @@ It does not report recruited partners or measured model quality.
 ## First gate
 
 Use Node 22.22 or later. For the published baseline, install the exact version below. For the current
-integration reliability and regression-proof candidate, use its freshly built
+1.6.0 evidence-suite candidate, use its freshly built
 tarball/VSIX and record its working-diff identity separately:
 
 ```bash
-npm install --global quorate@1.4.1
+npm install --global quorate@1.5.0
 quorate --version
 quorate setup demo
 ```

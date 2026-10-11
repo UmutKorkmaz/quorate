@@ -10,6 +10,7 @@
  */
 
 import { createServer } from "node:http";
+import { isIP } from "node:net";
 import { constants, readFileSync } from "node:fs";
 import { lstat, mkdir, open, readdir, rename, unlink } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
@@ -351,7 +352,17 @@ export class ReviewQueue {
 // Server startup
 // ---------------------------------------------------------------------------
 
+/** Omit host to retain the existing all-interface listener; explicit hosts are IP literals. */
+export function serverListenOptions(env: NodeJS.ProcessEnv = process.env): { port: number; host?: string } {
+  const port = Number(env.PORT?.trim() || "3000");
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be an integer from 1 to 65535");
+  const host = env.HOST?.trim();
+  if (host && !isIP(host)) throw new Error("HOST must be an IPv4 or IPv6 address");
+  return { port, ...(host ? { host } : {}) };
+}
+
 export async function startServer(): Promise<void> {
+  const listenOptions = serverListenOptions();
   // Validate required env vars up-front; log which optional ones are absent.
   const appId = requiredEnv("APP_ID");
   const privateKey = (() => {
@@ -363,7 +374,6 @@ export async function startServer(): Promise<void> {
     return raw.replace(/\\n/g, "\n");
   })();
   const webhookSecret = requiredEnv("WEBHOOK_SECRET");
-  const port = Number(optionalEnv("PORT") ?? "3000");
 
   const optionalKeys = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "QUORATE_PROVIDERS"];
   const missing = optionalKeys.filter((k) => !optionalEnv(k));
@@ -457,8 +467,8 @@ export async function startServer(): Promise<void> {
     void middleware(req, res);
   });
 
-  server.listen(port, () => {
-    logger.info(`Quorate GitHub App listening on port ${port}`, {
+  server.listen(listenOptions, () => {
+    logger.info(`Quorate GitHub App listening on port ${listenOptions.port}`, {
       webhookPath: "/api/webhook",
       healthPath: "/health",
       landingPath: "/"

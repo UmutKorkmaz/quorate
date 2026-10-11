@@ -1,3 +1,9 @@
+# Current acceptance status
+
+As of 2026-10-11, 1.5.0 is publicly released on GitHub, npm, VS Code Marketplace and the website. The owned native Fix-terminal journey was completed after folder trust was confirmed on 2026-10-04. Historical pending statements below describe earlier snapshots.
+
+The 1.6.0 evidence-suite candidate is undergoing independent review, packaged installation, native Terminal/editor acceptance and exact-revision CI. Candidate evidence is retained under the ignored .superpowers/sdd/evidence-suite directory. Installed-App and partner validation remain externally blocked as documented in [partner validation](PARTNER-VALIDATION.md).
+
 # Integration reliability acceptance
 
 Pre-integration acceptance was collected against baseline `d3e192e00e015837c0b2065f8b918aa349017e7e` plus the working diff on `fix/integration-reliability`. The QA records bind that tested candidate independently of its subsequent local commit or merge. No public candidate release is claimed. Tooling: macOS, Node 22.22.3, declared npm 11.7.0 temporary runtime, Vitest 4.1.11. Exact diff identity and packaged artifact evidence are in the local QA records.
@@ -25,6 +31,34 @@ Final fresh review found three Important issues: inconsistent suite counters, ca
 Final type checks, JS builds, GitHub App build/typecheck, website build, VSIX packaging, shell syntax and diff whitespace checks passed. Fresh candidate tarball journeys again returned 0/verified, 1/not-fixed and 2/setup-failed, each with valid explicit local trust and source/worktree preservation. The updated standalone verifier again installed published npm 1.4.1 successfully; that remains baseline evidence. No lint runner was available to the reviewer. The Git attachment fixture exceeded its original five-second test allowance under full-suite load twice; focused assertions passed, and the final suite passed after its test-only allowance became fifteen seconds. Product timeouts did not change.
 
 The owned native monitor, isolated VS Code profile process and isolated tmux server were stopped after acceptance. The development-host test folder, screenshot and ignored QA records remain available for the pending folder-trust/Fix-terminal check. Workspace trust and user extension state remain unchanged. The main checkout was unchanged throughout implementation acceptance; local integration is recorded separately. Final identity/artifact hashes are in `.superpowers/sdd/2026-10-02-regression-proof/final-candidate-identity.json`.
+
+## Evidence-suite candidate acceptance (2026-10-11)
+
+P2–P8 have implemented command surfaces and independent source reviews. Corrective
+regressions cover immutable GitHub asset identity, recovery deadlines, pinned
+regression bytes, manifest budgets, consumer impact closure, inline rule imports,
+and Windows path confinement. Native process execution in release/docs adapters
+is explicitly unavailable on Windows; read-only report and evidence flows remain
+in the CI matrix. Fixture observations and supplied installed-version metadata
+do not establish native agent enforcement or model quality.
+
+Final local verification passed 163 files and 1,955 tests, with one skipped.
+Builds, type checks, all 14 ContractCourt fixtures and the dependency audit passed.
+The final source review has no remaining Critical or Important findings.
+
+The rebuilt 1.6.0 archive passed installation, version/help, setup demo and both
+gate outcomes. The native VS Code inspector opened the selected evidence report;
+the integrated Terminal ran all 20 fixture journeys. macOS Terminal.app access
+was refused by the Computer tool, so that specific surface was not tested. The
+website page rendered at four widths and mobile documentation navigation passed.
+Clipboard copying was attempted but remained unverified in the browser backend.
+
+The user selected the umutkorkmaz.net server. An isolated, unactivated App bundle
+passed Linux Node syntax, systemd unit and proposed nginx configuration checks,
+plus loopback health and synthetic signed/invalid pings. Actual App credentials,
+GitHub installation and real PR acceptance remain pending fresh authentication.
+Production website configuration is unchanged. No partners are available, so
+partner results and P9 selection remain pending.
 
 ## Release integration verification (2026-10-03)
 

@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-10-11
+
+### Added
+
+- Read-only release verification and recovery reports for exact npm and GitHub artifacts, with bounded deadlines and per-destination outcomes.
+- Portable evidence bundles with strict integrity checks, explicit revision/check policy, optional trusted portable proof keys, and a native VS Code evidence inspector.
+- Acceptance checks for named Markdown, OpenSpec and Spec Kit criteria, trusted-base obligations, and explicit human-review states.
+- Executable adoption examples against a selected source candidate or exact published package in disposable repositories and homes.
+- Imported architecture boundary/cycle analysis, impact closure and mapped consumer checks with full-suite fallback for unknown relationships.
+- Read-only Claude/Cursor rules compatibility and drift reports with explicit native-enforcement limits.
+- Finding adjudication bound to the original report, finding fingerprint and selected evidence, retaining minority findings and unknown outcomes.
+
+### Fixed
+
+- Validate legacy proof artifact content against its original Markdown renderer before portable evidence import.
+- Update proxy-addr to 2.0.8 and source-map-js to 1.2.2 to address upstream security advisories.
+
+### Scope
+
+- Imported observations and accepted digests do not attest hosted execution. Architecture checks recommend existing checks without disabling CI. Installed GitHub App and opted-in partner validation require external hosting, credentials and consent.
+
 ## [1.5.0] - 2026-10-03
 
 ### Added
